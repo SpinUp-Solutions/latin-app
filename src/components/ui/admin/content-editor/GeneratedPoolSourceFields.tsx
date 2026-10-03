@@ -8,6 +8,8 @@ interface GeneratedPoolSourceFieldsProps {
   questionCountId: string;
   onPoolChange: (poolId: string | null) => void;
   onCountChange: (count: number) => void;
+  /** Extra pool settings rendered below the question count. */
+  children?: React.ReactNode;
 }
 
 export const GeneratedPoolSourceFields: React.FC<GeneratedPoolSourceFieldsProps> = ({
@@ -16,6 +18,7 @@ export const GeneratedPoolSourceFields: React.FC<GeneratedPoolSourceFieldsProps>
   questionCountId,
   onPoolChange,
   onCountChange,
+  children,
 }) => {
   return (
     <div className="space-y-4">
@@ -26,6 +29,7 @@ export const GeneratedPoolSourceFields: React.FC<GeneratedPoolSourceFieldsProps>
       />
 
       <GeneratedQuestionCountField id={questionCountId} count={count} onChange={onCountChange} />
+      {children}
     </div>
   );
 };

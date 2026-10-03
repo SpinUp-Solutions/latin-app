@@ -2,7 +2,7 @@ import { Mark, mergeAttributes } from '@tiptap/core';
 import { generateTooltipId } from '@/src/utils/tooltipUtils';
 import { TooltipMarkAttrs } from '@/src/types/tooltip';
 
-export interface TooltipOptions {
+interface TooltipOptions {
   HTMLAttributes: Record<string, unknown>;
 }
 
@@ -14,11 +14,29 @@ declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     tooltip: {
       setTooltip: (attributes: Partial<TooltipMarkAttrs>) => ReturnType;
-      toggleTooltip: (attributes: Partial<TooltipMarkAttrs>) => ReturnType;
       unsetTooltip: () => ReturnType;
     };
   }
 }
+
+// Array/object attributes are stored as JSON under a lowercase HTML attribute name.
+const jsonAttribute = (name: string) => {
+  const htmlName = name.toLowerCase();
+  return {
+    default: null,
+    parseHTML: (element: HTMLElement) => {
+      const val = element.getAttribute(htmlName);
+      if (!val) return null;
+      try {
+        return JSON.parse(val);
+      } catch {
+        return null;
+      }
+    },
+    renderHTML: (attributes: Record<string, unknown>) =>
+      attributes[name] ? { [htmlName]: JSON.stringify(attributes[name]) } : {},
+  };
+};
 
 export const Tooltip = Mark.create<TooltipOptions, TooltipStorage>({
   name: 'tooltip',
@@ -37,77 +55,21 @@ export const Tooltip = Mark.create<TooltipOptions, TooltipStorage>({
 
   addAttributes() {
     return {
-      tooltipId: {
-        default: null,
-      },
-      word: {
-        default: null,
-      },
-      translation: {
-        default: null,
-      },
-      pronunciation: {
-        default: null,
-      },
-      partOfSpeech: {
-        default: null,
-      },
-      wordType: {
-        default: null,
-      },
-      definition: {
-        default: null,
-      },
-      examples: {
-        default: null,
-        parseHTML: element => {
-          const val = element.getAttribute('examples');
-          if (!val) return null;
-          try {
-            return JSON.parse(val);
-          } catch {
-            return null;
-          }
-        },
-        renderHTML: attributes => {
-          if (!attributes.examples) return {};
-          return { examples: JSON.stringify(attributes.examples) };
-        },
-      },
-      etymology: {
-        default: null,
-      },
-      gender: {
-        default: null,
-      },
-      declensionClass: {
-        default: null,
-      },
-      conjugationClass: {
-        default: null,
-      },
-      grammaticalInfo: {
-        default: null,
-      },
-      principalParts: {
-        default: null,
-        parseHTML: element => {
-          const val = element.getAttribute('principalparts');
-          if (!val) return null;
-          try {
-            return JSON.parse(val);
-          } catch {
-            return null;
-          }
-        },
-        renderHTML: attributes => {
-          if (!attributes.principalParts) return {};
-          return { principalparts: JSON.stringify(attributes.principalParts) };
-        },
-      },
-      link: {
-        default: null,
-      },
+      tooltipId: { default: null },
+      word: { default: null },
+      translation: { default: null },
+      pronunciation: { default: null },
+      partOfSpeech: { default: null },
+      wordType: { default: null },
+      definition: { default: null },
+      examples: jsonAttribute('examples'),
+      etymology: { default: null },
+      gender: { default: null },
+      declensionClass: { default: null },
+      conjugationClass: { default: null },
+      grammaticalInfo: { default: null },
+      principalParts: jsonAttribute('principalParts'),
+      link: { default: null },
       title: {
         default: null,
         parseHTML: element => element.getAttribute('data-tooltip-title'),
@@ -116,54 +78,9 @@ export const Tooltip = Mark.create<TooltipOptions, TooltipStorage>({
           return { 'data-tooltip-title': attributes.title };
         },
       },
-      chips: {
-        default: null,
-        parseHTML: element => {
-          const val = element.getAttribute('chips');
-          if (!val) return null;
-          try {
-            return JSON.parse(val);
-          } catch {
-            return null;
-          }
-        },
-        renderHTML: attributes => {
-          if (!attributes.chips) return {};
-          return { chips: JSON.stringify(attributes.chips) };
-        },
-      },
-      customSections: {
-        default: null,
-        parseHTML: element => {
-          const val = element.getAttribute('customsections');
-          if (!val) return null;
-          try {
-            return JSON.parse(val);
-          } catch {
-            return null;
-          }
-        },
-        renderHTML: attributes => {
-          if (!attributes.customSections) return {};
-          return { customsections: JSON.stringify(attributes.customSections) };
-        },
-      },
-      visibleFields: {
-        default: null,
-        parseHTML: element => {
-          const val = element.getAttribute('visiblefields');
-          if (!val) return null;
-          try {
-            return JSON.parse(val);
-          } catch {
-            return null;
-          }
-        },
-        renderHTML: attributes => {
-          if (!attributes.visibleFields) return {};
-          return { visiblefields: JSON.stringify(attributes.visibleFields) };
-        },
-      },
+      chips: jsonAttribute('chips'),
+      customSections: jsonAttribute('customSections'),
+      visibleFields: jsonAttribute('visibleFields'),
     };
   },
 
@@ -197,12 +114,6 @@ export const Tooltip = Mark.create<TooltipOptions, TooltipStorage>({
         ({ commands }) => {
           const tooltipId = attributes.tooltipId || generateTooltipId(attributes.word);
           return commands.setMark(this.name, { ...attributes, tooltipId });
-        },
-      toggleTooltip:
-        (attributes: Partial<TooltipMarkAttrs>) =>
-        ({ commands }) => {
-          const tooltipId = attributes.tooltipId || generateTooltipId(attributes.word);
-          return commands.toggleMark(this.name, { ...attributes, tooltipId });
         },
       unsetTooltip:
         () =>

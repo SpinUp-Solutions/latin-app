@@ -1,13 +1,8 @@
 import type { Lesson, LessonSummary } from '@/src/types/lesson';
-import type { PracticeCategorySelection, PracticeLessonType } from '@/src/types/practice-category';
-import { PRACTICE_LESSON_TYPES } from '@/src/types/practice-category';
+import type { PracticeCategorySelection } from '@/src/types/practice-category';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
 export type PracticeCategoryFilter = 'all' | 'uncategorized' | string;
-
-export function isPracticeLessonType(type: Lesson['type']): type is PracticeLessonType {
-  return (PRACTICE_LESSON_TYPES as readonly string[]).includes(type);
-}
 
 /**
  * Explicit IDs are authoritative, including an empty array after the admin

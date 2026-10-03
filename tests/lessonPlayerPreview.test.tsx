@@ -41,7 +41,7 @@ jest.mock('@/src/components/ui/lesson/page-template', () => ({
     runtimeMode: string;
   }) => (
     <>
-      <span>Runtime mode: {runtimeMode}</span>
+      <span>Runtime mode: {runtimeMode ?? 'practice'}</span>
       <button type="button" onClick={() => onCompletionAccepted?.('exercise-1', 100)}>
         Complete exercise
       </button>
@@ -93,16 +93,5 @@ describe('LessonPlayer preview mode', () => {
     expect(mockMarkExerciseComplete).not.toHaveBeenCalled();
     expect(mockFinishLesson).not.toHaveBeenCalled();
     expect(toast.info).toHaveBeenCalledWith('Preview mode: progress is not tracked.');
-  });
-
-  it('does not persist progress in test runtime even when trackProgress is true', async () => {
-    render(<LessonPlayer lesson={lesson} trackProgress runtimeMode="test" />);
-
-    await waitFor(() => expect(mockUpdatePageProgress).not.toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: 'Complete exercise' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Finish lesson' }));
-
-    expect(mockMarkExerciseComplete).not.toHaveBeenCalled();
-    expect(mockFinishLesson).not.toHaveBeenCalled();
   });
 });

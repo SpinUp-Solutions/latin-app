@@ -1,10 +1,92 @@
+import type { TypedMutationOnQueryStarted } from '@reduxjs/toolkit/query';
 import { Lesson, LessonSummary, LessonWithProgress, StudentDashboard } from '@/src/types/lesson';
+import type { LessonProgressMutationResult } from '@/src/utils/lessonProgress';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 import { TooltipData } from '@/src/types/tooltip';
-import type { AdminLearningPathView, LearningPathDocument } from '@/src/types/learning-unit';
+import type { AdminLearningPathView, LearningPathDocument, LessonUnitType } from '@/src/types/learning-unit';
 import { buildLessonMutationPayload } from '@/src/utils/practiceCategoryLessons';
 import { appApi } from './appApi';
+import type { createAuthenticatedBaseQuery } from './baseQuery';
 import { getAttemptSummaryTagId, PRACTICE_CATEGORY_ASSIGNMENTS_TAG, STUDENT_DASHBOARD_TAG } from './tags';
+
+interface RecoveryItem {
+  id: string;
+  lessonId: string;
+  lessonTitle: string;
+  rawLessonData: Lesson;
+  errorMessage: string;
+  errorCode?: string;
+  createdAt: string;
+}
+
+interface ProgressMutationArgs {
+  userId: string;
+  lessonId: string;
+}
+
+/**
+ * A progress write returns the persisted summary, so the open lesson and the
+ * dashboard adopt it rather than refetching both after every page and exercise.
+ * Completing a lesson can unlock the next unit, which only the server decides,
+ * so that alone refetches the dashboard.
+ */
+const adoptPersistedProgress: TypedMutationOnQueryStarted<
+  LessonProgressMutationResult,
+  ProgressMutationArgs,
+  ReturnType<typeof createAuthenticatedBaseQuery>,
+  'appApi'
+> = async ({ userId, lessonId }, { dispatch, queryFulfilled }) => {
+  const result = await queryFulfilled.then(response => response.data).catch(() => null);
+  if (!result) return;
+  // Concurrent writes can resolve out of order, and persisted progress only grows, so keep the furthest state.
+  const adoptSummary = (
+    cached: Pick<LessonWithProgress, 'status' | 'progress' | 'furthestPageIndex' | 'currentPageIndex'>
+  ) => {
+    cached.status = result.lessonCompleted || cached.status === 'completed' ? 'completed' : 'in-progress';
+    cached.progress = Math.max(cached.progress ?? 0, result.progress);
+    cached.furthestPageIndex = Math.max(cached.furthestPageIndex ?? -1, result.furthestPageIndex);
+    cached.currentPageIndex = Math.max(cached.furthestPageIndex, 0);
+  };
+
+  dispatch(
+    lessonApi.util.updateQueryData('getStudentLesson', { lessonId, userId }, lesson => {
+      adoptSummary(lesson);
+      if (result.exerciseProgress.length < (lesson.exerciseProgress?.length ?? 0)) return;
+      lesson.exerciseProgress = result.exerciseProgress;
+      lesson.completedExerciseCount = result.completedExerciseCount;
+      lesson.requiredExerciseCount = result.requiredExerciseCount;
+    })
+  );
+
+  // The recipe runs only against a loaded dashboard. A first dashboard request
+  // still in flight predates this write, so a completion must refresh it too.
+  let dashboardLoaded = false;
+  let completedNow = false;
+  dispatch(
+    lessonApi.util.updateQueryData('getStudentDashboard', userId, dashboard => {
+      dashboardLoaded = true;
+      for (const unit of [...dashboard.learningPath, ...dashboard.practiceLessons]) {
+        if (unit.kind !== 'lesson' || unit.id !== lessonId) continue;
+        completedNow ||= result.lessonCompleted && unit.status !== 'completed';
+        adoptSummary(unit);
+      }
+    })
+  );
+  // Only the dashboard provides this tag, so the open lesson is not refetched.
+  if (completedNow || (result.lessonCompleted && !dashboardLoaded))
+    dispatch(lessonApi.util.invalidateTags([{ type: 'StudentLesson', id: 'LIST' }]));
+};
+
+/**
+ * The dashboard is the costliest student read, and progress writes and tag
+ * invalidation already keep its cached copy current. Views that only display
+ * it pass these options so that mounting them, or refocusing the tab, does not
+ * rebuild it. The dashboard page itself still refreshes it.
+ */
+export const REUSE_CACHED_STUDENT_DASHBOARD = { refetchOnMountOrArgChange: false, refetchOnFocus: false } as const;
+
+/** How old the dashboard page lets its data get before a tab refocus refreshes it. */
+export const STUDENT_DASHBOARD_FOCUS_REFRESH_MS = 5 * 60 * 1000;
 
 export const lessonApi = appApi.injectEndpoints({
   endpoints: builder => ({
@@ -80,14 +162,7 @@ export const lessonApi = appApi.injectEndpoints({
     getLessonById: builder.query<{ lesson: Lesson; tooltips: Record<string, TooltipData> }, { lessonId: string }>({
       query: ({ lessonId }) => `/admin/lessons/${lessonId}`,
       extraOptions: { retryNetworkErrors: true },
-      transformResponse: (response: { lesson?: Lesson } | Lesson) => {
-        const lesson = 'lesson' in response ? response.lesson : (response as Lesson);
-        if (!lesson) {
-          throw new Error('Lesson not found');
-        }
-        const tooltips = extractTooltipsFromLesson(lesson);
-        return { lesson, tooltips };
-      },
+      transformResponse: ({ lesson }: { lesson: Lesson }) => ({ lesson, tooltips: extractTooltipsFromLesson(lesson) }),
       providesTags: (result, error, { lessonId }) => [
         { type: 'Lesson', id: lessonId },
         PRACTICE_CATEGORY_ASSIGNMENTS_TAG,
@@ -143,7 +218,7 @@ export const lessonApi = appApi.injectEndpoints({
       {
         lessonIds: string[];
         isLive: boolean;
-        lessonType: 'normal' | 'vocab' | 'sentence-diagramming' | 'listening';
+        lessonType: LessonUnitType;
         expectedLiveLessonIds: string[];
         startOrder?: number;
       }
@@ -184,14 +259,8 @@ export const lessonApi = appApi.injectEndpoints({
     }),
 
     markExerciseComplete: builder.mutation<
-      {
-        success: boolean;
-        lessonCompleted: boolean;
-        progress: number;
-        completedExerciseCount: number;
-        requiredExerciseCount: number;
-      },
-      { userId: string; lessonId: string; exerciseId: string; score: number }
+      LessonProgressMutationResult,
+      ProgressMutationArgs & { exerciseId: string; score: number }
     >({
       query: ({ userId, lessonId, exerciseId, score }) => ({
         url: `/progress/${userId}/${lessonId}`,
@@ -202,26 +271,10 @@ export const lessonApi = appApi.injectEndpoints({
           score,
         },
       }),
-      invalidatesTags: (result, error, { userId, lessonId }) =>
-        error || !result
-          ? []
-          : [
-              { type: 'StudentLesson', id: lessonId },
-              { type: 'StudentLearningPath', id: userId },
-            ],
+      onQueryStarted: adoptPersistedProgress,
     }),
 
-    updatePageProgress: builder.mutation<
-      {
-        success: boolean;
-        furthestPageIndex: number;
-        lessonCompleted: boolean;
-        progress: number;
-        completedExerciseCount: number;
-        requiredExerciseCount: number;
-      },
-      { userId: string; lessonId: string; pageId: string }
-    >({
+    updatePageProgress: builder.mutation<LessonProgressMutationResult, ProgressMutationArgs & { pageId: string }>({
       query: ({ userId, lessonId, pageId }) => ({
         url: `/progress/${userId}/${lessonId}`,
         method: 'POST',
@@ -230,65 +283,21 @@ export const lessonApi = appApi.injectEndpoints({
           pageId,
         },
       }),
-      invalidatesTags: (result, error, { userId, lessonId }) =>
-        error || !result
-          ? []
-          : [
-              { type: 'StudentLesson', id: lessonId },
-              { type: 'StudentLearningPath', id: userId },
-            ],
+      onQueryStarted: adoptPersistedProgress,
     }),
 
-    finishLesson: builder.mutation<
-      {
-        success: boolean;
-        lessonCompleted: boolean;
-        alreadyCompleted: boolean;
-        progress: number;
-        completedExerciseCount: number;
-        requiredExerciseCount: number;
-      },
-      { userId: string; lessonId: string; finalPageId: string }
-    >({
+    finishLesson: builder.mutation<LessonProgressMutationResult, ProgressMutationArgs & { finalPageId: string }>({
       query: ({ userId, lessonId, finalPageId }) => ({
         url: `/progress/${userId}/${lessonId}/complete`,
         method: 'POST',
         body: { finalPageId },
       }),
-      invalidatesTags: (result, error, { userId, lessonId }) =>
-        error || !result
-          ? []
-          : [
-              { type: 'StudentLesson', id: lessonId },
-              { type: 'StudentLearningPath', id: userId },
-            ],
+      onQueryStarted: adoptPersistedProgress,
     }),
 
-    // Recovery endpoints
-    getRecoveryItems: builder.query<
-      {
-        id: string;
-        lessonId: string;
-        lessonTitle: string;
-        rawLessonData: Lesson;
-        errorMessage: string;
-        errorCode?: string;
-        createdAt: string;
-      }[],
-      void
-    >({
+    getRecoveryItems: builder.query<RecoveryItem[], void>({
       query: () => '/admin/lessons/recovery',
-      transformResponse: (response: {
-        recoveryItems: {
-          id: string;
-          lessonId: string;
-          lessonTitle: string;
-          rawLessonData: Lesson;
-          errorMessage: string;
-          errorCode?: string;
-          createdAt: string;
-        }[];
-      }) => response.recoveryItems,
+      transformResponse: (response: { recoveryItems: RecoveryItem[] }) => response.recoveryItems,
       providesTags: [{ type: 'Recovery', id: 'LIST' }],
     }),
 
@@ -341,7 +350,6 @@ export const {
   useMarkExerciseCompleteMutation,
   useUpdatePageProgressMutation,
   useFinishLessonMutation,
-  // Recovery hooks
   useGetRecoveryItemsQuery,
   useSaveToRecoveryMutation,
   useRetryFromRecoveryMutation,

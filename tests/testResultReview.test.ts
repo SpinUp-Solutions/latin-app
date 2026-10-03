@@ -3,6 +3,7 @@ import {
   testResultReviewDocumentSchema,
   toStudentTestResultReview,
 } from '@/src/lib/tests/review';
+import { sanitizeTestDeliveryState } from '@/src/lib/tests/delivery';
 import type { Exercise } from '@/src/types/exercises';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import type { TestResultReviewExerciseItem } from '@/src/types/test-results';
@@ -687,6 +688,38 @@ describe('submitted test review snapshot', () => {
       name: 'Chapter one',
       items: [{ id: 'v1', latin: 'amo', english: 'love', audioPath: 'audio/v1.mp3' }],
     });
+  });
+
+  it.each(
+    [
+      [matchingExercise(), []],
+      [fillExercise(), []],
+      [multipleChoiceExercise(), []],
+      [oddOneOutExercise(), []],
+      [textSelectionExercise(), []],
+      [fillEmboldedTextExercise(), []],
+      [sentenceDiagrammingExercise(), []],
+      [tableFillExercise(), []],
+      [clickOnMultipleWordsExercise(), []],
+      [generatedTranslationExercise(), [{ text: 'amo', acceptedAnswers: ['love'] }]],
+      [generatedFormIdentificationExercise('step-by-step'), [stepFormItem]],
+      [generatedFormIdentificationExercise('single-field'), [singleFieldFormItem]],
+      [translationGradingExercise(), []],
+    ].map(([exercise, items]) => [(exercise as Exercise).type, exercise, items] as [string, Exercise, unknown[]])
+  )('round-trips a %s review with the delivered question', (_type, exercise, items) => {
+    const resolvedExercises = { [exercise.id]: { items } };
+    const review = buildReview([{ items: [exercise] }], {
+      resolvedExercises,
+      exerciseResults: { [exercise.id]: { awardedPoints: 0, maxPoints: 10 } },
+    });
+    const delivered = sanitizeTestDeliveryState({
+      versionId: 'version-1',
+      pages: [{ id: 'page-0', items: [exercise] }],
+      resolvedExercises: resolvedExercises as never,
+    }).pages[0].items[0] as { data: unknown };
+
+    expect(exerciseItem(review, exercise.type).question).toEqual(delivered.data);
+    expect(testResultReviewDocumentSchema.parse(review)).toEqual(review);
   });
 
   it('rejects malformed known exercise variants instead of returning unsafe review data', () => {

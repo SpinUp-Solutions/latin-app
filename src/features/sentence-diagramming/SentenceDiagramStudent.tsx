@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { CheckCircle, HelpCircle, RotateCcw, Undo2, XCircle } from 'lucide-react';
 import { ANNOTATION_SPECS, AnnotationKind, DEFAULT_STUDENT_TOOLS, normalizeAnnotationTools } from './annotation-spec';
 import {
@@ -189,18 +189,18 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   onAttempt,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const [annotations, setAnnotations] = useState<DiagramAnnotation[]>(
     initialAnswer?.type === 'sentence-diagramming' ? initialAnswer.annotations : []
   );
-  const answerCallbackRef = useRef(onAnswer);
-  answerCallbackRef.current = onAnswer;
+  const emitAnswer = useEffectEvent((next: DiagramAnnotation[]) =>
+    onAnswer?.({ type: 'sentence-diagramming', annotations: next })
+  );
   const lastEmittedAnnotations = useRef(annotations);
   useEffect(() => {
     if (answerEditing && lastEmittedAnnotations.current !== annotations) {
       lastEmittedAnnotations.current = annotations;
-      answerCallbackRef.current?.({ type: 'sentence-diagramming', annotations });
+      emitAnswer(annotations);
     }
   }, [annotations, answerEditing]);
   const [selection, setSelection] = useState<DiagramSelection | null>(null);
@@ -328,14 +328,6 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
     }
 
     const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'sentence-diagramming', annotations }));
-
-    if (assessmentMode) {
-      setTestSubmitted(true);
-      if (comparison.isComplete) handleCorrect(true);
-      else handleIncorrect();
-      onComplete?.(score);
-      return;
-    }
 
     if (comparison.isComplete) {
       handleCorrect(true);
@@ -527,7 +519,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
         </div>
       </div>
 
-      {!assessmentMode && (
+      {!testAnswerMode && (
         <SentenceDiagramFeedbackPanel
           isCorrect={isCorrect}
           message={feedbackMessage}
@@ -544,5 +536,3 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
     </div>
   );
 };
-
-export default SentenceDiagramStudent;

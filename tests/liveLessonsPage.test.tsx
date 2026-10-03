@@ -5,6 +5,7 @@ import type { AdminLearningPathView } from '@/src/types/learning-unit';
 import type { LearningPathLessonIssue } from '@/src/types/learning-unit';
 import type { LessonSummary } from '@/src/types/lesson';
 import type { TestUnitSummary } from '@/src/types/test';
+import { toast } from 'sonner';
 
 const mockUseGetLessonsQuery = jest.fn();
 const mockUseGetLearningPathQuery = jest.fn();
@@ -30,17 +31,8 @@ jest.mock('@/src/components/auth/withAdminAuth', () => ({
 }));
 
 jest.mock('@/src/components/ui/tabs', () => ({
-  Tabs: ({
-    children,
-    value,
-    onValueChange,
-  }: {
-    children: React.ReactNode;
-    value: string;
-    onValueChange?: (value: string) => void;
-  }) => (
+  Tabs: ({ children, value }: { children: React.ReactNode; value: string }) => (
     <div>
-      <button onClick={() => onValueChange?.('vocab')}>Switch to vocab</button>
       {React.Children.toArray(children).filter(child => {
         if (!React.isValidElement<{ value?: string }>(child)) return true;
         return child.props.value === undefined || child.props.value === value;
@@ -51,7 +43,9 @@ jest.mock('@/src/components/ui/tabs', () => ({
 }));
 
 jest.mock('@/src/components/ui/admin/LessonTypeTabs', () => ({
-  LessonTypeTabs: () => null,
+  LessonTypeTabs: ({ onValueChange }: { onValueChange: (value: string) => void }) => (
+    <button onClick={() => onValueChange('vocab')}>Switch to vocab</button>
+  ),
 }));
 
 jest.mock('@dnd-kit/core', () => ({
@@ -279,7 +273,6 @@ describe('Learning delivery organizer', () => {
   });
 
   it('protects a dirty Learning Path draft from links, history navigation, and unload', () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
     const pushState = jest.spyOn(window.history, 'pushState');
     render(<LiveLessonsPage />);
 
@@ -290,13 +283,20 @@ describe('Learning delivery organizer', () => {
     document.body.append(navigationLink);
     expect(fireEvent.click(navigationLink)).toBe(false);
     navigationLink.remove();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'You have unsaved Learning Path changes. Leave this page and discard them?'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Stay on page' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
     const beforeUnload = new Event('beforeunload', { cancelable: true });
     expect(fireEvent(window, beforeUnload)).toBe(false);
     expect(beforeUnload.defaultPrevented).toBe(true);
 
     fireEvent.popState(window);
-    expect(confirm).toHaveBeenCalledTimes(2);
-    expect(pushState).toHaveBeenCalledWith(null, '', window.location.href);
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    // One Back guard entry for the whole dirty period.
+    expect(pushState).toHaveBeenCalledTimes(1);
   });
 
   it('protects a dirty Learning Path draft from practice-row edit navigation', () => {
@@ -309,14 +309,16 @@ describe('Learning delivery organizer', () => {
       isLoading: false,
       refetch: jest.fn(),
     });
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValueOnce(true).mockReturnValueOnce(false);
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
     render(<LiveLessonsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Lesson two to Learning Path' }));
     fireEvent.click(screen.getByRole('button', { name: 'Switch to vocab' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit Vocab live' }));
 
-    expect(confirm).toHaveBeenCalledWith('You have unsaved Learning Path changes. Leave this page and discard them?');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'You have unsaved Learning Path changes. Leave this page and discard them?'
+    );
   });
 
   it('requires confirmation before switching context with a dirty path draft', () => {
@@ -468,6 +470,50 @@ describe('Learning delivery organizer', () => {
         unitIds: ['lesson-3', 'lesson-1', 'lesson-2'],
       })
     );
+  });
+
+  it.each([
+    { rollback: 'succeeds', message: 'Unpublish failed; newly published lessons were rolled back' },
+    {
+      rollback: 'fails',
+      message: 'Unpublish failed and the publish rollback also failed. Review this practice list.',
+    },
+  ])('rolls back a swap when the unpublish step fails and the rollback $rollback', async ({ rollback, message }) => {
+    const toastError = jest.spyOn(toast, 'error').mockImplementation(() => 'toast');
+    const vocabLive = lesson({ id: 'vocab-live', title: 'Vocab live', type: 'vocab' });
+    const vocabDraft = lesson({
+      id: 'vocab-draft',
+      title: 'Vocab draft',
+      type: 'vocab',
+      isLive: false,
+      liveOrder: null,
+    });
+    mockUseGetLessonsQuery.mockReturnValue({ data: [vocabLive, vocabDraft], isLoading: false, refetch: jest.fn() });
+    mockUpdatePublishStatus
+      .mockReturnValueOnce({ unwrap: jest.fn().mockResolvedValue({ success: true }) })
+      .mockReturnValueOnce({ unwrap: jest.fn().mockRejectedValue(new Error('unpublish failed')) })
+      .mockReturnValueOnce({
+        unwrap:
+          rollback === 'succeeds'
+            ? jest.fn().mockResolvedValue({ success: true })
+            : jest.fn().mockRejectedValue(new Error('rollback failed')),
+      });
+
+    render(<LiveLessonsPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to vocab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    const checkboxes = await screen.findAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Publication Changes' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(message));
+    expect(mockUpdatePublishStatus).toHaveBeenLastCalledWith({
+      lessonIds: ['vocab-draft'],
+      isLive: false,
+      lessonType: 'vocab',
+      expectedLiveLessonIds: ['vocab-live', 'vocab-draft'],
+    });
   });
 
   it('prevents removing the final live practice lesson', async () => {

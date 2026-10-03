@@ -277,10 +277,6 @@ class PdfWriter {
     this.page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_WIDTH - MARGIN_X, y }, thickness: 0.6, color });
   }
 
-  private lines(text: string, font: PDFFont, size: number, width: number) {
-    return wrapParagraphs(font, text, size, width);
-  }
-
   private fit(text: string, font: PDFFont, size: number, width: number) {
     if (font.widthOfTextAtSize(text, size) <= width) return text;
     const characters = Array.from(text);
@@ -303,7 +299,7 @@ class PdfWriter {
     this.y -= 17;
     const top = this.y;
     // Pathological titles are flowed below the score, keeping every character.
-    const title = this.lines(model.title, this.serif, 23, leftWidth);
+    const title = wrapParagraphs(this.serif, model.title, 23, leftWidth);
     const firstLines = title.splice(0, 4);
     for (const line of firstLines) {
       this.draw(line, MARGIN_X, this.y, 23, this.serif, ROMAN_RED);
@@ -355,10 +351,10 @@ class PdfWriter {
     const width = ((block.maxWidth ?? CONTENT_WIDTH) - gutter * (block.columns.length - 1)) / block.columns.length;
     const columns = block.columns.map(column => ({
       ...column,
-      body: column.lines.flatMap(line => this.lines(line, font, size, width - inset * 2)),
+      body: column.lines.flatMap(line => wrapParagraphs(font, line, size, width - inset * 2)),
       labels:
         showLabels && column.label
-          ? this.lines(column.label.toUpperCase(), this.bold, LABEL_SIZE, width - inset * 2)
+          ? wrapParagraphs(this.bold, column.label.toUpperCase(), LABEL_SIZE, width - inset * 2)
           : [],
     }));
     const labelHeight = Math.max(0, ...columns.map(column => column.labels.length)) * 11;
@@ -469,7 +465,7 @@ class PdfWriter {
 
   private headerLines(exercise: TestResultPdfExercise, continued: boolean) {
     const title = `${exercise.title}${continued ? ' (continued)' : ''}`;
-    return this.lines(title, this.serif, 14, this.titleWidth(exercise));
+    return wrapParagraphs(this.serif, title, 14, this.titleWidth(exercise));
   }
 
   private blockHeight(block: Block) {
@@ -481,8 +477,8 @@ class PdfWriter {
     const scoreWidth = score ? this.regular.widthOfTextAtSize(score, 9) : 0;
     const stacked = scoreWidth > CONTENT_WIDTH * 0.42;
     const headingWidth = stacked ? CONTENT_WIDTH : Math.max(160, CONTENT_WIDTH - scoreWidth - 16);
-    const headingLines = this.lines(block.heading, this.bold, 11, headingWidth);
-    const scoreLines = stacked && score ? this.lines(score, this.regular, 9, CONTENT_WIDTH) : [];
+    const headingLines = wrapParagraphs(this.bold, block.heading, 11, headingWidth);
+    const scoreLines = stacked && score ? wrapParagraphs(this.regular, score, 9, CONTENT_WIDTH) : [];
     const ruleSpace = block.divided ? 22 : 2;
     const textHeight = Math.max(headingLines.length, 1) * 15 + scoreLines.length * 13;
     return { headingLines, scoreLines, stacked, scoreWidth, score, height: ruleSpace + textHeight + block.gap };

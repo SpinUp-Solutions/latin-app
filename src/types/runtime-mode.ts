@@ -1,7 +1,7 @@
 import type { DiagramAnnotation } from '@/src/features/sentence-diagramming/model';
 import type { FeedbackConfig } from '@/src/types/exercises/base';
 
-export type RuntimeMode = 'practice' | 'test' | 'preview';
+export type RuntimeMode = 'practice' | 'test';
 
 export type ExerciseAnswer =
   | { type: 'matching'; rounds: Record<string, string>[] }
@@ -35,14 +35,6 @@ export type ExerciseAnswerHandler = (answer: ExerciseAnswer) => void;
  * accepted.
  */
 export type ExerciseCompletionHandler = (score: number) => void;
-
-export interface TestTranslationGradeEvent {
-  exerciseId: string;
-  itemIndex: number;
-  userTranslation: string;
-}
-
-export type TestTranslationGradeHandler = (event: TestTranslationGradeEvent) => Promise<void>;
 
 export const TEST_RUNTIME_FEEDBACK_CONFIG: FeedbackConfig = {
   escalationLevels: [],

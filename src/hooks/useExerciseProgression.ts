@@ -9,29 +9,12 @@ interface ExerciseProgressionOptions {
   progressionRules?: ProgressionRules;
 }
 
-interface ExerciseProgressionState {
-  currentIndex: number;
-  isLastItem: boolean;
-  isFirstItem: boolean;
-  isAwaitingConfirmation: boolean;
-}
-
-interface ExerciseProgressionActions {
-  autoAdvanceIfEnabled: (afterAdvance: () => void, hasVisibleExplanation: boolean) => void;
-  confirmAdvance: () => void;
-  resetIndex: () => void;
-  nextItem: () => void;
-  previousItem: () => void;
-  goToItem: (index: number) => void;
-  cancelPendingAdvance: () => void;
-}
-
 export function useExerciseProgression({
   totalItems,
   initialIndex = 0,
   itemProgressionDelay,
   progressionRules,
-}: ExerciseProgressionOptions): ExerciseProgressionState & ExerciseProgressionActions {
+}: ExerciseProgressionOptions) {
   const [currentIndex, setCurrentIndex] = useState(() =>
     totalItems <= 0 ? 0 : Math.max(0, Math.min(initialIndex, totalItems - 1))
   );
@@ -52,17 +35,21 @@ export function useExerciseProgression({
     pendingTimerCallbackRef.current = null;
   }, []);
 
-  useEffect(() => {
-    if (previousTotalRef.current === totalItems) return;
-    previousTotalRef.current = totalItems;
+  const cancelPendingAdvance = useCallback(() => {
     pendingAdvanceRef.current = null;
     setIsAwaitingConfirmation(false);
     clearAutoAdvanceTimer();
+  }, [clearAutoAdvanceTimer]);
+
+  useEffect(() => {
+    if (previousTotalRef.current === totalItems) return;
+    previousTotalRef.current = totalItems;
+    cancelPendingAdvance();
     setCurrentIndex(prev => {
       if (totalItems === 0) return 0;
       return prev >= totalItems ? totalItems - 1 : prev;
     });
-  }, [totalItems, clearAutoAdvanceTimer]);
+  }, [totalItems, cancelPendingAdvance]);
 
   // Activity suspends effects on page leave. Pause timed question advancement and
   // retain manual Continue callbacks so a returning student can resume either flow.
@@ -89,55 +76,27 @@ export function useExerciseProgression({
   const isFirstItem = currentIndex === 0;
 
   const nextItem = useCallback(() => {
-    pendingAdvanceRef.current = null;
-    setIsAwaitingConfirmation(false);
-    clearAutoAdvanceTimer();
-    setCurrentIndex(prev => {
-      if (prev < totalItems - 1) {
-        return prev + 1;
-      }
-      return prev;
-    });
-  }, [totalItems, clearAutoAdvanceTimer]);
+    cancelPendingAdvance();
+    setCurrentIndex(prev => (prev < totalItems - 1 ? prev + 1 : prev));
+  }, [totalItems, cancelPendingAdvance]);
 
   const previousItem = useCallback(() => {
-    pendingAdvanceRef.current = null;
-    setIsAwaitingConfirmation(false);
-    clearAutoAdvanceTimer();
-    setCurrentIndex(prev => {
-      if (prev > 0) {
-        return prev - 1;
-      }
-      return prev;
-    });
-  }, [clearAutoAdvanceTimer]);
+    cancelPendingAdvance();
+    setCurrentIndex(prev => (prev > 0 ? prev - 1 : prev));
+  }, [cancelPendingAdvance]);
 
   const resetIndex = useCallback(() => {
-    pendingAdvanceRef.current = null;
-    setIsAwaitingConfirmation(false);
-    clearAutoAdvanceTimer();
+    cancelPendingAdvance();
     setCurrentIndex(0);
-  }, [clearAutoAdvanceTimer]);
+  }, [cancelPendingAdvance]);
 
   const goToItem = useCallback(
     (index: number) => {
-      pendingAdvanceRef.current = null;
-      setIsAwaitingConfirmation(false);
-      clearAutoAdvanceTimer();
-      if (totalItems <= 0) {
-        setCurrentIndex(0);
-        return;
-      }
-      setCurrentIndex(Math.max(0, Math.min(index, totalItems - 1)));
+      cancelPendingAdvance();
+      setCurrentIndex(totalItems <= 0 ? 0 : Math.max(0, Math.min(index, totalItems - 1)));
     },
-    [clearAutoAdvanceTimer, totalItems]
+    [cancelPendingAdvance, totalItems]
   );
-
-  const cancelPendingAdvance = useCallback(() => {
-    pendingAdvanceRef.current = null;
-    setIsAwaitingConfirmation(false);
-    clearAutoAdvanceTimer();
-  }, [clearAutoAdvanceTimer]);
 
   const autoAdvanceIfEnabled = useCallback(
     (afterAdvance: () => void, hasVisibleExplanation: boolean) => {
@@ -147,26 +106,23 @@ export function useExerciseProgression({
       const pauseForExplanation = progressionRules?.pauseForExplanation ?? true;
 
       const shouldShowContinue = !autoAdvance || (pauseForExplanation && hasVisibleExplanation);
+      const advance = () => {
+        nextItem();
+        afterAdvance();
+      };
 
       if (shouldShowContinue) {
-        pendingAdvanceRef.current = () => {
-          nextItem();
-          afterAdvance();
-        };
+        pendingAdvanceRef.current = advance;
         setIsAwaitingConfirmation(true);
       } else {
         const delay = itemProgressionDelay ?? DEFAULT_ITEM_PROGRESSION_DELAY;
-        const callback = () => {
-          nextItem();
-          afterAdvance();
-        };
-        pendingTimerCallbackRef.current = callback;
+        pendingTimerCallbackRef.current = advance;
         remainingDelayRef.current = delay;
         timerDeadlineRef.current = Date.now() + delay;
         autoAdvanceTimerRef.current = setTimeout(() => {
           autoAdvanceTimerRef.current = null;
           pendingTimerCallbackRef.current = null;
-          callback();
+          advance();
         }, delay);
       }
     },

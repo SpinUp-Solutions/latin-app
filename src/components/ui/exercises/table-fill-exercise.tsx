@@ -1,10 +1,8 @@
 'use client';
 
-import { useSectionedTest } from '../test/sectioned-test-context';
 import React, { useState } from 'react';
 import { TableFillExercise } from '@/src/types/exercise';
-import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { useSingleAnswerExercise } from '@/src/hooks/useSingleAnswerExercise';
 import { FeedbackDisplay } from '../feedback';
 import { validateTableFillExercise } from '@/src/utils/exercises/tableFillExercise';
 import { Button } from '@/src/components/ui/button';
@@ -19,14 +17,12 @@ import {
   RomanTableCell,
 } from '../core/roman-table';
 import { cn } from '@/src/lib/utils';
-import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type {
   ExerciseAnswer,
   ExerciseAnswerHandler,
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
-import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: TableFillExercise;
@@ -45,10 +41,6 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   onAnswer,
   initialAnswer,
 }) => {
-  const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
-  const testAnswerMode = mode === 'test';
-  const sectioned = useSectionedTest();
   const restoredAnswers = initialAnswer?.type === 'table-fill' ? initialAnswer.answers : {};
   const requiredCellKeys = exercise.data.rows.flatMap(row =>
     exercise.data.columns.flatMap(column => (row.cells[column.id]?.isBlank ? [`${row.id}-${column.id}`] : []))
@@ -56,44 +48,41 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   const hasAllRequiredAnswers = (answers: Record<string, string>) =>
     requiredCellKeys.length > 0 && requiredCellKeys.every(cellKey => Boolean(answers[cellKey]?.trim()));
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>(restoredAnswers);
-  const [hasSubmitted, setHasSubmitted] = useState(hasAllRequiredAnswers(restoredAnswers));
-  const [isProcessing, setIsProcessing] = useState(false);
   const [cellResults, setCellResults] = useState<Record<string, boolean>>({});
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression(
-    {
-      totalItems: 1,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    }
-  );
-
   const {
+    testAnswerMode,
+    hasSubmitted,
+    isProcessing,
+    resetRequired,
     isCorrect,
     message,
     level,
     showExplanation,
-    handleCorrect,
-    handleIncorrect,
     clearFeedback,
-    shouldResetExercise,
-    resetExercise,
-  } = useExerciseFeedback(exercise.feedbackConfig);
-
-  const resetRequired = mode === 'practice' && shouldResetExercise;
+    isAwaitingConfirmation,
+    confirmAdvance,
+    submit,
+    tryAgain,
+    startOver,
+  } = useSingleAnswerExercise({
+    exercise,
+    runtimeMode,
+    initiallySubmitted: hasAllRequiredAnswers(restoredAnswers),
+    onAnswer,
+    onComplete,
+    onCompletionAccepted,
+  });
 
   const handleExerciseReset = () => {
-    cancelPendingAdvance();
+    startOver();
     setUserAnswers({});
-    setHasSubmitted(false);
     setCellResults({});
-    setIsProcessing(false);
-    resetExercise();
   };
 
   const handleInputChange = (cellKey: string, value: string) => {
     if (hasSubmitted || isProcessing || resetRequired) return;
     setUserAnswers(prev => ({ ...prev, [cellKey]: value }));
-    if (testAnswerMode && sectioned) onAnswer?.({ type: 'table-fill', answers: { ...userAnswers, [cellKey]: value } });
+    if (testAnswerMode) onAnswer?.({ type: 'table-fill', answers: { ...userAnswers, [cellKey]: value } });
     if (isCorrect !== null) {
       clearFeedback();
     }
@@ -101,50 +90,23 @@ const TableFillExerciseComponent: React.FC<Props> = ({
 
   const handleSubmit = () => {
     if (isProcessing || !hasAllRequiredAnswers(userAnswers) || resetRequired) return;
-
-    setIsProcessing(true);
-    setHasSubmitted(true);
-    if (testAnswerMode) {
-      onAnswer?.({ type: 'table-fill', answers: userAnswers });
-      setIsProcessing(false);
-      onComplete?.(0);
-      return;
-    }
-
-    const validation = validateTableFillExercise(userAnswers, exercise);
-    setCellResults(validation.cellResults);
-
-    const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'table-fill', answers: userAnswers }));
-
-    if (validation.isCorrect) {
-      handleCorrect();
-      const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
-        hasVisibleFeedbackContent(exercise.data.explanation);
-
-      autoAdvanceIfEnabled(() => {
-        setIsProcessing(false);
-        onComplete?.(score);
-      }, hasVisibleExplanation);
-      if (!assessmentMode) onCompletionAccepted?.(score);
-    } else {
-      handleIncorrect();
-      setIsProcessing(false);
-      if (assessmentMode) onComplete?.(score);
-    }
+    submit({ type: 'table-fill', answers: userAnswers }, () => {
+      const validation = validateTableFillExercise(userAnswers, exercise);
+      setCellResults(validation.cellResults);
+      return validation.isCorrect;
+    });
   };
 
   const handleReset = () => {
     setUserAnswers({});
-    setHasSubmitted(false);
     setCellResults({});
-    clearFeedback();
+    tryAgain();
   };
 
   const getCellClassName = (cellKey: string, isBlank: boolean) => {
     if (!isBlank) return '';
 
-    if (!assessmentMode && hasSubmitted && cellKey in cellResults) {
+    if (!testAnswerMode && hasSubmitted && cellKey in cellResults) {
       return cellResults[cellKey] ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300';
     }
 
@@ -235,14 +197,14 @@ const TableFillExerciseComponent: React.FC<Props> = ({
             </Button>
           )}
 
-          {hasSubmitted && isCorrect === false && !assessmentMode && !resetRequired && (
+          {hasSubmitted && isCorrect === false && !testAnswerMode && !resetRequired && (
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
             </Button>
           )}
         </div>
 
-        {!assessmentMode && (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={message}

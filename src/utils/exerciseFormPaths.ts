@@ -1,62 +1,27 @@
 import type {
   VerbFormPath,
-  VerbFormKind,
   FiniteVerbMood,
   NounFormPath,
   AdjectiveFormPath,
   PronounFormPath,
-  AdverbFormPath,
 } from '@/src/types/api/exercise-word-responses';
 import type { TableType } from '@/src/utils/schema-helpers';
 
-export const createVerbFormPath = (
-  verbForm: VerbFormKind,
-  tense: string,
-  voice: string,
-  mood: FiniteVerbMood | '',
-  person: string,
-  number: string,
-  caseValue?: string,
-  gender?: string
+const FINITE_MOODS = new Set(['indicative', 'subjunctive', 'imperative']);
+
+const nonFiniteVerbPath = (
+  verbForm: VerbFormPath['verb_form'],
+  { tense = '', voice = '', number = '', caseValue, gender }: Record<string, string | undefined>
 ): VerbFormPath => ({
   verb_form: verbForm,
   tense,
   voice,
-  mood,
-  person,
+  mood: '',
+  person: '',
   number,
   ...(caseValue ? { case: caseValue } : {}),
   ...(gender ? { gender } : {}),
 });
-
-export const createNounFormPath = (number: string, caseValue: string): NounFormPath => ({
-  number,
-  case: caseValue,
-});
-
-export const createAdjectiveFormPath = (
-  degree: string,
-  gender: string,
-  number: string,
-  caseValue: string
-): AdjectiveFormPath => ({
-  degree,
-  gender,
-  number,
-  case: caseValue,
-});
-
-export const createPronounFormPath = (gender: string, number: string, caseValue: string): PronounFormPath => ({
-  gender,
-  number,
-  case: caseValue,
-});
-
-export const createAdverbFormPath = (degree: string): AdverbFormPath => ({
-  degree,
-});
-
-type FormPath = VerbFormPath | NounFormPath | AdjectiveFormPath | PronounFormPath | AdverbFormPath;
 
 export const parseFormPathFromString = (
   path: string,
@@ -66,73 +31,41 @@ export const parseFormPathFromString = (
 
   const parts = path.split('.');
 
-  if (tableType === 'conjugation') {
-    const finiteMoods = new Set(['indicative', 'subjunctive', 'imperative']);
-
-    if (parts.length === 5 && finiteMoods.has(parts[0])) {
-      return createVerbFormPath(
-        'finite',
-        parts[2],
-        parts[1],
-        parts[0] as FiniteVerbMood,
-        parts[4],
-        parts[3]
-      );
-    }
-
-    if (parts.length === 4 && parts[0] === 'nonFinite' && parts[1] === 'infinitive') {
-      return createVerbFormPath('infinitive', parts[2], parts[3], '', '', '');
-    }
-
-    if (parts.length === 7 && parts[0] === 'nonFinite' && parts[1] === 'participle') {
-      return createVerbFormPath('participle', parts[2], parts[3], '', '', parts[6], parts[4], parts[5]);
-    }
-
-    if (parts.length === 2 && parts[0] === 'gerund') {
-      return createVerbFormPath('gerund', '', '', '', '', '', parts[1]);
-    }
-
-    if (parts.length === 2 && parts[0] === 'supine') {
-      return createVerbFormPath('supine', '', '', '', '', '', parts[1]);
-    }
+  switch (tableType) {
+    case 'conjugation':
+      if (parts.length === 5 && FINITE_MOODS.has(parts[0])) {
+        const [mood, voice, tense, number, person] = parts;
+        return { verb_form: 'finite', tense, voice, mood: mood as FiniteVerbMood, person, number };
+      }
+      if (parts.length === 4 && parts[0] === 'nonFinite' && parts[1] === 'infinitive') {
+        return nonFiniteVerbPath('infinitive', { tense: parts[2], voice: parts[3] });
+      }
+      if (parts.length === 7 && parts[0] === 'nonFinite' && parts[1] === 'participle') {
+        const [, , tense, voice, caseValue, gender, number] = parts;
+        return nonFiniteVerbPath('participle', { tense, voice, number, caseValue, gender });
+      }
+      if (parts.length === 2 && (parts[0] === 'gerund' || parts[0] === 'supine')) {
+        return nonFiniteVerbPath(parts[0], { caseValue: parts[1] });
+      }
+      return null;
+    case 'adjective-declension':
+      if (parts.length === 4) {
+        const [degree, caseValue, gender, number] = parts;
+        return { degree, gender, number, case: caseValue };
+      }
+      break;
+    case 'pronoun-adjective-declension':
+      if (parts.length === 3) {
+        const [caseValue, gender, number] = parts;
+        return { gender, number, case: caseValue };
+      }
+      break;
+    case 'declension':
+    case 'pronoun-declension':
+      break;
+    default:
+      return null;
   }
 
-  if (tableType === 'declension') {
-    if (parts.length === 2) {
-      return createNounFormPath(parts[1], parts[0]);
-    }
-  }
-
-  if (tableType === 'adjective-declension') {
-    if (parts.length === 4) {
-      return createAdjectiveFormPath(parts[0], parts[2], parts[3], parts[1]);
-    }
-    if (parts.length === 2) {
-      return createNounFormPath(parts[1], parts[0]);
-    }
-  }
-
-  if (tableType === 'pronoun-declension') {
-    if (parts.length === 2) {
-      return createNounFormPath(parts[1], parts[0]);
-    }
-  }
-
-  if (tableType === 'pronoun-adjective-declension') {
-    if (parts.length === 3) {
-      return createPronounFormPath(parts[1], parts[2], parts[0]);
-    }
-    if (parts.length === 2) {
-      return createNounFormPath(parts[1], parts[0]);
-    }
-  }
-
-  return null;
-};
-
-export const formatFormPath = (formPath: FormPath | null): string => {
-  if (!formPath) return '';
-  return Object.values(formPath)
-    .filter(v => v)
-    .join(' ');
+  return parts.length === 2 ? { number: parts[1], case: parts[0] } : null;
 };

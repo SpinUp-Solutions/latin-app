@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -7,18 +8,14 @@ import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    await verifyAdminAccess(request);
     const { id } = await params;
 
     if (!id) {
       return NextResponse.json({ error: 'Lesson ID is required' }, { status: 400 });
     }
 
-    const lessonDoc = await adminDb.collection('lessons').doc(id).get();
+    const lessonDoc = await adminDb.collection(LEARNING_UNITS_COLLECTION).doc(id).get();
 
     if (!lessonDoc.exists) {
       return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
@@ -45,9 +42,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { id } = await params;
 

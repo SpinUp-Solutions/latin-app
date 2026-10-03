@@ -36,23 +36,6 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
     dispatch(copyContentItem({ content, source }));
   };
 
-  const pasteItem = (target: ClipboardTarget) => {
-    const result = dispatch(pasteContentItem(0)) as PasteResult | null;
-
-    if (result && result.content && result.tooltips) {
-      dispatch(
-        addContentToPage({
-          pageIndex: target.pageIndex,
-          content: result.content,
-        })
-      );
-
-      if (Object.keys(result.tooltips).length > 0) {
-        dispatch(loadTooltips(result.tooltips));
-      }
-    }
-  };
-
   const clearItems = () => {
     dispatch(clearClipboard());
     setSelectedItems([]);
@@ -61,18 +44,11 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
   const pasteBulk = (target: ClipboardTarget, selectedIndices: number[]) => {
     selectedIndices.forEach(index => {
       const result = dispatch(pasteContentItem(index)) as PasteResult | null;
+      if (!result) return;
 
-      if (result && result.content && result.tooltips) {
-        dispatch(
-          addContentToPage({
-            pageIndex: target.pageIndex,
-            content: result.content,
-          })
-        );
-
-        if (Object.keys(result.tooltips).length > 0) {
-          dispatch(loadTooltips(result.tooltips));
-        }
+      dispatch(addContentToPage({ pageIndex: target.pageIndex, content: result.content }));
+      if (Object.keys(result.tooltips).length > 0) {
+        dispatch(loadTooltips(result.tooltips));
       }
     });
   };
@@ -89,7 +65,7 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
     setSelectedItems([]);
   };
 
-  // Clear selections when clipboard items change
+  // Drop selections that point past the end of a shrunken clipboard.
   React.useEffect(() => {
     setSelectedItems(prev => prev.filter(index => index < clipboardItems.length));
   }, [clipboardItems.length]);
@@ -98,7 +74,6 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
     <ClipboardContext.Provider
       value={{
         copyItem,
-        pasteItem,
         pasteBulk,
         hasItems,
         clearItems,

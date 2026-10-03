@@ -19,6 +19,8 @@ import {
 import { BookOpen, CheckCircle, Clock, Edit, FileCheck2, Filter, Globe, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
+import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { toast } from 'sonner';
 import { SortableLearningPathLesson } from '@/src/components/admin/SortableLearningPathLesson';
 import { SortableLessonItem } from '@/src/components/admin/SortableLessonItem';
@@ -48,6 +50,7 @@ import type { LessonSummary } from '@/src/types/lesson';
 import type { PracticeLessonType } from '@/src/types/practice-category';
 import type { TestUnitSummary } from '@/src/types/test';
 import type { LearningPathLessonIssue } from '@/src/types/learning-unit';
+import { haveSameIdOrder } from '@/src/utils/orderByIds';
 
 type LessonType = 'normal' | PracticeLessonType;
 type FilterStatus = 'all' | 'live' | 'draft';
@@ -68,9 +71,6 @@ const practiceTypes: PracticeLessonType[] = ['vocab', 'sentence-diagramming', 'l
 const UNSAVED_PATH_MESSAGE = 'You have unsaved Learning Path changes. Leave this page and discard them?';
 const SWITCH_WITH_UNSAVED_PATH_MESSAGE =
   'You have unsaved Learning Path changes. Switch sections without saving them first?';
-
-const sameOrder = (left: string[], right: string[]) =>
-  left.length === right.length && left.every((id, index) => id === right[index]);
 
 const resolvePathMembershipConflict = (conflict: PathConflict): string[] => {
   const concurrentRemovals = new Set(
@@ -166,7 +166,7 @@ function LiveLessonsPage() {
   useEffect(() => {
     if (!pathView) return;
     setPathDraft(current => {
-      if (current && !sameOrder(current.unitIds, current.baseUnitIds)) return current;
+      if (current && !haveSameIdOrder(current.unitIds, current.baseUnitIds)) return current;
       return {
         baseRevision: canonicalRevision,
         baseUnitIds: [...canonicalPathIds],
@@ -176,11 +176,9 @@ function LiveLessonsPage() {
   }, [canonicalPathIds, canonicalRevision, pathView]);
 
   const pathUnitIds = pathDraft?.unitIds ?? canonicalPathIds;
-  const pathDirty = Boolean(pathDraft && !sameOrder(pathDraft.unitIds, pathDraft.baseUnitIds));
-  const navigateFromPathDraft = (href: string) => {
-    if (pathDirty && !window.confirm(UNSAVED_PATH_MESSAGE)) return;
-    router.push(href);
-  };
+  const pathDirty = Boolean(pathDraft && !haveSameIdOrder(pathDraft.unitIds, pathDraft.baseUnitIds));
+  const navigationGuard = useUnsavedNavigationGuard(pathDirty, UNSAVED_PATH_MESSAGE);
+  const navigateFromPathDraft = (href: string) => navigationGuard.requestNavigation(() => router.push(href));
   const pathUnits = pathUnitIds.map(id => pathUnitById.get(id)).filter(Boolean) as Array<
     LessonSummary | TestUnitSummary
   >;
@@ -208,45 +206,6 @@ function LiveLessonsPage() {
     })
     .sort((left, right) => left.title.localeCompare(right.title));
 
-  useEffect(() => {
-    if (!pathDirty) return;
-    const currentUrl = window.location.href;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    const handlePopState = () => {
-      if (window.confirm(UNSAVED_PATH_MESSAGE)) return;
-      window.history.pushState(null, '', currentUrl);
-    };
-    const handleDocumentNavigation = (event: MouseEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      )
-        return;
-      const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]');
-      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
-      const destination = new URL(anchor.href, window.location.href);
-      if (destination.origin !== window.location.origin || destination.href === window.location.href) return;
-      if (window.confirm(UNSAVED_PATH_MESSAGE)) return;
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('popstate', handlePopState);
-    document.addEventListener('click', handleDocumentNavigation, true);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('popstate', handlePopState);
-      document.removeEventListener('click', handleDocumentNavigation, true);
-    };
-  }, [pathDirty]);
-
   const serverPracticeLive = useMemo(() => {
     const result = {} as Record<PracticeLessonType, LessonSummary[]>;
     practiceTypes.forEach(type => {
@@ -271,7 +230,7 @@ function LiveLessonsPage() {
     ? serverLessons.filter(lesson => lesson.type === currentPracticeType && !lesson.isLive)
     : [];
   const practiceOrderDirty = currentPracticeType
-    ? !sameOrder(
+    ? !haveSameIdOrder(
         practiceOrderIds,
         currentServerLiveLessons.map(lesson => lesson.id)
       )
@@ -388,11 +347,7 @@ function LiveLessonsPage() {
           liveOrder: index,
         }))
       ).unwrap();
-      setPracticeOrderDrafts(current => {
-        const next = { ...current };
-        delete next[currentPracticeType];
-        return next;
-      });
+      discardPracticeOrderDraft(currentPracticeType);
       await refetchLessons();
       toast.success('Lesson order saved successfully');
     } catch (error) {
@@ -428,33 +383,21 @@ function LiveLessonsPage() {
             expectedLiveLessonIds: [...expectedLiveLessonIds, ...toPublish],
           }).unwrap();
         } catch (error) {
-          if (toPublish.length) {
-            try {
-              await updatePublishStatus({
-                lessonIds: toPublish,
-                isLive: false,
-                lessonType: currentPracticeType,
-                expectedLiveLessonIds: [...expectedLiveLessonIds, ...toPublish],
-              }).unwrap();
-              throw new Error('Unpublish failed; newly published lessons were rolled back');
-            } catch (rollbackError) {
-              if (
-                rollbackError instanceof Error &&
-                rollbackError.message === 'Unpublish failed; newly published lessons were rolled back'
-              ) {
-                throw rollbackError;
-              }
-              throw new Error('Unpublish failed and the publish rollback also failed. Review this practice list.');
-            }
+          if (!toPublish.length) throw error;
+          try {
+            await updatePublishStatus({
+              lessonIds: toPublish,
+              isLive: false,
+              lessonType: currentPracticeType,
+              expectedLiveLessonIds: [...expectedLiveLessonIds, ...toPublish],
+            }).unwrap();
+          } catch {
+            throw new Error('Unpublish failed and the publish rollback also failed. Review this practice list.');
           }
-          throw error;
+          throw new Error('Unpublish failed; newly published lessons were rolled back');
         }
       }
-      setPracticeOrderDrafts(current => {
-        const next = { ...current };
-        delete next[currentPracticeType];
-        return next;
-      });
+      discardPracticeOrderDraft(currentPracticeType);
       setSelectionKey(null);
       await refetchLessons();
       toast.success('Practice publication changes applied');
@@ -464,6 +407,16 @@ function LiveLessonsPage() {
       setIsPublishing(false);
     }
   };
+
+  const removeFromPath = (unitId: string) =>
+    setPathDraft(current => (current ? { ...current, unitIds: current.unitIds.filter(id => id !== unitId) } : current));
+
+  const discardPracticeOrderDraft = (type: PracticeLessonType) =>
+    setPracticeOrderDrafts(current => {
+      const next = { ...current };
+      delete next[type];
+      return next;
+    });
 
   const openTestPicker = (index: number) => {
     if (!pathView?.canEdit || pathSaving) return;
@@ -568,14 +521,7 @@ function LiveLessonsPage() {
             </>
           }
         />
-        <Tabs
-          value={lessonType}
-          onValueChange={value => {
-            if (value !== lessonType && pathDirty && !window.confirm(SWITCH_WITH_UNSAVED_PATH_MESSAGE)) return;
-            setLessonType(value as LessonType);
-            setFilterStatus('live');
-            setSearchQuery('');
-          }}>
+        <Tabs value={lessonType}>
           <LessonTypeTabs
             value={lessonType}
             onValueChange={value => {
@@ -768,16 +714,7 @@ function LiveLessonsPage() {
                                   variant="outline"
                                   aria-label={`Remove missing unit ${id} from Learning Path`}
                                   disabled={!pathView?.canEdit || pathSaving}
-                                  onClick={() =>
-                                    setPathDraft(current =>
-                                      current
-                                        ? {
-                                            ...current,
-                                            unitIds: current.unitIds.filter(unitId => unitId !== id),
-                                          }
-                                        : current
-                                    )
-                                  }>
+                                  onClick={() => removeFromPath(id)}>
                                   Remove reference
                                 </Button>
                               </div>
@@ -788,16 +725,7 @@ function LiveLessonsPage() {
                                 issues={unit.kind === 'test' ? [] : (lessonIssuesById[unit.id] ?? [])}
                                 disabled={!pathView?.canEdit || pathSaving}
                                 onNavigate={navigateFromPathDraft}
-                                onRemove={() =>
-                                  setPathDraft(current =>
-                                    current
-                                      ? {
-                                          ...current,
-                                          unitIds: current.unitIds.filter(unitId => unitId !== unit.id),
-                                        }
-                                      : current
-                                  )
-                                }
+                                onRemove={() => removeFromPath(unit.id)}
                               />
                             )}
                             {renderTestInsertionControl(index + 1)}
@@ -918,16 +846,7 @@ function LiveLessonsPage() {
                     </div>
                     {practiceOrderDirty && (
                       <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setPracticeOrderDrafts(current => {
-                              const next = { ...current };
-                              delete next[type];
-                              return next;
-                            })
-                          }>
+                        <Button size="sm" variant="outline" onClick={() => discardPracticeOrderDraft(type)}>
                           Discard
                         </Button>
                         <Button size="sm" onClick={savePracticeOrder}>
@@ -1088,6 +1007,7 @@ function LiveLessonsPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <UnsavedNavigationDialog guard={navigationGuard} />
     </>
   );
 }

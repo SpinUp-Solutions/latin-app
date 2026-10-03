@@ -81,10 +81,6 @@ const canonicalRequest = (input: CreateVocabularyPoolFromPoolsRequest) => ({
   requestId: input.requestId,
 });
 
-export function vocabularyPoolCopyRequestFingerprint(input: CreateVocabularyPoolFromPoolsRequest): string {
-  return digest(canonicalRequest(input));
-}
-
 function sourceMembershipFingerprint(
   sourcePoolIds: readonly string[],
   sourceStates: readonly SourcePoolState[]
@@ -102,10 +98,6 @@ function operationDocumentId(actorUid: string, requestId: string): string {
   return `copy-${digest({ actorUid, requestId }).slice(0, 48)}`;
 }
 
-function isPendingDeletion(value: unknown): boolean {
-  return Boolean(value);
-}
-
 function sourceWordIds(data: DocumentData, sourceId: string): string[] {
   if (!Array.isArray(data.wordDocIds)) {
     throw new VocabularyPoolFromPoolsError(
@@ -115,16 +107,14 @@ function sourceWordIds(data: DocumentData, sourceId: string): string[] {
     );
   }
 
-  const ids = data.wordDocIds as unknown[];
-  if (ids.some(id => !isFirestoreDocumentId(id))) {
+  if (data.wordDocIds.some(id => !isFirestoreDocumentId(id))) {
     throw new VocabularyPoolFromPoolsError(
       `Source pool ${sourceId} contains an invalid word reference and cannot be copied.`,
       409,
       'VOCABULARY_POOL_SOURCE_MEMBERSHIP_INVALID'
     );
   }
-  const typedIds = ids as string[];
-  return typedIds;
+  return data.wordDocIds as string[];
 }
 
 function assertSourceState(sourceId: string, active: DocumentSnapshot, tombstone: DocumentSnapshot): SourcePoolState {
@@ -158,7 +148,7 @@ function assertSourceState(sourceId: string, active: DocumentSnapshot, tombstone
       'VOCABULARY_POOL_SOURCE_PENDING'
     );
   }
-  if (isPendingDeletion(data._deletionPending)) {
+  if (data._deletionPending) {
     throw new VocabularyPoolFromPoolsError(
       `Source pool ${sourceId} is pending deletion and cannot be copied.`,
       409,
@@ -186,30 +176,16 @@ function unionWordIds(sourceStates: readonly SourcePoolState[], individualWordId
   return result;
 }
 
-async function getAllDocuments(
-  db: Firestore,
+/** Chunks getAll so large memberships stay under per-request read limits. */
+async function getAllChunked(
+  reader: { getAll: Firestore['getAll'] },
   refs: readonly DocumentReference[],
   fieldMask?: readonly string[]
 ): Promise<DocumentSnapshot[]> {
-  if (refs.length === 0) return [];
   const snapshots: DocumentSnapshot[] = [];
-  const readOptions = fieldMask ? { fieldMask: [...fieldMask] } : undefined;
+  const readOptions = fieldMask ? [{ fieldMask: [...fieldMask] }] : [];
   for (const refsChunk of chunk(refs, VOCABULARY_POOL_COPY_READ_CHUNK_SIZE)) {
-    snapshots.push(...(await db.getAll(...refsChunk, ...(readOptions ? [readOptions] : []))));
-  }
-  return snapshots;
-}
-
-async function transactionGetAll(
-  transaction: Transaction,
-  refs: readonly DocumentReference[],
-  fieldMask?: readonly string[]
-): Promise<DocumentSnapshot[]> {
-  if (refs.length === 0) return [];
-  const snapshots: DocumentSnapshot[] = [];
-  const readOptions = fieldMask ? { fieldMask: [...fieldMask] } : undefined;
-  for (const refsChunk of chunk(refs, VOCABULARY_POOL_COPY_READ_CHUNK_SIZE)) {
-    snapshots.push(...(await transaction.getAll(...refsChunk, ...(readOptions ? [readOptions] : []))));
+    snapshots.push(...(await reader.getAll(...refsChunk, ...readOptions)));
   }
   return snapshots;
 }
@@ -220,8 +196,8 @@ async function readSources(db: Firestore, sourcePoolIds: readonly string[]): Pro
   // Reading all active and tombstone documents before validating any of them
   // keeps the lookup deterministic and makes conflicts fail closed.
   const [activeSnapshots, tombstoneSnapshots] = await Promise.all([
-    getAllDocuments(db, activeRefs, ['wordDocIds', 'sourcePoolIds', '_creationPending', '_deletionPending']),
-    getAllDocuments(db, tombstoneRefs, ['archiveId']),
+    getAllChunked(db, activeRefs, ['wordDocIds', 'sourcePoolIds', '_creationPending', '_deletionPending']),
+    getAllChunked(db, tombstoneRefs, ['archiveId']),
   ]);
   return Promise.all(
     sourcePoolIds.map(async (id, index) => {
@@ -242,7 +218,7 @@ function validateWordSnapshots(wordIds: readonly string[], snapshots: readonly D
       'VOCABULARY_POOL_WORD_REFERENCE_MISSING'
     );
   }
-  const deletingIds = wordIds.filter((_, index) => isPendingDeletion(snapshots[index]?.data()?._deletionPending));
+  const deletingIds = wordIds.filter((_, index) => Boolean(snapshots[index]?.data()?._deletionPending));
   if (deletingIds.length > 0) {
     throw new VocabularyPoolFromPoolsError(
       `Cannot copy ${deletingIds.length} vocabulary ${deletingIds.length === 1 ? 'word' : 'words'} pending deletion (${deletingIds
@@ -256,20 +232,18 @@ function validateWordSnapshots(wordIds: readonly string[], snapshots: readonly D
 
 async function readAndValidateWords(db: Firestore, wordIds: readonly string[]): Promise<void> {
   const refs = wordIds.map(id => db.collection(VOCABULARY_WORDS_COLLECTION).doc(id));
-  const snapshots = await getAllDocuments(db, refs, ['_deletionPending', '_poolReferenceRevision']);
+  const snapshots = await getAllChunked(db, refs, ['_deletionPending', '_poolReferenceRevision']);
   validateWordSnapshots(wordIds, snapshots);
 }
 
 function markerMatches(
   marker: Record<string, unknown>,
-  input: CreateVocabularyPoolFromPoolsRequest,
   actorUid: string,
+  requestId: string,
   requestFingerprint: string
 ): boolean {
   return (
-    marker.actorUid === actorUid &&
-    marker.requestId === input.requestId &&
-    marker.requestFingerprint === requestFingerprint
+    marker.actorUid === actorUid && marker.requestId === requestId && marker.requestFingerprint === requestFingerprint
   );
 }
 
@@ -290,7 +264,7 @@ function assertPendingMarkerIdentity(
   sourceFingerprint: string
 ): void {
   if (
-    !markerMatches(marker, input, actorUid, requestFingerprint) ||
+    !markerMatches(marker, actorUid, input.requestId, requestFingerprint) ||
     marker.sourceMembershipFingerprint !== sourceFingerprint ||
     !sourceIdsMatch(marker, input.sourcePoolIds)
   ) {
@@ -398,9 +372,7 @@ function isSameCompletedRequest(
   const marker = markerRecord(value);
   return Boolean(
     marker &&
-      marker.actorUid === actorUid &&
-      marker.requestId === requestId &&
-      marker.requestFingerprint === requestFingerprint &&
+      markerMatches(marker, actorUid, requestId, requestFingerprint) &&
       typeof marker.sourceMembershipFingerprint === 'string' &&
       marker.sourceMembershipFingerprint.length > 0 &&
       marker.completedAt !== undefined &&
@@ -408,47 +380,7 @@ function isSameCompletedRequest(
   );
 }
 
-function assertNoRequestCollision(
-  existing: DocumentSnapshot,
-  actorUid: string,
-  requestId: string,
-  requestFingerprint: string
-): CreationPendingMarker | null {
-  if (!existing.exists) return null;
-  const data = existing.data() ?? {};
-  const pending = markerRecord(data._creationPending);
-  if (pending) {
-    if (!markerMatches(pending, { requestId } as CreateVocabularyPoolFromPoolsRequest, actorUid, requestFingerprint)) {
-      throw new VocabularyPoolFromPoolsError(
-        'This copy request conflicts with another saved copy. Review the selected pools and click Create Pool again.',
-        409,
-        'VOCABULARY_POOL_COPY_REQUEST_CONFLICT'
-      );
-    }
-    return pending as unknown as CreationPendingMarker;
-  }
-
-  const completed = markerRecord(data._copyRequest);
-  if (
-    completed &&
-    (completed.actorUid !== actorUid ||
-      completed.requestId !== requestId ||
-      completed.requestFingerprint !== requestFingerprint)
-  ) {
-    throw new VocabularyPoolFromPoolsError(
-      'This copy request conflicts with another saved copy. Review the selected pools and click Create Pool again.',
-      409,
-      'VOCABULARY_POOL_COPY_REQUEST_CONFLICT'
-    );
-  }
-  throw new VocabularyPoolFromPoolsError(
-    'A saved vocabulary pool copy is incomplete. Review the selected pools and click Create Pool again.',
-    409,
-    'VOCABULARY_POOL_COPY_REQUEST_CONFLICT'
-  );
-}
-
-function ensureSourceFingerprint(expected: string, actual: string): void {
+function ensureSourceFingerprint(expected: unknown, actual: string): void {
   if (expected === actual) return;
   throw new VocabularyPoolFromPoolsError(
     'A source pool changed while this copy was in progress. Review the selected pools and try Create Pool again.',
@@ -542,12 +474,7 @@ async function cleanupOwnedStage(
       const snapshot = await transaction.get(poolRef);
       if (!snapshot.exists) return;
       const marker = markerRecord(snapshot.data()?._creationPending);
-      if (
-        marker &&
-        marker.actorUid === actorUid &&
-        marker.requestId === requestId &&
-        marker.requestFingerprint === requestFingerprint
-      ) {
+      if (marker && markerMatches(marker, actorUid, requestId, requestFingerprint)) {
         transaction.delete(poolRef);
       }
     },
@@ -566,7 +493,7 @@ export async function createVocabularyPoolFromPools(
   input: CreateVocabularyPoolFromPoolsRequest
 ): Promise<DocumentData> {
   if (input.keepLinked !== false) return createLinkedVocabularyPool(db, actorUid, input);
-  const requestFingerprint = vocabularyPoolCopyRequestFingerprint(input);
+  const requestFingerprint = digest(canonicalRequest(input));
   const poolId = operationDocumentId(actorUid, input.requestId);
   const poolRef = db.collection(VOCABULARY_POOL_COLLECTION).doc(poolId);
   let operationMayHaveStage = false;
@@ -586,7 +513,6 @@ export async function createVocabularyPoolFromPools(
       }
       const existingData = existing.data() ?? {};
       const hasCopyRequestState = Object.prototype.hasOwnProperty.call(existingData, '_copyRequest');
-      const completedMarker = markerRecord(existingData._copyRequest);
       if (hasCopyRequestState && isVocabularyPoolCreationPending(existingData)) {
         throw new VocabularyPoolFromPoolsError(
           'The saved vocabulary pool copy state is conflicting. Review the selected pools and try Create Pool again.',
@@ -595,10 +521,7 @@ export async function createVocabularyPoolFromPools(
         );
       }
       if (existing.exists && hasCopyRequestState) {
-        if (
-          !completedMarker ||
-          !isSameCompletedRequest(existingData._copyRequest, actorUid, input.requestId, requestFingerprint)
-        ) {
+        if (!isSameCompletedRequest(existingData._copyRequest, actorUid, input.requestId, requestFingerprint)) {
           throw new VocabularyPoolFromPoolsError(
             'A saved vocabulary pool copy is incomplete or conflicts with this request. Review the selected pools and click Create Pool again.',
             409,
@@ -613,10 +536,14 @@ export async function createVocabularyPoolFromPools(
       if (existing.exists && !pendingMarker) {
         // Includes malformed private state and a legacy document that happens
         // to occupy the deterministic operation ID.
-        assertNoRequestCollision(existing, actorUid, input.requestId, requestFingerprint);
+        throw new VocabularyPoolFromPoolsError(
+          'A saved vocabulary pool copy is incomplete. Review the selected pools and click Create Pool again.',
+          409,
+          'VOCABULARY_POOL_COPY_REQUEST_CONFLICT'
+        );
       }
       if (pendingMarker) {
-        if (!markerMatches(pendingMarker, input, actorUid, requestFingerprint)) {
+        if (!markerMatches(pendingMarker, actorUid, input.requestId, requestFingerprint)) {
           throw new VocabularyPoolFromPoolsError(
             'This copy request conflicts with another saved copy. Review the selected pools and click Create Pool again.',
             409,
@@ -631,14 +558,36 @@ export async function createVocabularyPoolFromPools(
       // publication, so a stale preflight can never publish a changed source.
       const sourceStates = await readSources(db, input.sourcePoolIds);
       const sourceFingerprint = sourceMembershipFingerprint(input.sourcePoolIds, sourceStates);
-      if (pendingMarker) {
-        if (pendingMarker.sourceMembershipFingerprint !== sourceFingerprint) {
+      const readStageAndRecheckSources = async (transaction: Transaction) => {
+        const stagedSnapshot = await transaction.get(poolRef);
+        const destinationTombstoneSnapshot = await transaction.get(destinationTombstoneRef);
+        if (destinationTombstoneSnapshot.exists) {
           throw new VocabularyPoolFromPoolsError(
-            'A source pool changed while this copy was in progress. Review the selected pools and try Create Pool again.',
+            'The saved copy destination is archived or deleted. Try Create Pool again.',
             409,
-            'VOCABULARY_POOL_SOURCE_MEMBERSHIP_CHANGED'
+            'VOCABULARY_POOL_COPY_DESTINATION_ARCHIVED'
           );
         }
+        const activeSnapshots = await getAllChunked(
+          transaction,
+          input.sourcePoolIds.map(id => db.collection(VOCABULARY_POOL_COLLECTION).doc(id))
+        );
+        const tombstoneSnapshots = await getAllChunked(
+          transaction,
+          input.sourcePoolIds.map(id => db.collection(DELETED_VOCABULARY_POOL_COLLECTION).doc(id))
+        );
+        const currentSources = await Promise.all(
+          input.sourcePoolIds.map(async (id, index) => {
+            const source = assertSourceState(id, activeSnapshots[index], tombstoneSnapshots[index]);
+            return { ...source, data: await resolveVocabularyPool(db, id, source.data, transaction) };
+          })
+        );
+        ensureSourceFingerprint(sourceFingerprint, sourceMembershipFingerprint(input.sourcePoolIds, currentSources));
+        return stagedSnapshot;
+      };
+
+      if (pendingMarker) {
+        ensureSourceFingerprint(pendingMarker.sourceMembershipFingerprint, sourceFingerprint);
         if (!sourceIdsMatch(pendingMarker, input.sourcePoolIds)) {
           throw new VocabularyPoolFromPoolsError(
             'The selected source pools no longer match the saved copy. Review them and try Create Pool again.',
@@ -689,31 +638,7 @@ export async function createVocabularyPoolFromPools(
         await runVocabularyContentMutation(
           db,
           async transaction => {
-            const activeRefs = input.sourcePoolIds.map(id => db.collection(VOCABULARY_POOL_COLLECTION).doc(id));
-            const tombstoneRefs = input.sourcePoolIds.map(id =>
-              db.collection(DELETED_VOCABULARY_POOL_COLLECTION).doc(id)
-            );
-            const stagedSnapshot = await transaction.get(poolRef);
-            const destinationTombstoneSnapshot = await transaction.get(destinationTombstoneRef);
-            if (destinationTombstoneSnapshot.exists) {
-              throw new VocabularyPoolFromPoolsError(
-                'The saved copy destination is archived or deleted. Try Create Pool again.',
-                409,
-                'VOCABULARY_POOL_COPY_DESTINATION_ARCHIVED'
-              );
-            }
-            const activeSnapshots = await transactionGetAll(transaction, activeRefs);
-            const tombstoneSnapshots = await transactionGetAll(transaction, tombstoneRefs);
-            const currentSources = await Promise.all(
-              input.sourcePoolIds.map(async (id, index) => {
-                const source = assertSourceState(id, activeSnapshots[index], tombstoneSnapshots[index]);
-                return { ...source, data: await resolveVocabularyPool(db, id, source.data, transaction) };
-              })
-            );
-            ensureSourceFingerprint(
-              sourceFingerprint,
-              sourceMembershipFingerprint(input.sourcePoolIds, currentSources)
-            );
+            const stagedSnapshot = await readStageAndRecheckSources(transaction);
 
             let stagedMarker: Record<string, unknown> | null = null;
             if (stagedSnapshot.exists) {
@@ -743,7 +668,7 @@ export async function createVocabularyPoolFromPools(
             }
 
             const wordRefs = wordBatch.map(id => db.collection(VOCABULARY_WORDS_COLLECTION).doc(id));
-            const wordSnapshots = await transactionGetAll(transaction, wordRefs);
+            const wordSnapshots = await getAllChunked(transaction, wordRefs);
             validateWordSnapshots(wordBatch, wordSnapshots);
 
             // All transaction reads are complete before any revision or pool
@@ -774,28 +699,7 @@ export async function createVocabularyPoolFromPools(
       await runVocabularyContentMutation(
         db,
         async transaction => {
-          const activeRefs = input.sourcePoolIds.map(id => db.collection(VOCABULARY_POOL_COLLECTION).doc(id));
-          const tombstoneRefs = input.sourcePoolIds.map(id =>
-            db.collection(DELETED_VOCABULARY_POOL_COLLECTION).doc(id)
-          );
-          const stagedSnapshot = await transaction.get(poolRef);
-          const destinationTombstoneSnapshot = await transaction.get(destinationTombstoneRef);
-          if (destinationTombstoneSnapshot.exists) {
-            throw new VocabularyPoolFromPoolsError(
-              'The saved copy destination is archived or deleted. Try Create Pool again.',
-              409,
-              'VOCABULARY_POOL_COPY_DESTINATION_ARCHIVED'
-            );
-          }
-          const activeSnapshots = await transactionGetAll(transaction, activeRefs);
-          const tombstoneSnapshots = await transactionGetAll(transaction, tombstoneRefs);
-          const currentSources = await Promise.all(
-            input.sourcePoolIds.map(async (id, index) => {
-              const source = assertSourceState(id, activeSnapshots[index], tombstoneSnapshots[index]);
-              return { ...source, data: await resolveVocabularyPool(db, id, source.data, transaction) };
-            })
-          );
-          ensureSourceFingerprint(sourceFingerprint, sourceMembershipFingerprint(input.sourcePoolIds, currentSources));
+          const stagedSnapshot = await readStageAndRecheckSources(transaction);
 
           if (!stagedSnapshot.exists) {
             throw new VocabularyPoolFromPoolsError(
@@ -819,7 +723,7 @@ export async function createVocabularyPoolFromPools(
           const allWordSnapshots: DocumentSnapshot[] = [];
           for (const wordChunk of chunk(finalWordIds, VOCABULARY_POOL_COPY_WORD_BATCH_SIZE)) {
             const refs = wordChunk.map(id => db.collection(VOCABULARY_WORDS_COLLECTION).doc(id));
-            const snapshots = await transactionGetAll(transaction, refs);
+            const snapshots = await getAllChunked(transaction, refs);
             validateWordSnapshots(wordChunk, snapshots);
             allWordSnapshots.push(...snapshots);
           }

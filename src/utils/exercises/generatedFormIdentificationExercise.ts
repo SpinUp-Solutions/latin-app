@@ -1,5 +1,4 @@
-import { ValidationResult } from './types';
-import { stripHtmlTags } from './helpers';
+import { normalizeAnswer } from './helpers';
 import {
   FormIdentificationItemSchema,
   type FormIdentificationItem,
@@ -11,74 +10,28 @@ import {
 } from '@/src/types/exercises/schemas/form-identification';
 import { getAcceptedAnswersForStep } from './formIdentificationHelpers';
 
-export const normalize = (s: string): string => {
-  return stripHtmlTags(s)
-    .trim()
-    .toLowerCase()
-    .replace(/[.,;:!?]/g, '')
-    .replace(/\s+/g, ' ');
-};
-
 export const validateGeneratedFormIdentificationExercise = (
   userAnswer: string,
   currentItem: FormIdentificationItem
-): ValidationResult => {
+) => {
   const validatedItem = FormIdentificationItemSchema.parse(currentItem);
-
-  const input = normalize(userAnswer);
-
-  if (!input) {
-    return {
-      isCorrect: false,
-      correctAnswer: validatedItem.correctAnswer,
-      hint: validatedItem.hint,
-    };
-  }
-
-  const normalizedAnswers = validatedItem.acceptedAnswers.map(normalize).filter(a => a !== '');
-  const isCorrect = normalizedAnswers.includes(input);
-
-  return {
-    isCorrect,
-    correctAnswer: validatedItem.correctAnswer,
-    hint: validatedItem.hint,
-  };
+  const input = normalizeAnswer(userAnswer);
+  return { isCorrect: input !== '' && validatedItem.acceptedAnswers.map(normalizeAnswer).includes(input) };
 };
 
 export const validateSingleFieldFormIdentificationExercise = (
   userAnswer: string,
   currentItem: SingleFieldFormIdentificationItem
-): ValidationResult => {
+) => {
   const validatedItem = SingleFieldFormIdentificationItemSchema.parse(currentItem);
+  const userPaths = userAnswer.split(';').map(pathStr => pathStr.split(',').map(normalizeAnswer));
 
-  if (!normalize(userAnswer)) {
-    return {
-      isCorrect: false,
-      correctAnswer: validatedItem.correctAnswerDisplay,
-      hint: 'Please enter an answer',
-    };
-  }
-
-  const userPaths = userAnswer.split(';').map(pathStr => pathStr.split(',').map(part => normalize(part)));
-  const expectedPathCount = validatedItem.primaryFormPaths.length;
-  const expectedStepCount = validatedItem.steps.length;
-
-  if (userPaths.length !== expectedPathCount) {
-    return {
-      isCorrect: false,
-      correctAnswer: validatedItem.correctAnswerDisplay,
-      hint: `Expected ${expectedPathCount} path${expectedPathCount > 1 ? 's' : ''} separated by semicolons`,
-    };
-  }
-
-  for (const userPath of userPaths) {
-    if (userPath.length !== expectedStepCount) {
-      return {
-        isCorrect: false,
-        correctAnswer: validatedItem.correctAnswerDisplay,
-        hint: `Each path should have ${expectedStepCount} values separated by commas`,
-      };
-    }
+  if (
+    !normalizeAnswer(userAnswer) ||
+    userPaths.length !== validatedItem.primaryFormPaths.length ||
+    userPaths.some(userPath => userPath.length !== validatedItem.steps.length)
+  ) {
+    return { isCorrect: false };
   }
 
   const primaryPaths = validatedItem.primaryFormPaths;
@@ -95,7 +48,7 @@ export const validateSingleFieldFormIdentificationExercise = (
 
       if (pathStepValues.some(v => !v)) continue;
 
-      const variantsPerStep = pathStepValues.map(value => getAcceptedAnswersForStep(value || '').map(normalize));
+      const variantsPerStep = pathStepValues.map(value => getAcceptedAnswersForStep(value || '').map(normalizeAnswer));
       const matchesPath = userPath.every((userPart, index) => variantsPerStep[index].includes(userPart));
 
       if (matchesPath) {
@@ -105,19 +58,10 @@ export const validateSingleFieldFormIdentificationExercise = (
       }
     }
 
-    if (!foundMatch) {
-      return {
-        isCorrect: false,
-        correctAnswer: validatedItem.correctAnswerDisplay,
-        hint: validatedItem.hint,
-      };
-    }
+    if (!foundMatch) return { isCorrect: false };
   }
 
-  return {
-    isCorrect: true,
-    correctAnswer: validatedItem.correctAnswerDisplay,
-  };
+  return { isCorrect: true };
 };
 
 export interface SingleFieldPartialCredit {
@@ -139,7 +83,7 @@ export const scoreSingleFieldFormIdentificationAnswer = (
   const expectedPaths = validatedItem.primaryFormPaths;
   const steps = validatedItem.steps;
   const availableUnits = expectedPaths.length * steps.length;
-  const userPaths = userAnswer.split(';').map(path => path.split(',').map(normalize));
+  const userPaths = userAnswer.split(';').map(path => path.split(',').map(normalizeAnswer));
 
   if (userPaths.length !== expectedPaths.length || userPaths.some(path => path.length > steps.length)) {
     return { earnedUnits: 0, availableUnits };
@@ -150,7 +94,7 @@ export const scoreSingleFieldFormIdentificationAnswer = (
       steps.reduce((score, step, stepIndex) => {
         const expected = expectedPath[step];
         if (!expected || !userPath[stepIndex]) return score;
-        const accepted = getAcceptedAnswersForStep(expected).map(normalize);
+        const accepted = getAcceptedAnswersForStep(expected).map(normalizeAnswer);
         return score + (accepted.includes(userPath[stepIndex]) ? 1 : 0);
       }, 0)
     )
@@ -171,43 +115,19 @@ export const scoreSingleFieldFormIdentificationAnswer = (
   return { earnedUnits: search(0, new Set()), availableUnits };
 };
 
-export interface MultiAnswerStepValidationResult extends ValidationResult {
-  answerSlots: string[];
-}
-
-export const validateMultiAnswerStep = (
-  userAnswer: string,
-  currentItem: MultiAnswerFormIdentificationItem
-): MultiAnswerStepValidationResult => {
+export const validateMultiAnswerStep = (userAnswer: string, currentItem: MultiAnswerFormIdentificationItem) => {
   const validatedItem = MultiAnswerFormIdentificationItemSchema.parse(currentItem);
-
-  if (!normalize(userAnswer)) {
-    return {
-      isCorrect: false,
-      correctAnswer: validatedItem.correctAnswerDisplay,
-      hint: 'Please enter an answer',
-      answerSlots: [],
-    };
-  }
-
   const userParts = userAnswer.split(';').map(part => part.trim());
-  const expectedCount = validatedItem.expectedAnswerCount;
+  const rejected = { isCorrect: false, answerSlots: [] as string[] };
 
-  if (userParts.length !== expectedCount) {
-    return {
-      isCorrect: false,
-      correctAnswer: validatedItem.correctAnswerDisplay,
-      hint: `Expected ${expectedCount} answers separated by semicolons`,
-      answerSlots: [],
-    };
-  }
+  if (!normalizeAnswer(userAnswer) || userParts.length !== validatedItem.expectedAnswerCount) return rejected;
 
   const step = validatedItem.step;
   const primaryPaths = validatedItem.primaryFormPaths;
-  const normalizedUserParts = userParts.map(normalize);
+  const normalizedUserParts = userParts.map(normalizeAnswer);
   const acceptedByPath = primaryPaths.map(path => {
     const value = path[step];
-    return value ? getAcceptedAnswersForStep(value).map(normalize) : [];
+    return value ? getAcceptedAnswersForStep(value).map(normalizeAnswer) : [];
   });
   const userAssignedToPath = Array<number>(acceptedByPath.length).fill(-1);
   const assignUserToPath = (userIndex: number, visitedPaths: Set<number>): boolean => {
@@ -225,40 +145,18 @@ export const validateMultiAnswerStep = (
     return false;
   };
 
-  if (!normalizedUserParts.every((_, userIndex) => assignUserToPath(userIndex, new Set()))) {
-    return {
-      isCorrect: false,
-      correctAnswer: validatedItem.correctAnswerDisplay,
-      hint: validatedItem.hint,
-      answerSlots: [],
-    };
-  }
+  if (!normalizedUserParts.every((_, userIndex) => assignUserToPath(userIndex, new Set()))) return rejected;
 
-  return {
-    isCorrect: true,
-    correctAnswer: validatedItem.correctAnswerDisplay,
-    answerSlots: userParts,
-  };
+  return { isCorrect: true, answerSlots: userParts };
 };
-
-export interface PartialValidationResult extends ValidationResult {
-  failedSlots: number[];
-}
 
 export const validatePartialMultiAnswerPaths = (
   answerSlotsSoFar: string[][],
   stepsCompleted: FormIdentificationStep[],
   primaryFormPaths: Array<Record<string, string | undefined>>
-): PartialValidationResult => {
+) => {
   const slotCount = answerSlotsSoFar[0]?.length ?? 0;
-  if (slotCount === 0) {
-    return {
-      isCorrect: false,
-      correctAnswer: '',
-      hint: 'No answers provided',
-      failedSlots: [],
-    };
-  }
+  if (slotCount === 0) return { isCorrect: false, failedSlots: [] as number[] };
 
   const partialPaths = Array.from({ length: slotCount }, (_, slotIndex) => {
     const partialPath: Record<string, string> = {};
@@ -277,10 +175,10 @@ export const validatePartialMultiAnswerPaths = (
 
       const primaryPath = primaryFormPaths[pathIndex];
       const matches = stepsCompleted.every(step => {
-        const userValue = normalize(partialPath[step] || '');
+        const userValue = normalizeAnswer(partialPath[step] || '');
         const primaryValue = primaryPath[step];
         if (!primaryValue) return false;
-        return getAcceptedAnswersForStep(primaryValue).map(normalize).includes(userValue);
+        return getAcceptedAnswersForStep(primaryValue).map(normalizeAnswer).includes(userValue);
       });
 
       if (!matches) continue;
@@ -300,17 +198,5 @@ export const validatePartialMultiAnswerPaths = (
     if (!assignSlotToPath(slotIndex, new Set())) failedSlots.push(slotIndex);
   }
 
-  const correctDisplay = primaryFormPaths.map(path => stepsCompleted.map(step => path[step]).join(';')).join(' OR ');
-
-  const hint =
-    failedSlots.length > 0
-      ? `Answer${failedSlots.length > 1 ? 's' : ''} in position ${failedSlots.map(s => s + 1).join(', ')} ${failedSlots.length > 1 ? "don't" : "doesn't"} form a valid combination`
-      : undefined;
-
-  return {
-    isCorrect: failedSlots.length === 0,
-    correctAnswer: correctDisplay,
-    hint,
-    failedSlots,
-  };
+  return { isCorrect: failedSlots.length === 0, failedSlots };
 };

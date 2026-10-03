@@ -10,7 +10,7 @@ describe('advanced vocabulary API authorization boundaries', () => {
 
   it('authenticates admin inventory calls and sends generated exercise calls to the student-safe route', () => {
     expect(source).toContain('baseQuery: createAuthenticatedBaseQuery()');
-    expect(source).toContain('url: `/admin/words?${params.toString()}`');
+    expect(source).toContain('url: `/admin/words?${advancedWordsParams(args)}`');
     expect(source).toContain("url: '/admin/exercises/generated-preview'");
     expect(source).toContain("url: '/words/generated-exercise'");
   });

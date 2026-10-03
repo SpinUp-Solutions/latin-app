@@ -10,7 +10,7 @@ import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Textarea } from '@/src/components/ui/textarea';
-import { TestVersionEditor } from '@/src/components/ui/admin';
+import { TestVersionEditor } from '@/src/components/ui/admin/TestVersionEditor';
 import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
 import { PassingRequirementControl } from '@/src/components/ui/admin/test-version/PassingRequirementControl';
 import { TestVersionPreview } from '@/src/components/ui/admin/test-version/TestVersionPreview';

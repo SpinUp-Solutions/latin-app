@@ -48,6 +48,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /testAttemptSummaries/{document=**} {
+      allow read, write: if false;
+    }
+
     match /testResultReviews/{document=**} {
       allow read, write: if false;
     }
@@ -87,6 +91,12 @@ service cloud.firestore {
     }
 
     match /aiEvaluationRunThrottles/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Feedback reports and their private admin activity are accessible only
+    // through authenticated server routes.
+    match /studentFeedback/{document=**} {
       allow read, write: if false;
     }
 
@@ -160,6 +170,7 @@ service cloud.firestore {
         && collection != 'testVersionDrafts'
         && collection != 'testAttempts'
         && collection != 'testAttemptSessions'
+        && collection != 'testAttemptSummaries'
         && collection != 'testResultReviews'
         && collection != 'studentMockResults'
         && collection != 'studentMockResultMigrations'
@@ -170,6 +181,7 @@ service cloud.firestore {
         && collection != 'aiEvaluationCases'
         && collection != 'aiEvaluationResultCache'
         && collection != 'aiEvaluationRunThrottles'
+        && collection != 'studentFeedback'
         && collection != 'vocabulary_pools'
         && collection != 'vocabulary_words_v5'
         && collection != 'vocabulary_words_v4'

@@ -16,9 +16,11 @@ jest.mock('@/src/lib/verifyRequestAuth', () => ({
   verifyRequestAuth: (...args: unknown[]) => mockVerifyRequestAuth(...args),
 }));
 
-const mockGetLesson = jest.fn();
+const mockGetAuthorizedLesson = jest.fn();
 jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({
-  studentDashboardService: { getLesson: (...args: unknown[]) => mockGetLesson(...args) },
+  StudentDashboardServiceError: jest.requireActual('@/src/lib/learning-units/student-dashboard-service')
+    .StudentDashboardServiceError,
+  studentDashboardService: { getAuthorizedLesson: (...args: unknown[]) => mockGetAuthorizedLesson(...args) },
 }));
 
 import { POST } from '@/src/app/api/words/generated-exercise/route';
@@ -70,7 +72,7 @@ describe('student generated exercise playback route', () => {
     });
     dbState.collection = db.collection;
     mockVerifyRequestAuth.mockResolvedValue({ uid: 'student-1' });
-    mockGetLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [translationExercise] }] });
+    mockGetAuthorizedLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [translationExercise] }] });
   });
 
   it('rejects unauthenticated playback requests', async () => {
@@ -79,19 +81,19 @@ describe('student generated exercise playback route', () => {
     expect(response.status).toBe(401);
   });
 
-  it('loads the authorized persisted exercise and returns exactly count usable words', async () => {
+  it('resolves the authorized persisted exercise into questions, without the words behind them', async () => {
     const response = await POST({ json: async () => playbackBody } as never);
     expect(response.status).toBe(200);
-    expect(mockGetLesson).toHaveBeenCalledWith('student-1', 'lesson-1');
-    const payload = (response as unknown as { body: { words: unknown[]; collected: number } }).body;
-    expect(payload.words).toHaveLength(10);
-    expect(payload.collected).toBe(10);
+    expect(mockGetAuthorizedLesson).toHaveBeenCalledWith('student-1', 'lesson-1');
+    const payload = (response as unknown as { body: { items: Array<{ acceptedAnswers: string[] }> } }).body;
+    expect(Object.keys(payload)).toEqual(['items']);
+    expect(payload.items).toHaveLength(10);
+    expect(payload.items.every(item => ['girl', 'love'].includes(item.acceptedAnswers[0]))).toBe(true);
   });
 
   it('preserves lesson access failures from the ownership check', async () => {
-    mockGetLesson.mockRejectedValue(
-      Object.assign(new Error('Lesson is locked'), { status: 403, code: 'LESSON_LOCKED' })
-    );
+    const { StudentDashboardServiceError } = jest.requireActual('@/src/lib/learning-units/student-dashboard-service');
+    mockGetAuthorizedLesson.mockRejectedValue(new StudentDashboardServiceError('LESSON_LOCKED', 'Lesson is locked', 403));
 
     const response = await POST({ json: async () => playbackBody } as never);
 
@@ -108,32 +110,18 @@ describe('student generated exercise playback route', () => {
     const response = await POST({ json: async () => translationExercise } as never);
 
     expect(response.status).toBe(400);
-    expect(mockGetLesson).not.toHaveBeenCalled();
+    expect(mockGetAuthorizedLesson).not.toHaveBeenCalled();
   });
 
-  it('fills the requested pool count through the shared collector, ignoring a saved candidate cap', async () => {
+  it('fails closed on an invalid persisted unique word count', async () => {
     const { words, pool, exercise } = generatedPoolFixture();
-    const legacyConfig = { ...exercise.data.generatorConfig, poolWordLimit: 5 };
-    exercise.data.generatorConfig = legacyConfig;
+    const invalidConfig = { ...exercise.data.generatorConfig, uniqueWordCount: 0 };
+    exercise.data.generatorConfig = invalidConfig;
     const db = createFakeGeneratedWordDb({ words, pools: [pool] });
     dbState.collection = db.collection;
-    mockGetLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
+    mockGetAuthorizedLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
     const response = await POST({ json: async () => playbackBody } as never);
-    expect(response.status).toBe(200);
-    const payload = (
-      response as unknown as {
-        body: {
-          words: Array<{ id: string }>;
-          requestedCount: number;
-          collected: number;
-          globalScanLimitReached: boolean;
-        };
-      }
-    ).body;
-    expect(payload.requestedCount).toBe(30);
-    expect(payload.words).toHaveLength(30);
-    expect(payload.collected).toBe(30);
-    expect(payload.words.every(word => word.id.startsWith('valid-'))).toBe(true);
-    expect(payload.globalScanLimitReached).toBe(false);
+    expect(response.status).toBe(409);
+    expect((response as unknown as { body: { code?: string } }).body.code).toBe('INVALID_GENERATED_EXERCISE');
   });
 });

@@ -6,7 +6,9 @@ import type { StudentLessonSummary } from '@/src/types/lesson';
 
 jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('@/src/lib/tests/attempt-service', () => ({
-  testAttemptService: { getAttemptSummary: jest.fn() },
+  testAttemptService: {
+    loadAttemptSummaries: jest.fn(async () => ({ summary: jest.fn(), scoreTrend: jest.fn(async () => []) })),
+  },
 }));
 jest.mock('@/src/lib/tests/mock-service', () => ({
   mockTestService: {
@@ -18,6 +20,11 @@ jest.mock('@/src/lib/tests/mock-service', () => ({
 
 type RecordData = Record<string, unknown>;
 
+/** The attempts dependency, answering every origin's summary with `summary`. */
+const attemptsWith = (summary: jest.Mock) => ({
+  loadAttemptSummaries: jest.fn(async () => ({ summary, scoreTrend: jest.fn(async () => []) })),
+});
+
 const snapshot = (id: string, value?: RecordData, ref?: unknown) => ({
   id,
   exists: value !== undefined,
@@ -25,19 +32,22 @@ const snapshot = (id: string, value?: RecordData, ref?: unknown) => ({
   ref: ref ?? { id },
 });
 
+type QueryLogEntry = { collection: string; projected: boolean; docs: string[] };
+
 class FakeQuery {
-  private filters: Array<{ field: string; value: unknown }> = [];
+  private filters: Array<{ field: string; operator: string; value: unknown }> = [];
   private orderField?: string;
   private selectedFields?: string[];
 
   constructor(
     private readonly collectionName: string,
     private readonly collections: Record<string, Record<string, RecordData>>,
-    private readonly selectedFieldLog: string[][]
+    private readonly selectedFieldLog: string[][],
+    private readonly queryLog: QueryLogEntry[]
   ) {}
 
-  where(field: string, _operator: string, value: unknown) {
-    this.filters.push({ field, value });
+  where(field: string, operator: string, value: unknown) {
+    this.filters.push({ field, operator, value });
     return this;
   }
 
@@ -62,8 +72,10 @@ class FakeQuery {
 
   async get() {
     let entries = Object.entries(this.collections[this.collectionName] ?? {});
-    for (const filter of this.filters) {
-      entries = entries.filter(([, value]) => value[filter.field] === filter.value);
+    for (const { field, operator, value: expected } of this.filters) {
+      entries = entries.filter(([, value]) =>
+        operator === 'in' ? (expected as unknown[]).includes(value[field]) : value[field] === expected
+      );
     }
     if (this.orderField) {
       const field = this.orderField;
@@ -84,43 +96,49 @@ class FakeQuery {
         get: async () => snapshot(id, value),
       });
     });
+    this.queryLog.push({
+      collection: this.collectionName,
+      projected: Boolean(this.selectedFields),
+      docs: docs.map(doc => doc.id),
+    });
     return { docs, empty: docs.length === 0, size: docs.length };
   }
 }
 
 const createFakeDb = (collections: Record<string, Record<string, RecordData>>) => {
   const selectedFieldLog: string[][] = [];
-  return {
-    db: {
-      collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog),
-      getAll: async (
-        ...inputs: Array<{ get?: () => Promise<ReturnType<typeof snapshot>> } | { fieldMask: string[] }>
-      ) => {
-        const options = inputs.at(-1);
-        const fieldMask =
-          options && 'fieldMask' in options && Array.isArray(options.fieldMask) ? options.fieldMask : undefined;
-        const refs = (fieldMask ? inputs.slice(0, -1) : inputs) as Array<{
-          get: () => Promise<ReturnType<typeof snapshot>>;
-        }>;
-        if (fieldMask) selectedFieldLog.push(fieldMask);
-        return Promise.all(
-          refs.map(async ref => {
-            const full = await ref.get();
-            const value = full.data();
-            if (!fieldMask || !value) return full;
-            return snapshot(
-              full.id,
-              Object.fromEntries(
-                fieldMask.filter(field => value[field] !== undefined).map(field => [field, value[field]])
-              ),
-              full.ref
-            );
-          })
-        );
-      },
+  const queryLog: QueryLogEntry[] = [];
+  const db = {
+    collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog, queryLog),
+    runTransaction: <T>(run: (transaction: unknown) => Promise<T>) =>
+      run({ get: (target: { get: () => Promise<unknown> }) => target.get(), getAll: db.getAll }),
+    getAll: async (
+      ...inputs: Array<{ get?: () => Promise<ReturnType<typeof snapshot>> } | { fieldMask: string[] }>
+    ) => {
+      const options = inputs.at(-1);
+      const fieldMask =
+        options && 'fieldMask' in options && Array.isArray(options.fieldMask) ? options.fieldMask : undefined;
+      const refs = (fieldMask ? inputs.slice(0, -1) : inputs) as Array<{
+        get: () => Promise<ReturnType<typeof snapshot>>;
+      }>;
+      if (fieldMask) selectedFieldLog.push(fieldMask);
+      return Promise.all(
+        refs.map(async ref => {
+          const full = await ref.get();
+          const value = full.data();
+          if (!fieldMask || !value) return full;
+          return snapshot(
+            full.id,
+            Object.fromEntries(
+              fieldMask.filter(field => value[field] !== undefined).map(field => [field, value[field]])
+            ),
+            full.ref
+          );
+        })
+      );
     },
-    selectedFieldLog,
   };
+  return { db, selectedFieldLog, queryLog };
 };
 
 const lesson = (overrides: RecordData): RecordData => ({
@@ -213,7 +231,7 @@ describe('StudentDashboardService summary projection', () => {
         },
       },
     };
-    const { db, selectedFieldLog } = createFakeDb(collections);
+    const { db, selectedFieldLog, queryLog } = createFakeDb(collections);
     const getAssignmentsForLessonIds = jest.fn(async (lessonIds: string[]) => {
       expect(lessonIds).toEqual(['vocab-1', 'diagram-1', 'listening']);
       return new Map([
@@ -304,6 +322,8 @@ describe('StudentDashboardService summary projection', () => {
       { id: 'tag-cicero', name: 'Cicero', status: 'active', tagOrder: 0 },
     ]);
     expect(JSON.stringify(dashboard)).not.toContain('"pages"');
+    // Normal lessons come from the path, so the live query never reads them (nor legacy full documents).
+    expect(queryLog.find(query => query.collection === 'lessons')?.docs).toEqual(['diagram-1', 'vocab-1', 'listening']);
     expect(selectedFieldLog).toHaveLength(3);
     expect(selectedFieldLog.every(fields => !fields.includes('pages'))).toBe(true);
     // The dashboard reads progress with a summary mask: per-exercise history
@@ -354,7 +374,7 @@ describe('StudentDashboardService summary projection', () => {
         },
       },
     };
-    const { db } = createFakeDb(collections);
+    const { db, queryLog, selectedFieldLog } = createFakeDb(collections);
     const service = new StudentDashboardService(
       db as never,
       {
@@ -369,6 +389,13 @@ describe('StudentDashboardService summary projection', () => {
       ['first', 'in-progress', 50, 0],
       ['second', 'in-progress', 75, 2],
     ]);
+
+    // A lesson with a progress record is authorized from the path alone, without the unlock scan.
+    queryLog.length = selectedFieldLog.length = 0;
+    await expect(service.getLesson('user', 'second')).resolves.toMatchObject({ id: 'second' });
+    expect([...queryLog, ...selectedFieldLog]).toEqual([]);
+    collections.learningPaths.default.unitIds = ['first'];
+    await expect(service.getLesson('user', 'second')).rejects.toMatchObject({ code: 'LESSON_NOT_FOUND' });
   });
 
   it('authorizes one detail through the same projection and rejects locked lessons', async () => {
@@ -563,7 +590,6 @@ describe('StudentDashboardService summary projection', () => {
 
     const active = await service.getDashboard('user');
     expect(active.learningPath.map(item => item.id)).toEqual(['placed', 'legacy']);
-    await expect(service.getNormalSequenceUnitIds()).resolves.toEqual(['placed', 'legacy']);
     expect(active.practiceLessons.map(item => item.id)).toEqual(['practice']);
     expect(errorSpy).toHaveBeenCalledWith('Learning Path references missing unit missing; skipping it');
 
@@ -647,7 +673,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never,
-      { getAttemptSummary } as never
+      attemptsWith(getAttemptSummary) as never
     );
 
     const dashboard = await service.getDashboard('user');
@@ -659,7 +685,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     ]);
     expect(dashboard.learningPath[2].lockedReason).toBe('Pass Chapter test to unlock');
     expect(dashboard.learningPath[1]).not.toHaveProperty('totalPages');
-    expect(getAttemptSummary).toHaveBeenCalledWith({ kind: 'normal-test', testId: 'test' }, 'user');
+    expect(getAttemptSummary).toHaveBeenCalledWith({ kind: 'normal-test', testId: 'test' });
   });
 
   it('uses the frozen failed outcome for related mocks even when current settings become score-only', async () => {
@@ -697,8 +723,8 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never,
-      {
-        getAttemptSummary: jest.fn(async () => ({
+      attemptsWith(
+        jest.fn(async () => ({
           origin: { kind: 'normal-test' as const, testId: 'test' },
           inProgressAttemptId: null,
           attemptCount: 1,
@@ -711,8 +737,8 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
             outcome,
             submittedAt: '2026-07-28T12:00:00.000Z',
           },
-        })),
-      } as never,
+        }))
+      ) as never,
       {
         listStudentLiveMocks: jest.fn(async () => []),
         listPastStudentMockResults: jest.fn(async () => []),
@@ -777,15 +803,15 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never,
-      {
-        getAttemptSummary: jest.fn(async () => ({
+      attemptsWith(
+        jest.fn(async () => ({
           origin: { kind: 'normal-test', testId: 'inserted' },
           inProgressAttemptId: null,
           attemptCount: 0,
           best: null,
           latest: null,
-        })),
-      } as never
+        }))
+      ) as never
     );
 
     const dashboard = await service.getDashboard('user');
@@ -834,15 +860,15 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never,
-      {
-        getAttemptSummary: jest.fn(async () => ({
+      attemptsWith(
+        jest.fn(async () => ({
           origin: { kind: 'normal-test', testId: 'broken' },
           inProgressAttemptId: null,
           attemptCount: 0,
           best: null,
           latest: null,
-        })),
-      } as never
+        }))
+      ) as never
     );
 
     const dashboard = await service.getDashboard('user');
@@ -881,7 +907,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never,
-      { getAttemptSummary: jest.fn(async () => Promise.reject(new Error('index unavailable'))) } as never
+      attemptsWith(jest.fn(async () => Promise.reject(new Error('index unavailable')))) as never
     );
 
     await expect(service.getDashboard('user')).rejects.toThrow('index unavailable');
@@ -914,15 +940,14 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     const attemptsHeld = new Promise<void>(resolve => {
       releaseAttempts = resolve;
     });
-    const getAttemptSummary = jest.fn(
-      () =>
-        attemptsHeld.then(() => ({
-          origin: { kind: 'normal-test' as const, testId: 'test' },
-          inProgressAttemptId: null,
-          attemptCount: 0,
-          best: null,
-          latest: null,
-        }))
+    const getAttemptSummary = jest.fn(() =>
+      attemptsHeld.then(() => ({
+        origin: { kind: 'normal-test' as const, testId: 'test' },
+        inProgressAttemptId: null,
+        attemptCount: 0,
+        best: null,
+        latest: null,
+      }))
     );
     const getAssignmentsForLessonIds = jest.fn(async () => new Map());
     const listStudentLiveMocks = jest.fn(async () => []);
@@ -930,7 +955,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds } as never,
-      { getAttemptSummary } as never,
+      attemptsWith(getAttemptSummary) as never,
       { listStudentLiveMocks, listPastStudentMockResults, getRelatedLiveMocks: jest.fn() } as never
     );
 
@@ -941,7 +966,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
 
     expect(getAttemptSummary).toHaveBeenCalledTimes(1);
     expect(getAssignmentsForLessonIds).toHaveBeenCalledTimes(1);
-    expect(listStudentLiveMocks).toHaveBeenCalledWith('user');
+    expect(listStudentLiveMocks).toHaveBeenCalledWith('user', expect.anything());
     expect(listPastStudentMockResults).toHaveBeenCalledWith('user');
 
     releaseAttempts();
@@ -971,7 +996,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never,
-      { getAttemptSummary: jest.fn(async () => ({})) } as never,
+      attemptsWith(jest.fn(async () => ({}))) as never,
       { listStudentLiveMocks, listPastStudentMockResults, getRelatedLiveMocks: jest.fn() } as never
     );
 
@@ -1150,7 +1175,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
         },
       },
     };
-    const { db } = createFakeDb(collections);
+    const { db, queryLog } = createFakeDb(collections);
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
@@ -1165,10 +1190,13 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
       ['first', 'completed', 100],
       ['second', 'available', 0],
     ]);
+    queryLog.length = 0;
     await expect(service.getLesson('user', 'second')).resolves.toMatchObject({
       id: 'second',
       status: 'available',
     });
+    // An unreached lesson checks the path against progress projections, not full progress documents.
+    expect(queryLog).toEqual([{ collection: 'userProgress', projected: true, docs: ['user_first'] }]);
   });
 
   it('isolates an invalid lesson during canonical dashboard hydration', async () => {

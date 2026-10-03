@@ -1,19 +1,9 @@
 import { TRANSLATION_GRADING_PROFILES } from '@/shared/openai/model-registry';
-import {
-  createTranslationGradingService,
-  translationGrader,
-  type StructuredAIExecutor,
-} from '@/shared/openai/translation-grading';
+import { translationGrader } from '@/shared/openai/translation-grading';
 import { getTranslationGradingTask } from '@/shared/openai/translation-grading-tasks';
 import { openai } from '@/shared/openai/client';
 
-jest.mock('@/shared/openai/client', () => ({
-  openai: { responses: { create: jest.fn() } },
-  DEFAULT_MODEL: 'gpt-5.4-mini',
-  AUTOCOMPLETE_MODEL: 'gpt-5.4-mini',
-  DEFAULT_TEMPERATURE: 0.2,
-  MAX_TOKENS: 32000,
-}));
+jest.mock('@/shared/openai/client', () => ({ openai: { responses: { create: jest.fn() } } }));
 
 const createResponse = jest.mocked(openai.responses.create);
 
@@ -62,33 +52,6 @@ describe('translation grading runner', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     createResponse.mockResolvedValue(responseFor());
-  });
-
-  it('keeps task and production-profile selection behind an injectable executor', async () => {
-    const calls: Array<{ mode: string; profileKey: string; variableSuffix: string }> = [];
-    const executor: StructuredAIExecutor = {
-      async execute(task, prompt, profile) {
-        calls.push({ mode: task.mode, profileKey: profile.key, variableSuffix: prompt.variableSuffix });
-        return {
-          success: false,
-          code: 'provider-error',
-          error: 'Expected test failure',
-          requestedModel: profile.model,
-          costMeasurement: { status: 'unavailable', reason: 'No provider call was made.' },
-          latencyMs: 0,
-        };
-      },
-    };
-    const grader = createTranslationGradingService(executor);
-
-    await grader.grade('test', request);
-    await grader.grade('lesson', request, 'candidate');
-
-    expect(calls).toEqual([
-      expect.objectContaining({ mode: 'test', profileKey: 'baseline' }),
-      expect.objectContaining({ mode: 'lesson', profileKey: 'candidate' }),
-    ]);
-    expect(JSON.parse(calls[0].variableSuffix).studentTranslation).toBe(request.userTranslation);
   });
 
   it('reuses the production schema/prompt runner for the high-reasoning candidate profile', async () => {

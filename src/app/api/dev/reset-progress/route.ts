@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { USER_PROGRESS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { auth } from 'firebase-admin';
 
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const progressCollection = adminDb.collection('userProgress');
+    const progressCollection = adminDb.collection(USER_PROGRESS_COLLECTION);
     const allProgressDocs = await progressCollection.get();
     const userDocs = allProgressDocs.docs.filter(
       doc => doc.id.startsWith(`${userId}_`) || doc.data().userId === userId

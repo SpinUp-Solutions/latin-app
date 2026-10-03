@@ -1,6 +1,7 @@
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import type { TableType } from '@/src/utils/schema-helpers';
-import { getSupportedVerbFormStepsForPath, getSupportedVerbFormStepsForParsedPath } from './verbFormStepCompatibility';
+import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
+import { getSupportedVerbFormStepsForParsedPath } from './verbFormStepCompatibility';
 
 export interface FormPathStepSupport {
   label: string;
@@ -31,7 +32,7 @@ const GENDERED_PRONOUN_STEPS: readonly FormIdentificationStep[] = [
   'number',
 ];
 
-const supportForTableType = (tableType: TableType): FormPathStepSupport => {
+const supportForTableType = (tableType: Exclude<TableType, 'conjugation'>): FormPathStepSupport => {
   switch (tableType) {
     case 'declension':
       return { label: 'Noun forms', supportedSteps: NOUN_STEPS };
@@ -41,10 +42,6 @@ const supportForTableType = (tableType: TableType): FormPathStepSupport => {
       return { label: 'Personal pronoun forms', supportedSteps: PERSONAL_PRONOUN_STEPS };
     case 'pronoun-adjective-declension':
       return { label: 'Gendered pronoun forms', supportedSteps: GENDERED_PRONOUN_STEPS };
-    case 'conjugation':
-      // A conjugation path is parsed below so that finite/non-finite forms
-      // retain their different sets of answerable questions.
-      return { label: 'Verb forms', supportedSteps: [] };
   }
 };
 
@@ -54,16 +51,11 @@ const supportForTableType = (tableType: TableType): FormPathStepSupport => {
  * verbs, infinitives, participles, gerunds, and supines.
  */
 export function getFormPathStepSupport(path: string, tableType: TableType): FormPathStepSupport | null {
-  if (tableType === 'conjugation') return getSupportedVerbFormStepsForPath(path);
-
-  const parts = path.split('.');
-  const isValid =
-    (tableType === 'declension' && parts.length === 2) ||
-    (tableType === 'adjective-declension' && (parts.length === 2 || parts.length === 4)) ||
-    (tableType === 'pronoun-declension' && parts.length === 2) ||
-    (tableType === 'pronoun-adjective-declension' && (parts.length === 2 || parts.length === 3));
-
-  return isValid ? supportForTableType(tableType) : null;
+  const parsedPath = parseFormPathFromString(path, tableType);
+  if (!parsedPath) return null;
+  return tableType === 'conjugation'
+    ? getSupportedVerbFormStepsForParsedPath(parsedPath)
+    : supportForTableType(tableType);
 }
 
 /**
@@ -124,21 +116,6 @@ export function getFormIdentificationCompatibilitySummary(
     answerableCount,
     skipped,
     unknownPaths,
-  };
-}
-
-export function getSelectedFormPathCompatibility(
-  partOfSpeech: string,
-  path: Record<string, string | undefined>,
-  selectedSteps: readonly FormIdentificationStep[]
-): FormPathCompatibility | null {
-  const support = getParsedFormPathStepSupport(partOfSpeech, path);
-  if (!support) return null;
-  const selected = new Set(selectedSteps);
-  return {
-    path: '',
-    support,
-    applicableSteps: support.supportedSteps.filter(step => selected.has(step)),
   };
 }
 

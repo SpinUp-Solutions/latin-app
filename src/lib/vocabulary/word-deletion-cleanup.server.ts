@@ -1,5 +1,5 @@
 import { FieldPath, type Firestore } from 'firebase-admin/firestore';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { VOCABULARY_POOL_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 
@@ -24,7 +24,7 @@ export async function scanVocabularyWordPoolReferences(
   let lastDocument: FirebaseFirestore.QueryDocumentSnapshot | undefined;
   while (true) {
     let query = db
-      .collection('vocabulary_pools')
+      .collection(VOCABULARY_POOL_COLLECTION)
       .where('wordDocIds', 'array-contains', wordId)
       .orderBy(FieldPath.documentId())
       .limit(WORD_DELETION_POOL_SCAN_PAGE_SIZE);
@@ -50,7 +50,7 @@ export async function cleanupVocabularyWordPoolReferences(
 ): Promise<{ cleanedPoolCount: number; cleanedPoolNames: string[] }> {
   const wordRef = db.collection(VOCABULARY_WORDS_COLLECTION).doc(input.wordId);
   const poolsQuery = db
-    .collection('vocabulary_pools')
+    .collection(VOCABULARY_POOL_COLLECTION)
     .where('wordDocIds', 'array-contains', input.wordId)
     .limit(WORD_DELETION_POOL_CLEANUP_BATCH_SIZE);
   let cleanedPoolCount = 0;

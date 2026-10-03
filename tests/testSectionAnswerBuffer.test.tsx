@@ -30,7 +30,6 @@ function setup() {
     hook.result.current.activateAttempt({
       attemptId: 'attempt-1',
       originKey: 'normal:test',
-      uid: 'student-1',
       answers: {},
       section: { pageId: 'page-1', revision: 0 },
     })
@@ -120,7 +119,6 @@ it('stops stale-tab replay and preserves the local answer until authoritative re
     result.current.activateAttempt({
       attemptId: 'attempt-1',
       originKey: 'normal:test',
-      uid: 'student-1',
       answers: { exercise: event('remote').answer },
       section: { pageId: 'page-1', revision: 4 },
     })
@@ -172,7 +170,6 @@ it('ignores a late save response after moving to a different section', async () 
     result.current.activateAttempt({
       attemptId: 'attempt-1',
       originKey: 'normal:test',
-      uid: 'student-1',
       answers: {},
       section: { pageId: 'page-2', revision: 0 },
     })

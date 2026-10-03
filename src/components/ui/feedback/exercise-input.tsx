@@ -6,21 +6,11 @@ interface ExerciseInputProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
-  placeholder?: string;
-  buttonText?: string;
-  className?: string;
+  placeholder: string;
   disabled?: boolean;
 }
 
-const ExerciseInput: React.FC<ExerciseInputProps> = ({
-  value,
-  onChange,
-  onSubmit,
-  placeholder = 'Type your answer in Latin...',
-  buttonText = 'Check',
-  className = '',
-  disabled,
-}) => {
+const ExerciseInput: React.FC<ExerciseInputProps> = ({ value, onChange, onSubmit, placeholder, disabled }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const wasDisabledRef = useRef(false);
 
@@ -47,7 +37,7 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
   };
 
   return (
-    <div className={`${className}`}>
+    <div>
       <div className="flex gap-4">
         <div className="flex-1">
           <Input
@@ -65,7 +55,7 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
           onClick={handleButtonClick}
           disabled={disabled || value.trim().length === 0}
           className="bg-roman-red text-white hover:bg-red-700">
-          {buttonText}
+          Check
         </Button>
       </div>
     </div>

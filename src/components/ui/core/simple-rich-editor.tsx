@@ -113,5 +113,3 @@ export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
     </>
   );
 };
-
-export default SimpleRichEditor;

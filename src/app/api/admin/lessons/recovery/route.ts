@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
-import { verifyAdminAccess } from '../../../../../lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 
 export interface RecoveryItem {
   id: string;
@@ -19,9 +19,6 @@ export interface RecoveryItem {
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const snapshot = await adminDb
       .collection('lesson_recovery')
@@ -51,9 +48,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { lesson, errorMessage, errorCode } = (await request.json()) as {
       lesson: Lesson;

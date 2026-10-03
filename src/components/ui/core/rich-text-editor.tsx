@@ -17,7 +17,7 @@ interface RichTextEditorProps {
 
 const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, className }) => {
   const editor = useTipTapEditor({
-    extensions: getAdminExtensions({ enableAnnotations: false }),
+    extensions: getAdminExtensions(),
     initialContent: content,
     className: 'rich-text-editor-content',
     onUpdate: (editor, html) => onChange(html),
@@ -26,8 +26,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
   const tooltipManager = useTooltipManager({ editor });
   const hyperlinkManager = useHyperlinkManager({ editor });
 
-  const toolbarConfig = useToolbarConfig({
-    type: 'rich-text',
+  const toolbarSections = useToolbarConfig({
     editor,
     onAddTooltip: tooltipManager.handleAddTooltip,
     onAddHyperlink: hyperlinkManager.handleAddHyperlink,
@@ -35,7 +34,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
 
   return (
     <div className={`border border-gray-300 rounded-md ${className}`}>
-      {toolbarConfig && editor && <ToolbarFactory config={toolbarConfig} editor={editor} />}
+      {toolbarSections && editor && <ToolbarFactory sections={toolbarSections} editor={editor} />}
       <EditorContent editor={editor} />
       <TooltipEditorDialog
         isOpen={tooltipManager.isDialogOpen}

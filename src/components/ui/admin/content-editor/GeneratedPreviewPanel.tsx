@@ -8,6 +8,7 @@ import type { GeneratedExercisePreviewDiagnostics } from '@/src/lib/tests/genera
 interface GeneratedPreviewData<T> {
   words: T[];
   diagnostics: GeneratedExercisePreviewDiagnostics[];
+  uniqueWords?: number;
   globalScanLimitReached?: boolean;
 }
 
@@ -53,7 +54,10 @@ export function GeneratedPreviewPanel<T>({
 
           {words && words.length > 0 && (
             <div className="space-y-2 mt-4">
-              <label className="block text-sm font-medium">Preview ({words.length} items)</label>
+              <label className="block text-sm font-medium">
+                Preview ({words.length} items
+                {previewData?.uniqueWords !== undefined ? ` from ${previewData.uniqueWords} unique words` : ''})
+              </label>
               {renderItems(words)}
             </div>
           )}

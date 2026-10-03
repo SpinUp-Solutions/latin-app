@@ -32,7 +32,7 @@ interface MatchingTableProps {
   initialAnswer?: ExerciseAnswer;
 }
 
-export const MatchingTable: React.FC<MatchingTableProps> = ({
+const MatchingTable: React.FC<MatchingTableProps> = ({
   exercise,
   onComplete,
   onCompletionAccepted,
@@ -41,7 +41,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
   initialAnswer,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const { leftColumn, rightColumn } = exercise.data;
   const finalAnswer = useMemo(() => getSelectableMatchingAnswers(exercise), [exercise]);
@@ -192,7 +191,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
 
     // Auto-match if left item is already selected
     if (selectedLeft && matchingItem) {
-      if (assessmentMode) {
+      if (testAnswerMode) {
         const nextMatches = { ...matches, [selectedLeft.id]: matchingItem.id };
         const nextRounds = [...testRounds];
         nextRounds[currentRound - 1] = nextMatches;
@@ -201,14 +200,11 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
         setMatchedLeftIds(previous => new Set(previous).add(selectedLeft.id));
         setSelectedLeft(null);
         setSelectedRight(null);
-        if (testAnswerMode) onAnswer?.({ type: 'matching', rounds: nextRounds });
+        onAnswer?.({ type: 'matching', rounds: nextRounds });
 
         if (Object.keys(nextMatches).length === totalMatches) {
           if (currentRound >= totalRounds) {
-            const score = testAnswerMode
-              ? 0
-              : Math.round(gradeExercisePercentage({ exercise }, { type: 'matching', rounds: nextRounds }));
-            onComplete?.(score);
+            onComplete?.(0);
           } else {
             setCurrentRound(previous => previous + 1);
             setMatches({});
@@ -262,7 +258,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
         const reachesResetThreshold = willResetOnNextIncorrect;
         handleIncorrect();
 
-        setShowIncorrectFlash(!assessmentMode);
+        setShowIncorrectFlash(true);
 
         clearIncorrectFlashTimeout();
         if (reachesResetThreshold) {
@@ -397,7 +393,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
         </div>
 
         {/* Feedback Display */}
-        {!assessmentMode && (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={message}

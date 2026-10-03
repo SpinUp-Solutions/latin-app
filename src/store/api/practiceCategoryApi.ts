@@ -89,13 +89,13 @@ interface UpdatePracticeMembershipTagsArgs {
   tagIds: string[];
 }
 
-const afterSuccessfulMutation = async (mutation: Promise<unknown>, effect: () => void) => {
-  try {
-    await mutation;
-    effect();
-  } catch {
-    return;
-  }
+/** Optimistic category reorder, applied to both list endpoints that share the active scope. */
+const applyCategoryOrder = (categories: PracticeCategory[], orderedCategoryIds: string[]) => {
+  const reordered = orderByIds(categories, orderedCategoryIds);
+  reordered.forEach((category, index) => {
+    category.categoryOrder = index;
+  });
+  categories.splice(0, categories.length, ...reordered);
 };
 
 const categoryTags = (
@@ -114,8 +114,7 @@ export const practiceCategoryApi = appApi.injectEndpoints({
         url: '/admin/practice-categories',
         params: { lessonType, status },
       }),
-      transformResponse: (response: { categories: PracticeCategory[] } | PracticeCategory[]) =>
-        Array.isArray(response) ? response : response.categories,
+      transformResponse: (response: { categories: PracticeCategory[] }) => response.categories,
       providesTags: (result, error, { lessonType, status = 'active' }) => categoryTags(result, lessonType, status),
     }),
     getPracticeCategoriesWithCounts: builder.query<PracticeCategoryWithCounts[], GetPracticeCategoriesArgs>({
@@ -123,8 +122,7 @@ export const practiceCategoryApi = appApi.injectEndpoints({
         url: '/admin/practice-categories',
         params: { lessonType, status, includeCounts: 'true' },
       }),
-      transformResponse: (response: { categories: PracticeCategoryWithCounts[] } | PracticeCategoryWithCounts[]) =>
-        Array.isArray(response) ? response : response.categories,
+      transformResponse: (response: { categories: PracticeCategoryWithCounts[] }) => response.categories,
       providesTags: (result, error, { lessonType, status = 'active' }) => categoryTags(result, lessonType, status),
     }),
     getPracticeCategoryDetail: builder.query<PracticeCategoryDetailResponse, string>({
@@ -190,22 +188,14 @@ export const practiceCategoryApi = appApi.injectEndpoints({
         const args = { lessonType, status: 'active' as const };
         const patches = [
           dispatch(
-            practiceCategoryApi.util.updateQueryData('getPracticeCategories', args, categories => {
-              const reordered = orderByIds(categories, orderedCategoryIds);
-              reordered.forEach((category, index) => {
-                category.categoryOrder = index;
-              });
-              categories.splice(0, categories.length, ...reordered);
-            })
+            practiceCategoryApi.util.updateQueryData('getPracticeCategories', args, categories =>
+              applyCategoryOrder(categories, orderedCategoryIds)
+            )
           ),
           dispatch(
-            practiceCategoryApi.util.updateQueryData('getPracticeCategoriesWithCounts', args, categories => {
-              const reordered = orderByIds(categories, orderedCategoryIds);
-              reordered.forEach((category, index) => {
-                category.categoryOrder = index;
-              });
-              categories.splice(0, categories.length, ...reordered);
-            })
+            practiceCategoryApi.util.updateQueryData('getPracticeCategoriesWithCounts', args, categories =>
+              applyCategoryOrder(categories, orderedCategoryIds)
+            )
           ),
         ];
 
@@ -325,9 +315,9 @@ export const practiceCategoryApi = appApi.injectEndpoints({
               STUDENT_DASHBOARD_TAG,
             ],
       onQueryStarted(args, { dispatch, queryFulfilled }) {
-        void afterSuccessfulMutation(queryFulfilled, () => {
-          dispatch(appApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG]));
-        });
+        queryFulfilled
+          .then(() => dispatch(appApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG])))
+          .catch(() => undefined);
       },
     }),
     removePracticeCategoryLesson: builder.mutation<{ removed: boolean }, RemoveCategoryLessonArgs>({
@@ -344,9 +334,9 @@ export const practiceCategoryApi = appApi.injectEndpoints({
               STUDENT_DASHBOARD_TAG,
             ],
       onQueryStarted(args, { dispatch, queryFulfilled }) {
-        void afterSuccessfulMutation(queryFulfilled, () => {
-          dispatch(appApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG]));
-        });
+        queryFulfilled
+          .then(() => dispatch(appApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG])))
+          .catch(() => undefined);
       },
     }),
     reorderPracticeCategoryLessons: builder.mutation<

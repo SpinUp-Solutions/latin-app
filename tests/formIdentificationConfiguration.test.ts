@@ -1,12 +1,11 @@
 import {
   getGeneratedFormIdentificationConfigurationIssues,
   getGeneratedFormIdentificationConfigurationMessages,
-  getGeneratedFormIdentificationConfigurationWarnings,
-  formatFormIdentificationConfigurationWarning,
 } from '@/src/utils/exercises/formIdentificationConfiguration';
 import { lessonAuthoringInputSchema } from '@/src/lib/learning-units/schemas';
 import { testVersionDraftInputSchema } from '@/src/lib/tests/schemas';
 import {
+  getCompatibilityStepLabels,
   getFormIdentificationCompatibilitySummary,
   getFormPathStepSupport,
 } from '@/src/utils/exercises/formIdentificationCompatibility';
@@ -91,25 +90,13 @@ describe('generated form-identification configuration validation', () => {
     );
   });
 
-  it('keeps mixed selections saveable and reports only the skipped family', () => {
+  it('keeps mixed selections saveable', () => {
     const exercise = makeExercise(
       [finitePath, infinitivePath, participlePath, 'gerund.genitive'],
       ['person', 'number', 'mood']
     );
 
     expect(getGeneratedFormIdentificationConfigurationMessages(exercise)).toEqual([]);
-    expect(getGeneratedFormIdentificationConfigurationWarnings(exercise)).toEqual([
-      expect.objectContaining({
-        label: 'Infinitive forms',
-        skippedCount: 1,
-        answerableCount: 2,
-      }),
-      expect.objectContaining({
-        label: 'Gerund forms',
-        skippedCount: 1,
-        answerableCount: 2,
-      }),
-    ]);
 
     const lessonResult = lessonAuthoringInputSchema.safeParse({
       id: 'lesson-mixed',
@@ -130,7 +117,6 @@ describe('generated form-identification configuration validation', () => {
     exercise.data.paradigmConfigs['verb-conjugation'].steps.push('case');
 
     expect(getGeneratedFormIdentificationConfigurationMessages(exercise)).toEqual([]);
-    expect(getGeneratedFormIdentificationConfigurationWarnings(exercise)).toEqual([]);
   });
 
   it('does not block an exercise when another enabled paradigm remains answerable', () => {
@@ -143,27 +129,12 @@ describe('generated form-identification configuration validation', () => {
     };
 
     expect(getGeneratedFormIdentificationConfigurationMessages(exercise)).toEqual([]);
-    expect(getGeneratedFormIdentificationConfigurationWarnings(exercise)).toEqual([
-      expect.objectContaining({ label: 'Gerund forms', skippedCount: 1 }),
-    ]);
   });
 
-  it('treats unrecognized saved paths like skipped selections when another form is answerable', () => {
+  it('does not block unrecognized saved paths when another form is answerable', () => {
     const exercise = makeExercise([finitePath, 'legacy.saved.path'], ['mood']);
 
     expect(getGeneratedFormIdentificationConfigurationMessages(exercise)).toEqual([]);
-    const warnings = getGeneratedFormIdentificationConfigurationWarnings(exercise);
-    expect(warnings).toEqual([
-      expect.objectContaining({
-        label: 'Unrecognized saved forms',
-        skippedCount: 1,
-        kind: 'unrecognized',
-        answerableCount: 1,
-      }),
-    ]);
-    expect(formatFormIdentificationConfigurationWarning(warnings[0])).toBe(
-      '1 unrecognized saved form will be skipped. Select a valid form or remove the selection.'
-    );
   });
 
   it('keeps an all-unrecognized saved selection blocked', () => {
@@ -172,19 +143,10 @@ describe('generated form-identification configuration validation', () => {
     expect(getGeneratedFormIdentificationConfigurationMessages(exercise)).toEqual([
       'Saved form selections are unrecognized. Select valid forms before saving.',
     ]);
-    expect(getGeneratedFormIdentificationConfigurationWarnings(exercise)).toEqual([]);
   });
 
-  it('uses humanized step labels and plural wording for grouped warnings', () => {
-    const exercise = makeExercise([finitePath, 'gerund.genitive', 'gerund.accusative'], ['mood']);
-    const warning = getGeneratedFormIdentificationConfigurationWarnings(exercise).find(
-      entry => entry.kind === 'incompatible'
-    );
-
-    expect(warning).toBeDefined();
-    expect(formatFormIdentificationConfigurationWarning(warning!)).toBe(
-      '2 gerund forms will not appear because none of the selected questions apply. Add Conjugation, Verb form, or Case to include them.'
-    );
+  it('humanizes step labels for skipped-form guidance', () => {
+    expect(getCompatibilityStepLabels(['conjugation', 'verb_form', 'case'])).toBe('Conjugation, Verb form, or Case');
   });
 
   it.each([

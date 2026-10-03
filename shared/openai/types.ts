@@ -80,13 +80,10 @@ export interface AIAutocompleteResponse {
   notes?: string;
 }
 
-export type OpenAIStructuredOutput = Partial<VocabularyWord>;
-
 export type TranslationDirection = 'latin-to-english' | 'english-to-latin';
 export const TRANSLATION_GRADING_MODES = ['lesson', 'test'] as const;
 export type TranslationGradingMode = (typeof TRANSLATION_GRADING_MODES)[number];
 export const TRANSLATION_FEEDBACK_LEVELS = ['Excellent', 'Very good', 'Good', 'Adequate', 'Not quite right'] as const;
-export type TranslationFeedbackLevel = (typeof TRANSLATION_FEEDBACK_LEVELS)[number];
 
 export interface TranslationGradingRequest {
   sourceText: string;

@@ -19,19 +19,10 @@ import {
   type PronounPerson,
 } from '@/shared/types/vocabulary/schemas/enums';
 import { VerbConjugationSchema, type VerbConjugation } from '@/shared/types/vocabulary/schemas/verb-conjugation';
+import type { PoolFilters } from '@/src/types/pool-filters';
 
 interface AdvancedFiltersPanelProps {
-  filters: {
-    partOfSpeech: PartOfSpeech | 'all';
-    search: string;
-    verbConjugation: VerbConjugation[] | 'all';
-    isDeponent: 'true' | 'false' | 'both';
-    nounDeclension: NounDeclension[] | 'all';
-    adjectiveDeclension: AdjectiveDeclension[] | 'all';
-    pronounType: PronounType[] | 'all';
-    pronounPerson: PronounPerson[] | 'all';
-    limit?: number | 'all';
-  };
+  filters: PoolFilters & { limit?: number | 'all' };
   onFiltersChange: (updates: Partial<AdvancedFiltersPanelProps['filters']>) => void;
   onReset: () => void;
   onApply?: () => void;

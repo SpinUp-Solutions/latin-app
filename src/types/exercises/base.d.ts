@@ -1,7 +1,6 @@
 import { ContentItem } from '../content';
 import type { TableType } from '@/src/utils/schema-helpers';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
-import type { FormIdentificationStep } from './schemas/form-identification';
 
 export interface FeedbackLevel {
   /** Custom message shown at this level (optional). */
@@ -49,8 +48,7 @@ export interface FeedbackConfig {
   maxLevelFailures?: number;
 }
 
-// New robust state machine types
-export type FeedbackPhase = 'initial' | 'attempting' | 'succeeded' | 'failed';
+export type FeedbackPhase = 'initial' | 'attempting' | 'succeeded';
 
 export interface FeedbackState {
   readonly phase: FeedbackPhase;
@@ -64,16 +62,9 @@ export interface FeedbackState {
 
 export type FeedbackAction =
   | { type: 'ANSWER_INCORRECT'; escalationLevels: FeedbackLevel[] }
-  | { type: 'ANSWER_CORRECT'; successMessage: string; showExplanation: boolean; isLastItem?: boolean }
+  | { type: 'ANSWER_CORRECT'; successMessage: string; showExplanation: boolean }
   | { type: 'CLEAR_FEEDBACK' }
-  | { type: 'RESET' }
-  | { type: 'EXERCISE_RESET' };
-
-export interface FeedbackMachineConfig {
-  escalationLevels: FeedbackLevel[];
-  successMessage: SuccessMessageConfig;
-  progressionRules: ProgressionRules;
-}
+  | { type: 'RESET' };
 
 export interface BaseExercise extends ContentItem {
   instructions: string;
@@ -104,6 +95,8 @@ export interface GeneratorConfigBase {
   wordSource: 'filters' | 'pool';
   poolId?: string | null;
   count: number | 'all';
+  /** Pool-backed form identification only: rotate this many words through different forms to fill `count`. */
+  uniqueWordCount?: number | null;
   filters?: GeneratorFilters;
 }
 
@@ -113,9 +106,4 @@ export interface PosGeneratorConfig {
   formSelection?: FormSelection;
 }
 
-export interface FormIdentificationPosConfig extends PosGeneratorConfig {
-  steps: FormIdentificationStep[];
-}
-
 export type PosConfigs = Partial<Record<PartOfSpeech, PosGeneratorConfig>>;
-export type FormIdentificationPosConfigs = Partial<Record<PartOfSpeech, FormIdentificationPosConfig>>;

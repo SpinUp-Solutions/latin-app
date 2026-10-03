@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent } from 'react';
+import { interceptableLink } from './useUnsavedNavigationGuard';
 
 export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination?: string) => void) => {
-  // Callers pass a new callback on every render. Reading it through a ref keeps the
-  // history guard below from pushing a new entry (and re-rendering the router) each render.
-  const onNavigateAwayRef = useRef(onNavigateAway);
-  onNavigateAwayRef.current = onNavigateAway;
+  // Callers pass a new callback on every render. An effect event always sees the latest one
+  // without being an effect dependency, so the history guard below pushes one entry per dirty
+  // period instead of one per render (each push re-renders the App Router page).
+  const navigateAway = useEffectEvent((destination?: string) => onNavigateAway?.(destination));
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -27,7 +28,7 @@ export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination
       if (hasDraft) {
         e.preventDefault();
         window.history.pushState(null, '', window.location.href);
-        onNavigateAwayRef.current?.();
+        navigateAway();
       }
     };
 
@@ -35,22 +36,12 @@ export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination
     window.addEventListener('popstate', handlePopState);
 
     const handleDocumentNavigation = (event: MouseEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      )
-        return;
-      const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]');
-      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+      const anchor = interceptableLink(event);
+      if (!anchor) return;
       const destination = new URL(anchor.href, window.location.href);
-      if (destination.origin !== window.location.origin || destination.href === window.location.href) return;
       event.preventDefault();
       event.stopPropagation();
-      onNavigateAwayRef.current?.(`${destination.pathname}${destination.search}${destination.hash}`);
+      navigateAway(`${destination.pathname}${destination.search}${destination.hash}`);
     };
 
     document.addEventListener('click', handleDocumentNavigation, true);

@@ -1,4 +1,4 @@
-import type { DocumentReference, DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
+import type { DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
   LEARNING_PATHS_COLLECTION,
@@ -15,12 +15,11 @@ import {
   type LearningUnit,
   type LessonUnitType,
 } from '@/src/types/learning-unit';
-import type { RotationVersionReference } from '@/src/types/test';
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
 import { mockTestDocumentSchema } from '@/src/lib/tests/schemas';
 import { isStoredVersionReadyForStudentVisibility } from '@/src/lib/tests/persistence';
 import { validateTestAssignmentGraph } from '@/src/lib/tests/domain';
-import { isLessonDocumentData, normalizeLearningUnit } from './domain';
+import { isLessonDocumentData, normalizeLearningUnit, withLegacyLearningUnitDefaults } from './domain';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
 import type { Lesson } from '@/src/types/lesson';
 import {
@@ -36,7 +35,7 @@ export { LearningPathServiceError } from './learning-path-errors';
 
 const MAX_LEARNING_PATH_DOCUMENT_BYTES = 900 * 1024;
 
-function learningPathFromSnapshot(snapshot: DocumentSnapshot): LearningPathDocument | null {
+export function parseLearningPathSnapshot(snapshot: DocumentSnapshot): LearningPathDocument | null {
   if (!snapshot.exists) return null;
   const parsed = learningPathDocumentSchema.safeParse({
     ...snapshot.data(),
@@ -50,10 +49,6 @@ function learningPathFromSnapshot(snapshot: DocumentSnapshot): LearningPathDocum
     );
   }
   return parsed.data;
-}
-
-export function parseLearningPathSnapshot(snapshot: DocumentSnapshot): LearningPathDocument | null {
-  return learningPathFromSnapshot(snapshot);
 }
 
 function parseLearningUnitSnapshot(snapshot: DocumentSnapshot): LearningUnit {
@@ -150,20 +145,9 @@ function auditPlacedLessonSnapshot(snapshot: DocumentSnapshot): LearningPathLess
   const raw = snapshot.data() as Record<string, unknown>;
   if (raw.type !== 'normal') return [];
 
-  const normalized = {
-    ...raw,
-    id: raw.id ?? snapshot.id,
-    kind: raw.kind ?? 'lesson',
-    description: raw.description ?? '',
-    isLive: raw.isLive ?? false,
-    liveOrder: raw.liveOrder ?? null,
-    publishedAt: raw.publishedAt ?? null,
-    publishedBy: raw.publishedBy ?? null,
-    showWordSearch: raw.showWordSearch ?? true,
-  };
   const issues: LearningPathLessonIssue[] = [];
   const seen = new Set<string>();
-  const parsed = learningUnitDocumentSchema.safeParse(normalized);
+  const parsed = learningUnitDocumentSchema.safeParse(withLegacyLearningUnitDefaults(raw, snapshot.id));
 
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
@@ -217,7 +201,7 @@ export async function assertUnitDeletionAllowedInTransaction(
   unitId: string
 ): Promise<void> {
   const pathSnapshot = await transaction.get(db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID));
-  const path = learningPathFromSnapshot(pathSnapshot);
+  const path = parseLearningPathSnapshot(pathSnapshot);
   if (path && path.unitIds.includes(unitId)) {
     throw new LearningPathServiceError(
       'PLACED_UNIT_DELETE',
@@ -234,7 +218,7 @@ export async function assertPlacedLessonReplacementAllowedInTransaction(
   lesson: Pick<Lesson, 'type' | 'pages'>
 ): Promise<void> {
   const pathSnapshot = await transaction.get(db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID));
-  const path = learningPathFromSnapshot(pathSnapshot);
+  const path = parseLearningPathSnapshot(pathSnapshot);
   if (!path || !path.unitIds.includes(unitId)) return;
 
   if (lesson.type !== 'normal') {
@@ -255,47 +239,11 @@ export async function assertPlacedLessonReplacementAllowedInTransaction(
   }
 }
 
-/**
- * Shared guard for ownership-transfer mutations introduced with mock
- * assignment. A placed normal test must retain at least one structurally valid
- * rotation version in the same transaction that changes ownership.
- */
-export async function assertPlacedTestRotationAllowedInTransaction(
-  transaction: Transaction,
-  db: Firestore,
-  testId: string,
-  rotationVersions: RotationVersionReference[]
-): Promise<void> {
-  const path = learningPathFromSnapshot(
-    await transaction.get(db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID))
-  );
-  if (!path || !path.unitIds.includes(testId)) return;
-  if (rotationVersions.length === 0) {
-    throw new LearningPathServiceError(
-      'PLACED_UNIT_INVALID',
-      'Remove this test from the Learning Path or add another rotation version before changing version ownership',
-      400
-    );
-  }
-
-  const snapshots = await transaction.getAll(
-    ...rotationVersions.map(reference => db.collection(TEST_VERSIONS_COLLECTION).doc(reference.versionId))
-  );
-  const invalid = snapshots.find(snapshot => !isStoredVersionReadyForStudentVisibility(snapshot));
-  if (invalid) {
-    throw new LearningPathServiceError(
-      'PLACED_UNIT_INVALID',
-      `Placed test ${testId} would reference missing or invalid version ${invalid.id}`,
-      400
-    );
-  }
-}
-
 export async function assertLegacyNormalPlacementAllowedInTransaction(
   transaction: Transaction,
   db: Firestore
 ): Promise<void> {
-  const path = learningPathFromSnapshot(
+  const path = parseLearningPathSnapshot(
     await transaction.get(db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID))
   );
   if (!path) return;
@@ -367,7 +315,6 @@ export async function assertLegacyNormalPlacementChangeAllowedInTransaction(
 export class LearningPathService {
   constructor(
     private readonly db: Firestore = adminDb,
-    private readonly allowTestUnits = true,
     private readonly now: () => string = () => new Date().toISOString()
   ) {}
 
@@ -388,7 +335,7 @@ export class LearningPathService {
   }
 
   async getPath(): Promise<LearningPathDocument | null> {
-    return learningPathFromSnapshot(await this.pathRef().get());
+    return parseLearningPathSnapshot(await this.pathRef().get());
   }
 
   private async auditCanonicalLessons(
@@ -396,17 +343,7 @@ export class LearningPathService {
   ): Promise<Record<string, LearningPathLessonIssue[]>> {
     if (!path || path.unitIds.length === 0) return {};
 
-    const references = path.unitIds.map(unitId => this.units.doc(unitId) as unknown as DocumentReference);
-    const dbWithGetAll = this.db as Firestore & {
-      getAll?: (...refs: DocumentReference[]) => Promise<DocumentSnapshot[]>;
-    };
-    // The production Firestore client batches these reads. The fallback keeps
-    // lightweight service fakes useful in unit tests without changing the
-    // production read pattern.
-    const snapshots =
-      typeof dbWithGetAll.getAll === 'function'
-        ? await dbWithGetAll.getAll(...references)
-        : await Promise.all(references.map(reference => reference.get()));
+    const snapshots = await this.db.getAll(...path.unitIds.map(unitId => this.units.doc(unitId)));
     const issuesById: Record<string, LearningPathLessonIssue[]> = {};
 
     snapshots.forEach(snapshot => {
@@ -450,13 +387,6 @@ export class LearningPathService {
         continue;
       }
 
-      if (!this.allowTestUnits) {
-        throw new LearningPathServiceError(
-          'INELIGIBLE_LEARNING_UNIT',
-          `Test ${unit.id} cannot be placed before normal-flow test integration is enabled`,
-          400
-        );
-      }
       if (unit.rotationVersions.length === 0) {
         throw new LearningPathServiceError(
           'INELIGIBLE_LEARNING_UNIT',
@@ -533,7 +463,7 @@ export class LearningPathService {
 
     return runVocabularyContentMutation(this.db, async transaction => {
       const pathSnapshot = await transaction.get(this.pathRef());
-      const currentPath = learningPathFromSnapshot(pathSnapshot);
+      const currentPath = parseLearningPathSnapshot(pathSnapshot);
       if (!currentPath) {
         throw new LearningPathServiceError(
           'LEARNING_PATH_NOT_FOUND',

@@ -21,7 +21,6 @@ import type { ComponentType } from 'react';
 import {
   CONTENT_TYPE_METADATA,
   CREATABLE_CONTENT_TYPE_METADATA,
-  EXERCISE_TYPE_METADATA,
   TEST_ELIGIBLE_CONTENT_TYPE_METADATA,
   type ContentType,
 } from '@/src/lib/content/registry';
@@ -55,15 +54,9 @@ const withIcon = (metadata: (typeof CONTENT_TYPE_METADATA)[number]) => ({
 
 export const ALL_CONTENT_TYPES = CREATABLE_CONTENT_TYPE_METADATA.map(withIcon);
 
-export const CONTENT_TYPES = CREATABLE_CONTENT_TYPE_METADATA.filter(metadata => metadata.kind === 'content')
-  .filter(metadata => metadata.type !== 'listening-passage')
-  .map(withIcon);
-
 export const SENTENCE_DIAGRAMMING_LESSON_CONTENT_TYPES = CONTENT_TYPE_METADATA.filter(
   metadata => metadata.type === 'sentence-diagramming'
 ).map(withIcon);
-
-export const EXERCISE_TYPES = EXERCISE_TYPE_METADATA.filter(metadata => metadata.creatable).map(withIcon);
 
 export const TEST_VERSION_CONTENT_TYPES = TEST_ELIGIBLE_CONTENT_TYPE_METADATA.filter(metadata => metadata.creatable).map(
   withIcon

@@ -19,4 +19,18 @@ const customJestConfig = {
   moduleDirectories: ['node_modules', '<rootDir>/'],
 };
 
-export default createJestConfig(customJestConfig);
+// Test the React Compiler output that `next build` ships, not the uncompiled source.
+const withReactCompiler = async () => {
+  const config = await createJestConfig(customJestConfig)();
+  const transform = Object.fromEntries(
+    Object.entries(config.transform).map(([pattern, [transformer, options]]) => [
+      pattern,
+      transformer.endsWith('jest-transformer.js')
+        ? ['<rootDir>/tests/helpers/reactCompilerJestTransformer.cjs', options]
+        : [transformer, options],
+    ])
+  );
+  return { ...config, transform };
+};
+
+export default withReactCompiler;

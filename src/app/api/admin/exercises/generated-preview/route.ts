@@ -6,15 +6,31 @@ import {
   GeneratedExercisePlaybackRequestSchema,
   GeneratedExercisePreviewRequestSchema,
 } from '@/src/lib/tests/generated-preview-schema';
-import type { GeneratedExercise } from '@/src/lib/tests/generated-exercises';
+import { createGeneratedExerciseItems, type GeneratedExercise } from '@/src/lib/tests/generated-exercises';
 import { collectWordsForGeneratedExerciseRequest } from '@/src/lib/tests/generated-word-loader.server';
-import { GeneratedVocabularySourceError } from '@/src/lib/tests/generated-word-composition.server';
-import { studentDashboardService } from '@/src/lib/learning-units/student-dashboard-service';
+import { GeneratedVocabularySourceError } from '@/src/lib/tests/errors';
+import {
+  studentDashboardService,
+  StudentDashboardServiceError,
+} from '@/src/lib/learning-units/student-dashboard-service';
+import { LearningPathServiceError } from '@/src/lib/learning-units/learning-path-errors';
+import { PracticeCategoryError } from '@/src/lib/practice-categories/service';
+import { TestServiceError } from '@/src/lib/tests/errors';
+import { VocabularyPoolAssignmentError } from '@/src/lib/vocabulary-pools/assignment.server';
+import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { adminDb } from '@/src/services/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
-const routeErrorResponse = createRouteErrorResponse(GeneratedVocabularySourceError);
+const routeErrorResponse = createRouteErrorResponse(
+  GeneratedVocabularySourceError,
+  StudentDashboardServiceError,
+  VocabularyPoolStateError,
+  VocabularyPoolAssignmentError,
+  TestServiceError,
+  LearningPathServiceError,
+  PracticeCategoryError
+);
 
 export async function handleGeneratedExerciseWordsPOST(request: NextRequest, audience: 'admin' | 'generated') {
   try {
@@ -30,7 +46,7 @@ export async function handleGeneratedExerciseWordsPOST(request: NextRequest, aud
 
       const requestBody = await request.json().catch(() => null);
       const source = GeneratedExercisePlaybackRequestSchema.parse(requestBody);
-      const lesson = await studentDashboardService.getLesson(student.uid, source.lessonId);
+      const lesson = await studentDashboardService.getAuthorizedLesson(student.uid, source.lessonId);
       const item = lesson.pages[source.pageIndex]?.items[source.itemIndex];
       if (
         !item ||
@@ -56,12 +72,17 @@ export async function handleGeneratedExerciseWordsPOST(request: NextRequest, aud
     }
 
     const result = await collectWordsForGeneratedExerciseRequest(adminDb, exercise);
+    const items = createGeneratedExerciseItems(exercise, result.words);
+    // Students get only the questions; admins also see the words and diagnostics behind them.
+    if (audience === 'generated') return NextResponse.json({ items });
 
     return NextResponse.json({
+      items,
       words: result.words,
       diagnostics: result.diagnostics,
       requestedCount: result.requestedCount,
       collected: result.words.length,
+      uniqueWords: result.uniqueWords,
       globalScanLimitReached: result.globalScanLimitReached,
     });
   } catch (error) {

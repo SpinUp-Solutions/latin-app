@@ -1,5 +1,3 @@
-export type { ConjugationTable, DeclensionTableRow, AdjectiveDeclensionTableRow } from './vocabulary/index';
-
 export interface Word {
   id: string;
   word: string;
@@ -19,9 +17,6 @@ export interface Word {
   isDeponent?: boolean;
   principalParts?: string[];
   alternateForm?: string;
-  declensionTable?: DeclensionTableRow[];
-  adjectiveDeclensionTable?: AdjectiveDeclensionTableRow[];
-  conjugationTable?: ConjugationTable;
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -4,7 +4,8 @@ import React, { memo, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
-import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { STUDENT_DASHBOARD_FOCUS_REFRESH_MS, useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { useRefreshStaleOnFocus } from '@/src/hooks/useRefreshStaleOnFocus';
 import { persistStudentDashboard } from '@/src/store/api/dashboardCache';
 import { useAuth } from '@/src/hooks/useAuth';
 import { getAuthErrorMessage } from '@/src/lib/auth-errors';
@@ -306,9 +307,13 @@ export default function DashboardPage() {
     isError: dashboardError,
     error: dashboardQueryError,
     refetch: refetchDashboard,
+    fulfilledTimeStamp: dashboardFetchedAt,
   } = useGetStudentDashboardQuery(uid, {
     skip: !uid,
+    refetchOnFocus: false,
   });
+  // Returning to the tab refreshes the dashboard only once it is old enough to have missed new content.
+  useRefreshStaleOnFocus(dashboardFetchedAt, refetchDashboard, STUDENT_DASHBOARD_FOCUS_REFRESH_MS);
 
   useEffect(() => {
     if (uid && studentDashboard) persistStudentDashboard(uid, studentDashboard);

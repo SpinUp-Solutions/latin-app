@@ -13,7 +13,6 @@ jest.mock('@/src/lib/ai-evaluations/cache-key', () => ({
 }));
 jest.mock('@/src/lib/ai-evaluations/cache', () => ({
   getCachedEvaluationResult: jest.fn(),
-  getEvaluationCacheExpiry: jest.fn(() => ({ toMillis: () => Date.now() + 30 * 24 * 60 * 60 * 1_000 })),
   setCachedEvaluationResult: jest.fn(),
 }));
 

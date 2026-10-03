@@ -111,5 +111,3 @@ export const SentenceDiagramToolbar: React.FC<SentenceDiagramToolbarProps> = ({
     </div>
   );
 };
-
-export default SentenceDiagramToolbar;

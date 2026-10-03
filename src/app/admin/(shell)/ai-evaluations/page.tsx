@@ -40,11 +40,7 @@ import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog'
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { toast } from 'sonner';
 import { TRANSLATION_GRADING_MODES } from '@/shared/openai/types';
-import {
-  EVALUATION_TRANSLATION_PROFILE_IDS,
-  getTranslationGradingProfile,
-  type TranslationGradingProfileId,
-} from '@/shared/openai/model-registry';
+import { EVALUATION_TRANSLATION_PROFILE_IDS, TRANSLATION_GRADING_PROFILES } from '@/shared/openai/model-registry';
 import type {
   EvaluationAggregate,
   EvaluationCase,
@@ -75,13 +71,13 @@ const formatDuration = (milliseconds: number) => {
   return `${(milliseconds / 1_000).toFixed(2)} s`;
 };
 const formatCost = (value: number) => (value === 0 ? '$0.000000' : `$${value.toFixed(6)}`);
-const formatMeasuredCost = (value: number | undefined, status: string, lowerBound = false) => {
+const formatMeasuredCost = (value: number | undefined, status: string) => {
   if (status === 'unavailable' || value === undefined) return 'Unavailable';
   if (status === 'not-incurred-app-cache' || status === 'not-incurred-coalesced') return 'No API call';
-  return `${lowerBound ? '≥' : ''}${formatCost(value)}`;
+  return `${status === 'lower-bound' ? '≥' : ''}${formatCost(value)}`;
 };
-
-const profileFor = (id: TranslationGradingProfileId) => getTranslationGradingProfile(id);
+const aggregateCostStatus = (anyUnknown: boolean, anyKnown: boolean) =>
+  !anyUnknown ? 'measured' : anyKnown ? 'lower-bound' : 'unavailable';
 
 type DisplayedRun = {
   result: EvaluationRunResult;
@@ -278,7 +274,7 @@ function BreakdownDetails({ cell }: { cell: EvaluationCellResult }) {
 }
 
 function ResultCell({ cell }: { cell: EvaluationCellResult }) {
-  const profile = profileFor(cell.profileId);
+  const profile = TRANSLATION_GRADING_PROFILES[cell.profileId];
   if (cell.error) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50/70 p-4" role="alert">
@@ -341,46 +337,31 @@ function ModelComparisonCards({ cells }: { cells: EvaluationCellResult[] }) {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       {EVALUATION_TRANSLATION_PROFILE_IDS.map((profileId, profileIndex) => {
-        const profile = profileFor(profileId);
+        const profile = TRANSLATION_GRADING_PROFILES[profileId];
         const modelCells = cells.filter(cell => cell.profileId === profileId);
         const uniqueCells = modelCells.filter(cell => !cell.duplicateWithinRun);
         const successfulCells = modelCells.filter(cell => cell.output);
-        const usage = uniqueCells.reduce(
-          (sum, cell) => ({
-            promptTokens: sum.promptTokens + (cell.usage?.promptTokens ?? 0),
-            completionTokens: sum.completionTokens + (cell.usage?.completionTokens ?? 0),
-            totalTokens: sum.totalTokens + (cell.usage?.totalTokens ?? 0),
-            ordinaryInputTokens: sum.ordinaryInputTokens + (cell.usage?.ordinaryInputTokens ?? 0),
-            cachedInputTokens: sum.cachedInputTokens + (cell.usage?.cachedInputTokens ?? 0),
-            cacheWriteTokens: sum.cacheWriteTokens + (cell.usage?.cacheWriteTokens ?? 0),
-            reasoningTokens: sum.reasoningTokens + (cell.usage?.reasoningTokens ?? 0),
-          }),
-          {
-            promptTokens: 0,
-            completionTokens: 0,
-            totalTokens: 0,
-            ordinaryInputTokens: 0,
-            cachedInputTokens: 0,
-            cacheWriteTokens: 0,
-            reasoningTokens: 0,
-          }
-        );
+        const usage = {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cachedInputTokens: 0,
+          cacheWriteTokens: 0,
+          reasoningTokens: 0,
+        };
+        for (const cell of uniqueCells) {
+          for (const key of Object.keys(usage) as Array<keyof typeof usage>) usage[key] += cell.usage?.[key] ?? 0;
+        }
         const originalCost = uniqueCells.reduce((sum, cell) => sum + (cell.originalCost?.totalCost ?? 0), 0);
         const incurredCost = uniqueCells.reduce((sum, cell) => sum + (cell.costIncurredThisRun?.totalCost ?? 0), 0);
-        const originalUnknown = uniqueCells.filter(cell => cell.originalCostStatus === 'unavailable').length;
-        const incurredUnknown = uniqueCells.filter(cell => cell.costIncurredThisRunStatus === 'unavailable').length;
-        const originalStatus =
-          originalUnknown === 0
-            ? 'measured'
-            : modelCells.some(cell => cell.originalCost)
-              ? 'lower-bound'
-              : 'unavailable';
-        const incurredStatus =
-          incurredUnknown === 0
-            ? 'measured'
-            : modelCells.some(cell => cell.costIncurredThisRun)
-              ? 'lower-bound'
-              : 'unavailable';
+        const originalStatus = aggregateCostStatus(
+          uniqueCells.some(cell => cell.originalCostStatus === 'unavailable'),
+          modelCells.some(cell => cell.originalCost)
+        );
+        const incurredStatus = aggregateCostStatus(
+          uniqueCells.some(cell => cell.costIncurredThisRunStatus === 'unavailable'),
+          modelCells.some(cell => cell.costIncurredThisRun)
+        );
         const generationTime = uniqueCells.reduce((sum, cell) => sum + (cell.generationLatencyMs ?? 0), 0);
         const actualModel = modelCells.find(cell => cell.actualModel)?.actualModel ?? profile.model;
 
@@ -439,15 +420,11 @@ function ModelComparisonCards({ cells }: { cells: EvaluationCellResult[] }) {
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3 text-xs">
                 <span className="text-roman-stone">
                   API cost this run{' '}
-                  <strong className="text-foreground">
-                    {formatMeasuredCost(incurredCost, incurredStatus, incurredStatus === 'lower-bound')}
-                  </strong>
+                  <strong className="text-foreground">{formatMeasuredCost(incurredCost, incurredStatus)}</strong>
                 </span>
                 <span className="text-roman-stone">
                   Original generated cost{' '}
-                  <strong className="text-foreground">
-                    {formatMeasuredCost(originalCost, originalStatus, originalStatus === 'lower-bound')}
-                  </strong>
+                  <strong className="text-foreground">{formatMeasuredCost(originalCost, originalStatus)}</strong>
                 </span>
               </div>
             </RomanCardContent>
@@ -476,16 +453,8 @@ function AggregateSummary({ aggregate }: { aggregate: EvaluationAggregate }) {
       <Metric
         icon={DollarSign}
         label="API cost this run"
-        value={formatMeasuredCost(
-          aggregate.costIncurredThisRun?.totalCost,
-          aggregate.costIncurredThisRunStatus,
-          aggregate.costIncurredThisRunStatus === 'lower-bound'
-        )}
-        detail={`original generated: ${formatMeasuredCost(
-          aggregate.originalCost?.totalCost,
-          aggregate.originalCostStatus,
-          aggregate.originalCostStatus === 'lower-bound'
-        )}`}
+        value={formatMeasuredCost(aggregate.costIncurredThisRun?.totalCost, aggregate.costIncurredThisRunStatus)}
+        detail={`original generated: ${formatMeasuredCost(aggregate.originalCost?.totalCost, aggregate.originalCostStatus)}`}
       />
       <Metric
         icon={Clock3}
@@ -549,21 +518,13 @@ function AggregateDetails({ aggregate }: { aggregate: EvaluationAggregate }) {
           <div>
             <dt className="text-roman-stone">Input cost this run</dt>
             <dd className="font-semibold tabular-nums">
-              {formatMeasuredCost(
-                aggregate.costIncurredThisRun?.inputCost,
-                aggregate.costIncurredThisRunStatus,
-                aggregate.costIncurredThisRunStatus === 'lower-bound'
-              )}
+              {formatMeasuredCost(aggregate.costIncurredThisRun?.inputCost, aggregate.costIncurredThisRunStatus)}
             </dd>
           </div>
           <div>
             <dt className="text-roman-stone">Output cost this run</dt>
             <dd className="font-semibold tabular-nums">
-              {formatMeasuredCost(
-                aggregate.costIncurredThisRun?.outputCost,
-                aggregate.costIncurredThisRunStatus,
-                aggregate.costIncurredThisRunStatus === 'lower-bound'
-              )}
+              {formatMeasuredCost(aggregate.costIncurredThisRun?.outputCost, aggregate.costIncurredThisRunStatus)}
             </dd>
           </div>
         </dl>
@@ -692,7 +653,6 @@ function AIEvaluationsPage() {
     dirty,
     'You have unsaved evaluation edits. Leave this page or switch cases without saving?'
   );
-  const result = displayedRun?.result ?? null;
 
   const cloneCaseInput = (value: EvaluationCaseInput): EvaluationCaseInput => ({
     title: value.title,
@@ -718,8 +678,7 @@ function AIEvaluationsPage() {
       if (nextCases.length > 0) {
         const first = nextCases[0];
         setSelectedId(first.id);
-        const nextForm = cloneCaseInput(first);
-        setForm(nextForm);
+        setForm(cloneCaseInput(first));
         setSavedForm(cloneCaseInput(first));
         setDisplayedRun(null);
       }
@@ -743,8 +702,7 @@ function AIEvaluationsPage() {
   const applySelectedCase = (evaluationCase: EvaluationCase) => {
     runGenerationRef.current += 1;
     setSelectedId(evaluationCase.id);
-    const nextForm = cloneCaseInput(evaluationCase);
-    setForm(nextForm);
+    setForm(cloneCaseInput(evaluationCase));
     setSavedForm(cloneCaseInput(evaluationCase));
     setDisplayedRun(null);
   };
@@ -757,8 +715,7 @@ function AIEvaluationsPage() {
   const applyNewCase = () => {
     runGenerationRef.current += 1;
     setSelectedId(null);
-    const nextForm = blankCase();
-    setForm(nextForm);
+    setForm(blankCase());
     setSavedForm(null);
     setDisplayedRun(null);
   };
@@ -776,16 +733,8 @@ function AIEvaluationsPage() {
     setSaving(true);
     try {
       const saved = await saveEvaluationCaseInFirebase(form, selectedId ?? undefined);
-      setCases(previous => {
-        const withoutSaved = previous.filter(item => item.id !== saved.id);
-        return [saved, ...withoutSaved];
-      });
-      runGenerationRef.current += 1;
-      setSelectedId(saved.id);
-      const nextForm = cloneCaseInput(saved);
-      setForm(nextForm);
-      setSavedForm(cloneCaseInput(saved));
-      setDisplayedRun(null);
+      setCases(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
+      applySelectedCase(saved);
       toast.success(selectedId ? 'Evaluation case saved' : 'Evaluation case created');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to save evaluation case');
@@ -1141,7 +1090,7 @@ function AIEvaluationsPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     {EVALUATION_TRANSLATION_PROFILE_IDS.map(profileId => (
                       <Badge key={profileId} variant="outline">
-                        {profileFor(profileId).label}
+                        {TRANSLATION_GRADING_PROFILES[profileId].label}
                       </Badge>
                     ))}
                   </div>
@@ -1191,7 +1140,7 @@ function AIEvaluationsPage() {
           )}
 
           {displayedRun && <Results result={displayedRun.result} evaluationCase={displayedRun.evaluationCase} />}
-          {!result && !running && !selectedId && (
+          {!displayedRun && !running && !selectedId && (
             <AdminEmptyState
               icon={Gauge}
               title="Your comparison will appear here"

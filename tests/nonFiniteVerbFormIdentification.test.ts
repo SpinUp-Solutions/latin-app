@@ -13,9 +13,7 @@ import {
   validateSingleFieldFormIdentificationExercise,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import { hasSelectedForm } from '@/src/utils/exercises/formSelection';
-import {
-  getVerbFormSelectionValidationMessages,
-} from '@/src/utils/exercises/verbFormStepCompatibility';
+import { getFormIdentificationCompatibilitySummary } from '@/src/utils/exercises/formIdentificationCompatibility';
 import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
 
 const makeVerbWord = (formPath: VerbFormPath): ExerciseWordResponse =>
@@ -244,21 +242,17 @@ describe('non-finite verb form identification', () => {
     ).toBe(true);
   });
 
-  it('warns only when a selected form cannot answer any selected question', () => {
-    expect(getVerbFormSelectionValidationMessages(['gerund.genitive'], ['conjugation', 'verb_form', 'case'])).toEqual(
-      []
-    );
-    expect(getVerbFormSelectionValidationMessages(['gerund.genitive'], ['mood'])).toEqual([
-      'Gerund forms have no applicable selected questions.',
+  it('skips a selected form only when it cannot answer any selected question', () => {
+    const skippedLabels = (paths: string[], steps: FormIdentificationStep[]) =>
+      getFormIdentificationCompatibilitySummary('conjugation', paths, steps).skipped.map(entry => entry.support.label);
+
+    expect(skippedLabels(['gerund.genitive'], ['conjugation', 'verb_form', 'case'])).toEqual([]);
+    expect(skippedLabels(['gerund.genitive'], ['mood'])).toEqual(['Gerund forms']);
+    expect(skippedLabels(['gerund.genitive'], ['tense', 'voice', 'person', 'number', 'gender'])).toEqual([
+      'Gerund forms',
     ]);
-    expect(
-      getVerbFormSelectionValidationMessages(['gerund.genitive'], ['tense', 'voice', 'person', 'number', 'gender'])
-    ).toEqual(['Gerund forms have no applicable selected questions.']);
-    expect(
-      getVerbFormSelectionValidationMessages(
-        ['nonFinite.participle.present.active.nominative.masculine.singular'],
-        ['person']
-      )
-    ).toEqual(['Participle forms have no applicable selected questions.']);
+    expect(skippedLabels(['nonFinite.participle.present.active.nominative.masculine.singular'], ['person'])).toEqual([
+      'Participle forms',
+    ]);
   });
 });

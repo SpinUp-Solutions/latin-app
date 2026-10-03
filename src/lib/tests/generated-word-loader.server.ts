@@ -4,24 +4,21 @@ import { PARADIGM_POS_GROUP, PARADIGM_TABLE_TYPE } from '@/src/config/paradigmDe
 import type { GeneratorFilters } from '@/src/types/exercises/base';
 import type { FormParadigm, ParadigmConfigs } from '@/src/types/exercises/paradigm';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
+import { getAppliedUniqueWordCount } from '@/src/utils/exercises/generatorConfigDefaults';
 import {
   buildLegacyParadigmConfigs,
   buildLegacyPosConfigs,
   normalizeCollection,
 } from '@/src/utils/exercises/legacyExerciseCompat';
+import { GeneratedVocabularySourceError } from './errors';
 import type { GeneratedExercise, GeneratedWordLoader } from './generated-exercises';
 import {
-  applyValueFilter,
   collectGeneratedExerciseWords,
-  GeneratedVocabularySourceError,
   type CollectGeneratedExerciseWordsResult,
   type WordQuerySpec,
 } from './generated-word-composition.server';
 
-export { applyValueFilter, GeneratedVocabularySourceError };
-export type { WordQuerySpec };
-
-export function requireGeneratedVocabularyCollection(collection?: string): string {
+function requireGeneratedVocabularyCollection(collection?: string): string {
   if (!collection || collection === VOCABULARY_WORDS_COLLECTION) return VOCABULARY_WORDS_COLLECTION;
   if (/^vocabulary_words_v\d+$/.test(collection)) return VOCABULARY_WORDS_COLLECTION;
   throw new GeneratedVocabularySourceError('Generated exercises must use the configured vocabulary collection');
@@ -101,6 +98,7 @@ export async function collectWordsForGeneratedExerciseRequest(
     count: config.count || 'all',
     exercise,
     poolId,
+    uniqueWordCount: exercise.type === 'generated-form-identification' ? getAppliedUniqueWordCount(config) : null,
     rng: options?.rng,
     paradigmConfigs: exercise.type === 'generated-form-identification' ? getParadigmConfigs(exercise) : {},
   });

@@ -10,12 +10,22 @@ import {
 import { AdminSidebar } from '@/src/components/admin/shell/AdminSidebar';
 
 let pathname = '/admin/vocabulary/pending';
+let mockIsAdmin = false;
+const mockFeedbackCountQuery = jest.fn((..._args: unknown[]) => ({ data: undefined as { count: number } | undefined }));
 
 jest.mock('next/navigation', () => ({ usePathname: () => pathname }));
+jest.mock('@/src/hooks/useAuth', () => ({ useAuth: () => ({ isAdmin: mockIsAdmin }) }));
+jest.mock('@/src/store/api/studentFeedbackApi', () => ({
+  useGetAdminFeedbackCountQuery: (...args: unknown[]) => mockFeedbackCountQuery(...args),
+}));
 jest.mock('next/image', () => ({ __esModule: true, default: ({ alt }: { alt: string }) => <span aria-label={alt} /> }));
 
 describe('admin shell routing and accessibility', () => {
-  beforeEach(() => sessionStorage.clear());
+  beforeEach(() => {
+    sessionStorage.clear();
+    mockIsAdmin = false;
+    mockFeedbackCountQuery.mockClear();
+  });
 
   it('uses explicit breadcrumb templates and falls back safely for unknown dynamic routes', () => {
     expect(getAdminBreadcrumbs('/admin/tests/edit/test-1/versions/version-1/edit')).toEqual([
@@ -96,6 +106,20 @@ describe('admin shell routing and accessibility', () => {
     expect(active).toHaveAttribute('aria-current', 'page');
     expect(active).toHaveClass('focus-visible:ring-2');
     expect(screen.queryByRole('link', { name: 'Advanced Filters' })).not.toBeInTheDocument();
+  });
+
+  it('waits for the admin session before requesting the feedback count', () => {
+    pathname = '/admin';
+    // Before Firebase restores the session the request would carry no token and fail with a 401.
+    const { unmount } = render(<AdminSidebar />);
+    expect(mockFeedbackCountQuery).toHaveBeenCalledWith(undefined, { skip: true });
+    unmount();
+
+    mockIsAdmin = true;
+    mockFeedbackCountQuery.mockReturnValue({ data: { count: 2 } });
+    render(<AdminSidebar />);
+    expect(mockFeedbackCountQuery).toHaveBeenLastCalledWith(undefined, { skip: false });
+    expect(screen.getByLabelText('2 unresolved feedback reports')).toHaveTextContent('2');
   });
 
   it('collapses the desktop sidebar while keeping its navigation accessible', () => {

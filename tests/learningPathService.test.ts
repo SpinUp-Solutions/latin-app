@@ -2,7 +2,6 @@ import {
   LearningPathService,
   LearningPathServiceError,
   assertPlacedLessonReplacementAllowedInTransaction,
-  assertPlacedTestRotationAllowedInTransaction,
   assertUnitDeletionAllowedInTransaction,
 } from '@/src/lib/learning-units/learning-path-service';
 import { learningPathDocumentSchema, saveLearningPathInputSchema } from '@/src/lib/learning-units/schemas';
@@ -105,6 +104,8 @@ class FakeFirestore {
   constructor(readonly records: Record<string, Record<string, Data>>) {}
 
   collection = (name: string) => new FakeQuery(name, this.records);
+
+  getAll = async (...refs: Ref[]) => Promise.all(refs.map(ref => ref.get()));
 
   transaction = {
     get: async (target: Ref | FakeQuery) => (target.kind === 'ref' ? target.get() : target.get()),
@@ -245,7 +246,7 @@ describe('LearningPathService', () => {
       mockTests: {},
       testVersions: {},
     });
-    const service = new LearningPathService(db as never, true);
+    const service = new LearningPathService(db as never);
 
     await expect(service.save({ expectedRevision: 2, unitIds: [] }, 'admin')).rejects.toMatchObject({
       code: 'INELIGIBLE_LEARNING_UNIT',
@@ -260,7 +261,7 @@ describe('LearningPathService', () => {
       mockTests: {},
       testVersions: {},
     });
-    const service = new LearningPathService(db as never, true);
+    const service = new LearningPathService(db as never);
 
     await expect(service.save({ expectedRevision: 2, unitIds: [] }, 'admin')).resolves.toMatchObject({
       revision: 3,
@@ -559,60 +560,6 @@ describe('LearningPathService', () => {
         pages: [{ id: 'page-1', items: [] }],
       })
     ).rejects.toMatchObject({ code: 'PLACED_UNIT_INVALID' });
-  });
-
-  it('guards version-ownership changes that would invalidate a placed test', async () => {
-    const db = new FakeFirestore({
-      learningPaths: { default: path({ unitIds: ['test'] }) },
-      testVersions: {
-        version: {
-          name: 'Version A',
-          pages: [
-            {
-              id: 'page-1',
-              items: [
-                {
-                  id: 'fill-1',
-                  type: 'fill',
-                  title: 'Fill',
-                  instructions: '',
-                  maxPoints: 1,
-                  feedbackConfig: { escalationLevels: [] },
-                  data: { items: [{ text: 'Question', answer: 'Answer' }] },
-                },
-              ],
-            },
-          ],
-          totalPages: 1,
-          totalItems: 1,
-          totalExercises: 1,
-          totalPoints: 1,
-        },
-      },
-    });
-
-    await expect(
-      assertPlacedTestRotationAllowedInTransaction(db.transaction as never, db as never, 'test', [])
-    ).rejects.toMatchObject({ code: 'PLACED_UNIT_INVALID' });
-
-    await expect(
-      assertPlacedTestRotationAllowedInTransaction(db.transaction as never, db as never, 'test', [
-        { versionId: 'version' },
-      ])
-    ).resolves.toBeUndefined();
-
-    await expect(
-      assertPlacedTestRotationAllowedInTransaction(db.transaction as never, db as never, 'unplaced-test', [])
-    ).resolves.toBeUndefined();
-
-    db.records.testVersions.version = readableLegacyInvalidVersion;
-    expect(testVersionDocumentSchema.safeParse({ id: 'version', ...readableLegacyInvalidVersion }).success).toBe(true);
-    await expect(
-      assertPlacedTestRotationAllowedInTransaction(db.transaction as never, db as never, 'test', [
-        { versionId: 'version' },
-      ])
-    ).rejects.toMatchObject({ code: 'PLACED_UNIT_INVALID' });
-    expect(db.writes).toHaveLength(0);
   });
 
   it('does not newly place a test backed by a readable legacy-invalid version', async () => {

@@ -5,9 +5,11 @@ import { ensureGeneratorConfig } from '@/src/utils/exercises/generatorConfigDefa
 import { GeneratedTranslationEditor } from '@/src/components/ui/admin/content-editor/GeneratedTranslationEditor';
 import { GeneratedFormIdentificationEditor } from '@/src/components/ui/admin/content-editor/GeneratedFormIdentificationEditor';
 
+const mockUpdateContent = jest.fn();
 const mockTranslationUpdateConfig = jest.fn();
 const mockFormUpdateConfig = jest.fn();
 let mockCount: number | 'all' = 5;
+let mockUniqueWordCount: number | null = null;
 let mockEditingContent: Record<string, unknown>;
 
 jest.mock('@/src/store/hooks', () => ({
@@ -39,7 +41,7 @@ jest.mock('@/src/hooks/useGeneratedExerciseEditor', () => ({
     previewError: undefined,
     setIsPreviewOpen: jest.fn(),
     updateConfig: mockTranslationUpdateConfig,
-    updateContent: jest.fn(),
+    updateContent: mockUpdateContent,
   }),
 }));
 
@@ -51,6 +53,7 @@ jest.mock('@/src/hooks/useFormIdentificationEditor', () => ({
       poolId: 'pool-1',
       poolWordLimit: null,
       count: mockCount,
+      uniqueWordCount: mockUniqueWordCount,
     },
     derivedFilters: { partOfSpeech: 'all' },
     derivedFormSelection: undefined,
@@ -65,7 +68,7 @@ jest.mock('@/src/hooks/useFormIdentificationEditor', () => ({
     previewError: undefined,
     setIsPreviewOpen: jest.fn(),
     updateConfig: mockFormUpdateConfig,
-    updateContent: jest.fn(),
+    updateContent: mockUpdateContent,
   }),
 }));
 
@@ -127,13 +130,25 @@ const formExercise = {
 };
 
 describe.each([
-  ['generated translation', GeneratedTranslationEditor, translationExercise, mockTranslationUpdateConfig],
-  ['generated morphology', GeneratedFormIdentificationEditor, formExercise, mockFormUpdateConfig],
-] as const)('%s pool question count', (_label, Editor, exercise, updateConfig) => {
+  ['generated translation', GeneratedTranslationEditor, translationExercise, mockTranslationUpdateConfig, 1],
+  ['generated morphology', GeneratedFormIdentificationEditor, formExercise, mockFormUpdateConfig, 2],
+] as const)('%s pool question count', (_label, Editor, exercise, updateConfig, numberFieldCount) => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockEditingContent = exercise;
     mockCount = 5;
+    mockUniqueWordCount = null;
+  });
+
+  it('defaults retries on for legacy exercises and saves an explicit admin opt-out', () => {
+    const view = render(<Editor />);
+    const toggle = screen.getByRole('checkbox', { name: 'Repeat incorrect words until correct' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(mockUpdateContent).toHaveBeenCalledWith({ data: { ...exercise.data, retryIncorrectAnswers: false } });
+    mockEditingContent = { ...exercise, ...mockUpdateContent.mock.calls[0][0] };
+    view.rerender(<Editor />);
+    expect(screen.getByRole('checkbox', { name: 'Repeat incorrect words until correct' })).not.toBeChecked();
   });
 
   it('offers only one question count for the selected pool', () => {
@@ -148,7 +163,65 @@ describe.each([
 
     expect(screen.queryByRole('checkbox', { name: 'Use all eligible pool words' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Pool Word Limit')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(numberFieldCount);
+  });
+});
+
+describe('generated morphology unique word limit', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEditingContent = formExercise;
+    mockCount = 30;
+    mockUniqueWordCount = null;
+  });
+
+  const commitUniqueWords = (value: string) => {
+    const input = screen.getByLabelText('Unique Words');
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
+    return input;
+  };
+
+  it('is not offered for generated translation', () => {
+    mockEditingContent = translationExercise;
+    render(<GeneratedTranslationEditor />);
+    expect(screen.queryByLabelText('Unique Words')).not.toBeInTheDocument();
+  });
+
+  it('saves a limit and clamps it to the question count', () => {
+    render(<GeneratedFormIdentificationEditor />);
+    expect(screen.getByLabelText('Unique Words')).toHaveValue(null);
+    commitUniqueWords('10');
+    expect(mockFormUpdateConfig).toHaveBeenLastCalledWith({ uniqueWordCount: 10 });
+    expect(commitUniqueWords('50')).toHaveValue(30);
+    expect(mockFormUpdateConfig).toHaveBeenLastCalledWith({ uniqueWordCount: 30 });
+  });
+
+  it('clears the limit when the field is emptied', () => {
+    mockUniqueWordCount = 10;
+    render(<GeneratedFormIdentificationEditor />);
+    expect(screen.getByLabelText('Unique Words')).toHaveValue(10);
+    commitUniqueWords('');
+    expect(mockFormUpdateConfig).toHaveBeenCalledWith({ uniqueWordCount: null });
+  });
+
+  it.each(['0', '-2', '1.5'])('does not commit an invalid limit of %s', value => {
+    mockUniqueWordCount = 10;
+    render(<GeneratedFormIdentificationEditor />);
+    expect(commitUniqueWords(value)).toHaveValue(10);
+    expect(mockFormUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('keeps a saved limit within the question count whenever the config is normalized', () => {
+    expect(ensureGeneratorConfig({ wordSource: 'pool', count: 5, uniqueWordCount: 10 }).uniqueWordCount).toBe(5);
+    expect(ensureGeneratorConfig({ wordSource: 'pool', count: 20, uniqueWordCount: 10 }).uniqueWordCount).toBe(10);
+    expect(ensureGeneratorConfig({ wordSource: 'pool', count: 'all', uniqueWordCount: 10 }).uniqueWordCount).toBe(10);
+  });
+
+  it('is disabled for saved all-word exercises', () => {
+    mockCount = 'all';
+    render(<GeneratedFormIdentificationEditor />);
+    expect(screen.getByLabelText('Unique Words')).toBeDisabled();
   });
 });
 

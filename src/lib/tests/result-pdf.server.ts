@@ -1,4 +1,4 @@
-import { LEARNING_UNITS_COLLECTION, MOCK_TESTS_COLLECTION } from '@/shared/constants/firestore';
+import { LEARNING_UNITS_COLLECTION, MOCK_TESTS_COLLECTION, USERS_COLLECTION } from '@/shared/constants/firestore';
 import { buildTestResultPdfFilename } from '@/src/lib/tests/result-pdf-filename';
 import { sourceTitleFromDocument, studentIdentityFromProfile } from '@/src/lib/tests/result-pdf-identity';
 import { buildTestResultPdfModel } from '@/src/lib/tests/result-pdf-model';
@@ -20,7 +20,7 @@ export async function createSubmittedResultPdf(
   const [sourceSnapshot, userSnapshot] = await Promise.all([
     sourceRef.get().catch(() => null),
     db
-      .collection('users')
+      .collection(USERS_COLLECTION)
       .doc(actor.uid)
       .get()
       .catch(() => null),

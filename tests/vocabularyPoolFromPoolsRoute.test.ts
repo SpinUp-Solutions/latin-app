@@ -118,11 +118,15 @@ describe('POST /api/admin/vocabulary-pools/from-pools', () => {
   });
 
   it('maps service conflicts with their actionable code', async () => {
+    const { VocabularyPoolFromPoolsError } = jest.requireMock('@/src/lib/vocabulary-pools/from-pools.server') as {
+      VocabularyPoolFromPoolsError: new (message: string, status: number, code: string) => Error;
+    };
     mockCreateVocabularyPoolFromPools.mockRejectedValueOnce(
-      Object.assign(new Error('Source membership changed; start a fresh copy'), {
-        status: 409,
-        code: 'VOCABULARY_POOL_SOURCE_MEMBERSHIP_CHANGED',
-      })
+      new VocabularyPoolFromPoolsError(
+        'Source membership changed; start a fresh copy',
+        409,
+        'VOCABULARY_POOL_SOURCE_MEMBERSHIP_CHANGED'
+      )
     );
     const response = (await POST(
       makeRequest({

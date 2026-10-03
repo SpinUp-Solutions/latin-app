@@ -16,8 +16,6 @@ import type {
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
-import { useSectionedTest } from '../test/sectioned-test-context';
-import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 import { richTextToPlainText } from '@/src/utils/exercises/helpers';
@@ -40,9 +38,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
   initialAnswer,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
-  const sectioned = useSectionedTest();
   const passageWords = useMemo(() => splitHtmlIntoWords(exercise.data.passage), [exercise.data.passage]);
   const restoredAnswers = initialAnswer?.type === 'fill-embolded-text' ? initialAnswer.answers : [];
   const firstIncompleteIndex = exercise.data.words.findIndex((_, index) => !restoredAnswers[index]?.trim());
@@ -51,7 +47,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
   const [submittedAnswers, setSubmittedAnswers] = useState<string[]>(restoredAnswers);
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [testSubmitted, setTestSubmitted] = useState(Boolean(restoredAnswers[restoredIndex]?.trim()));
 
   const {
     currentIndex,
@@ -89,7 +84,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
     setUserAnswer('');
     setSelectedWordIndex(null);
     setIsProcessing(false);
-    setTestSubmitted(false);
     setSubmittedAnswers([]);
     resetIndex();
     resetExercise();
@@ -123,11 +117,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
 
     if (testAnswerMode) {
       onAnswer?.({ type: 'fill-embolded-text', answers: nextAnswers });
-      setTestSubmitted(true);
-      if (sectioned) {
-        if (isLastItem) onComplete?.(0);
-        else continueTest();
-      }
+      continueTest();
       return;
     }
 
@@ -139,7 +129,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
     applySequentialItemResult({
       isCorrect: validation.isCorrect,
       isLastItem,
-      assessmentMode,
       showExplanation: exercise.feedbackConfig.successMessage?.showExplanation,
       explanation: currentWord.explanation,
       finalScore,
@@ -172,7 +161,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
     const nextAnswer = submittedAnswers[currentIndex + 1] ?? '';
     setUserAnswer(nextAnswer);
     setSelectedWordIndex(null);
-    setTestSubmitted(Boolean(nextAnswer.trim()));
     setIsProcessing(false);
     reset();
     nextItem();
@@ -241,19 +229,16 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
           />
         </div>
 
-        {testAnswerMode ? (
-          !sectioned && testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
-        ) : (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
-            message={assessmentMode ? '' : message}
-            level={assessmentMode ? null : level}
-            hint={assessmentMode ? undefined : currentWord.hint}
-            correctAnswer={assessmentMode ? undefined : currentWord.correctAnswer}
-            explanation={assessmentMode ? undefined : currentWord.explanation}
-            showExplanation={!assessmentMode && showExplanation}
-            onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
-            allowContinueOnIncorrect={assessmentMode}
+            message={message}
+            level={level}
+            hint={currentWord.hint}
+            correctAnswer={currentWord.correctAnswer}
+            explanation={currentWord.explanation}
+            showExplanation={showExplanation}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
             onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}

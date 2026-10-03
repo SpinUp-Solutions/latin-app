@@ -1,5 +1,5 @@
 import React, { Activity, useState } from 'react';
-import { RetainedPracticeSession } from '@/src/hooks/usePracticeGeneratedExerciseWords';
+import { RetainedPracticeSession } from '@/src/hooks/usePracticeGeneratedExerciseItems';
 import type { Page } from '@/src/types/lesson';
 
 interface Props {

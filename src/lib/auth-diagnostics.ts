@@ -22,7 +22,7 @@ type AuthDiagnosticDetails = {
   signedIn?: boolean;
   sameUserAsBefore?: boolean;
   step?: 'dashboard_cache' | 'profile_subscription' | 'profile_snapshot';
-  destination?: '/admin' | '/dashboard';
+  destination?: '/admin' | '/dashboard' | '/feedback';
 };
 
 const EXPECTED_SIGN_IN_ERRORS = new Set([

@@ -8,21 +8,10 @@ const mockGetAvailableCategoryLessons = jest.fn();
 
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
-jest.mock('@/src/lib/verifyAdminAccess', () => {
-  class AdminAccessError extends Error {
-    constructor(
-      message: 'Unauthorized' | 'Forbidden',
-      public readonly status: 401 | 403
-    ) {
-      super(message);
-      this.name = 'AdminAccessError';
-    }
-  }
-  return {
-    AdminAccessError,
-    verifyAdminAccess: (...args: unknown[]) => mockVerifyAdminAccess(...args),
-  };
-});
+jest.mock('@/src/lib/verifyAdminAccess', () => ({
+  AdminAccessError: jest.requireActual('@/src/lib/admin-access-error').AdminAccessError,
+  verifyAdminAccess: (...args: unknown[]) => mockVerifyAdminAccess(...args),
+}));
 
 jest.mock('@/src/lib/practice-categories/service', () => ({
   PracticeCategoryError: class PracticeCategoryError extends Error {},

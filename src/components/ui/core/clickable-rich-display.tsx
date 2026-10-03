@@ -46,5 +46,3 @@ export const ClickableRichDisplay: React.FC<ClickableRichDisplayProps> = ({
     </div>
   );
 };
-
-export default ClickableRichDisplay;

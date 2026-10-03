@@ -2,23 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import {
-  LEGACY_VOCABULARY_WORDS_COLLECTION,
   requireVocabularyWordMigrationCollections,
   VocabularyWordCollectionError,
 } from '@/src/lib/vocabulary/word-collection.server';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
-
-const DEFAULT_SOURCE_COLLECTION = LEGACY_VOCABULARY_WORDS_COLLECTION;
-const DEFAULT_TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
-
-const stripMacrons = (str: string): string => {
-  return str
-    .normalize('NFD')
-    .replace(/[\u0304]/g, '')
-    .normalize('NFC');
-};
+import { stripMacrons } from '@/src/utils/exercises/helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,8 +17,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get('dryRun') === 'true';
     const { sourceCollection, targetCollection } = requireVocabularyWordMigrationCollections(
-      searchParams.get('sourceCollection') || DEFAULT_SOURCE_COLLECTION,
-      searchParams.get('targetCollection') || DEFAULT_TARGET_COLLECTION
+      searchParams.get('sourceCollection'),
+      searchParams.get('targetCollection')
     );
 
     const snapshot = await adminDb.collection(sourceCollection).get();

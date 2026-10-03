@@ -4,10 +4,15 @@ import type {
   DocumentSnapshot,
   Firestore,
   Query,
+  QueryDocumentSnapshot,
   QuerySnapshot,
   Transaction,
 } from 'firebase-admin/firestore';
-import { PRACTICE_CATEGORIES_COLLECTION, PRACTICE_CATEGORY_MEMBERSHIPS_COLLECTION } from '@/shared/constants/firestore';
+import {
+  LEARNING_UNITS_COLLECTION,
+  PRACTICE_CATEGORIES_COLLECTION,
+  PRACTICE_CATEGORY_MEMBERSHIPS_COLLECTION,
+} from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { Lesson, LessonSummary } from '@/src/types/lesson';
 import type {
@@ -25,6 +30,7 @@ import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/v
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { assertUnitDeletionAllowedInTransaction } from '@/src/lib/learning-units/learning-path-service';
 import { toLessonSummary } from '@/src/utils/lessonSummary';
+import { haveSameIdOrder } from '@/src/utils/orderByIds';
 import { isCategorisableLesson, normalizeCategoryName, normalizeTagName } from './domain';
 import {
   practiceCategoryDocumentSchema,
@@ -112,6 +118,9 @@ export function getPracticeCategoryMembershipId(categoryId: string, lessonId: st
 }
 
 function categoryFromSnapshot(snapshot: DocumentSnapshot): PracticeCategory {
+  if (!snapshot.exists) {
+    throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
+  }
   const data = snapshot.data() ?? {};
   const parsed = practiceCategoryDocumentSchema.safeParse({
     ...data,
@@ -157,8 +166,21 @@ function assertExactScope(
   }
 }
 
-function sameIds(left: readonly string[], right: readonly string[]) {
-  return left.length === right.length && left.every((id, index) => id === right[index]);
+type MembershipDoc = { snapshot: QueryDocumentSnapshot; membership: PracticeCategoryMembership };
+
+function sortedMembershipDocs(snapshot: QuerySnapshot): MembershipDoc[] {
+  return snapshot.docs
+    .map(doc => ({ snapshot: doc, membership: membershipFromSnapshot(doc) }))
+    .sort((a, b) => byLessonOrder(a.membership, b.membership));
+}
+
+/** Rewrites lessonOrder to 0..n-1 for already-ordered memberships, touching only changed documents. */
+function compactLessonOrder(transaction: Transaction, items: MembershipDoc[], now: string, actorId: string) {
+  items.forEach((item, index) => {
+    if (item.membership.lessonOrder !== index) {
+      transaction.update(item.snapshot.ref, { lessonOrder: index, updatedAt: now, updatedBy: actorId });
+    }
+  });
 }
 
 export class PracticeCategoryService {
@@ -172,12 +194,29 @@ export class PracticeCategoryService {
     return this.db.collection(PRACTICE_CATEGORY_MEMBERSHIPS_COLLECTION);
   }
 
+  private get lessons() {
+    return this.db.collection(LEARNING_UNITS_COLLECTION);
+  }
+
   private activeCategoriesQuery(lessonType: PracticeLessonType) {
     return this.categories.where('lessonType', '==', lessonType).where('status', '==', 'active');
   }
 
   private categoryMembershipsQuery(categoryId: string) {
     return this.memberships.where('categoryId', '==', categoryId);
+  }
+
+  /** Rewrites categoryOrder to 0..n-1 for already-sorted categories, touching only changed documents. */
+  private compactCategoryOrder(transaction: Transaction, categories: PracticeCategory[], now: string, actorId: string) {
+    categories.forEach((category, index) => {
+      if (category.categoryOrder !== index) {
+        transaction.update(this.categories.doc(category.id), {
+          categoryOrder: index,
+          updatedAt: now,
+          updatedBy: actorId,
+        });
+      }
+    });
   }
 
   async listCategories(options: {
@@ -195,9 +234,6 @@ export class PracticeCategoryService {
 
   async getCategory(categoryId: string): Promise<PracticeCategoryWithCounts> {
     const snapshot = await this.categories.doc(categoryId).get();
-    if (!snapshot.exists) {
-      throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-    }
     const [category] = await this.withCategoryCounts([categoryFromSnapshot(snapshot)]);
     return category;
   }
@@ -224,9 +260,7 @@ export class PracticeCategoryService {
     const lessonIds = unique(
       categoryMemberships.flatMap(memberships => memberships.map(membership => membership.lessonId))
     );
-    const lessonSnapshots = lessonIds.length
-      ? await this.db.getAll(...lessonIds.map(id => this.db.collection('lessons').doc(id)))
-      : [];
+    const lessonSnapshots = lessonIds.length ? await this.db.getAll(...lessonIds.map(id => this.lessons.doc(id))) : [];
     const lessonsById = new Map(lessonSnapshots.filter(doc => doc.exists).map(doc => [doc.id, doc.data()]));
 
     return categories.map((category, index) => {
@@ -239,13 +273,9 @@ export class PracticeCategoryService {
         if (lesson.isLive) liveLessonCount += 1;
         else draftLessonCount += 1;
       }
-      const assignedLessonCount = memberships.filter(membership => {
-        const lesson = lessonsById.get(membership.lessonId);
-        return Boolean(lesson && isCategorisableLesson(lesson) && lesson.type === category.lessonType);
-      }).length;
       return {
         ...category,
-        assignedLessonCount,
+        assignedLessonCount: liveLessonCount + draftLessonCount,
         liveLessonCount,
         draftLessonCount,
       };
@@ -276,15 +306,7 @@ export class PracticeCategoryService {
 
       const now = new Date().toISOString();
       const activeCategories = activeSnapshot.docs.map(categoryFromSnapshot).sort(byCategoryOrder);
-      activeCategories.forEach((category, index) => {
-        if (category.categoryOrder !== index) {
-          transaction.update(this.categories.doc(category.id), {
-            categoryOrder: index,
-            updatedAt: now,
-            updatedBy: actorId,
-          });
-        }
-      });
+      this.compactCategoryOrder(transaction, activeCategories, now, actorId);
       const category: PracticeCategory = {
         id: ref.id,
         lessonType: input.lessonType,
@@ -309,9 +331,6 @@ export class PracticeCategoryService {
     const tagId = this.categories.doc().id;
     return runVocabularyContentMutation(this.db, async transaction => {
       const snapshot = await transaction.get(categoryRef);
-      if (!snapshot.exists) {
-        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-      }
       const category = categoryFromSnapshot(snapshot);
       if (category.status !== 'active') {
         throw new PracticeCategoryError('CATEGORY_ARCHIVED', 'Restore the category before creating tags', 409);
@@ -362,9 +381,6 @@ export class PracticeCategoryService {
     const categoryRef = this.categories.doc(categoryId);
     return runVocabularyContentMutation(this.db, async transaction => {
       const snapshot = await transaction.get(categoryRef);
-      if (!snapshot.exists) {
-        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-      }
       const category = categoryFromSnapshot(snapshot);
       const current = category.tags.find(tag => tag.id === tagId);
       if (!current) {
@@ -423,9 +439,6 @@ export class PracticeCategoryService {
         transaction.get(categoryRef),
         transaction.get(this.categoryMembershipsQuery(categoryId)),
       ]);
-      if (!categorySnapshot.exists) {
-        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-      }
       const category = categoryFromSnapshot(categorySnapshot);
       const tag = category.tags.find(item => item.id === tagId);
       if (!tag) {
@@ -456,9 +469,6 @@ export class PracticeCategoryService {
     const categoryRef = this.categories.doc(categoryId);
     return runVocabularyContentMutation(this.db, async transaction => {
       const snapshot = await transaction.get(categoryRef);
-      if (!snapshot.exists) {
-        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-      }
       const category = categoryFromSnapshot(snapshot);
       if (category.status !== 'active') {
         throw new PracticeCategoryError('CATEGORY_ARCHIVED', 'Restore the category before reordering tags', 409);
@@ -488,9 +498,6 @@ export class PracticeCategoryService {
     const ref = this.categories.doc(categoryId);
     return runVocabularyContentMutation(this.db, async transaction => {
       const snapshot = await transaction.get(ref);
-      if (!snapshot.exists) {
-        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-      }
       const current = categoryFromSnapshot(snapshot);
       const nextNormalizedName = input.name === undefined ? current.normalizedName : normalizeCategoryName(input.name);
 
@@ -509,7 +516,7 @@ export class PracticeCategoryService {
         ? await transaction.get(this.activeCategoriesQuery(current.lessonType))
         : undefined;
 
-      if (conflictSnapshot && !conflictSnapshot.empty && conflictSnapshot.docs.some(doc => doc.id !== categoryId)) {
+      if (conflictSnapshot?.docs.some(doc => doc.id !== categoryId)) {
         throw new PracticeCategoryError(
           'CATEGORY_NAME_CONFLICT',
           `A ${categoryTypeLabels[current.lessonType]} category with this name already exists`,
@@ -534,26 +541,14 @@ export class PracticeCategoryService {
       if (changesStatus && activeSnapshot) {
         const active = activeSnapshot.docs.map(categoryFromSnapshot).sort(byCategoryOrder);
         if (input.status === 'archived') {
-          const remaining = active.filter(category => category.id !== categoryId);
-          remaining.forEach((category, index) => {
-            if (category.categoryOrder !== index) {
-              transaction.update(this.categories.doc(category.id), {
-                categoryOrder: index,
-                updatedAt: now,
-                updatedBy: actorId,
-              });
-            }
-          });
+          this.compactCategoryOrder(
+            transaction,
+            active.filter(category => category.id !== categoryId),
+            now,
+            actorId
+          );
         } else {
-          active.forEach((category, index) => {
-            if (category.categoryOrder !== index) {
-              transaction.update(this.categories.doc(category.id), {
-                categoryOrder: index,
-                updatedAt: now,
-                updatedBy: actorId,
-              });
-            }
-          });
+          this.compactCategoryOrder(transaction, active, now, actorId);
           updated.categoryOrder = active.length;
         }
       }
@@ -570,9 +565,6 @@ export class PracticeCategoryService {
         transaction.get(ref),
         transaction.get(this.memberships.where('categoryId', '==', categoryId).limit(1)),
       ]);
-      if (!categorySnapshot.exists) {
-        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-      }
       const category = categoryFromSnapshot(categorySnapshot);
       if (category.status !== 'archived') {
         throw new PracticeCategoryError(
@@ -628,14 +620,10 @@ export class PracticeCategoryService {
       categoryRef.get(),
       this.categoryMembershipsQuery(categoryId).get(),
     ]);
-    if (!categorySnapshot.exists) {
-      throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-    }
-
     const category = categoryFromSnapshot(categorySnapshot);
     const memberships = membershipSnapshot.docs.map(membershipFromSnapshot).sort(byLessonOrder);
     const assignedSnapshots = memberships.length
-      ? await this.db.getAll(...memberships.map(membership => this.db.collection('lessons').doc(membership.lessonId)))
+      ? await this.db.getAll(...memberships.map(membership => this.lessons.doc(membership.lessonId)))
       : [];
     const assignedById = new Map(assignedSnapshots.map(snapshot => [snapshot.id, snapshot]));
     const lessons = memberships.map(membership => {
@@ -692,13 +680,9 @@ export class PracticeCategoryService {
       categoryRef.get(),
       this.categoryMembershipsQuery(categoryId).get(),
     ]);
-    if (!categorySnapshot.exists) {
-      throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-    }
-
     const category = categoryFromSnapshot(categorySnapshot);
     const assignedIds = new Set(membershipSnapshot.docs.map(snapshot => membershipFromSnapshot(snapshot).lessonId));
-    const allTypeLessonsSnapshot = await this.db.collection('lessons').where('type', '==', category.lessonType).get();
+    const allTypeLessonsSnapshot = await this.lessons.where('type', '==', category.lessonType).get();
 
     return allTypeLessonsSnapshot.docs
       .filter(snapshot => !assignedIds.has(snapshot.id) && isCategorisableLesson(snapshot.data()))
@@ -713,13 +697,8 @@ export class PracticeCategoryService {
         transaction.get(categoryRef),
         transaction.get(this.categoryMembershipsQuery(categoryId)),
       ]);
-      if (!categorySnapshot.exists) {
-        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-      }
       const category = categoryFromSnapshot(categorySnapshot);
-      const currentDocs = membershipSnapshot.docs
-        .map(snapshot => ({ snapshot, membership: membershipFromSnapshot(snapshot) }))
-        .sort((a, b) => byLessonOrder(a.membership, b.membership));
+      const currentDocs = sortedMembershipDocs(membershipSnapshot);
       const current = currentDocs.map(item => item.membership);
       const currentByLessonId = new Map(current.map(membership => [membership.lessonId, membership]));
       if (category.status !== 'active' && lessonIds.some(lessonId => !currentByLessonId.has(lessonId))) {
@@ -730,9 +709,7 @@ export class PracticeCategoryService {
         );
       }
 
-      const lessonSnapshots = await transaction.getAll(
-        ...lessonIds.map(lessonId => this.db.collection('lessons').doc(lessonId))
-      );
+      const lessonSnapshots = await transaction.getAll(...lessonIds.map(lessonId => this.lessons.doc(lessonId)));
       const lessonById = new Map(lessonSnapshots.map(snapshot => [snapshot.id, snapshot]));
 
       lessonIds.forEach(lessonId => {
@@ -804,30 +781,19 @@ export class PracticeCategoryService {
         transaction.get(categoryRef),
         transaction.get(this.categoryMembershipsQuery(categoryId)),
       ]);
-      if (!categorySnapshot.exists) {
-        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-      }
       categoryFromSnapshot(categorySnapshot);
 
-      const currentDocs = membershipSnapshot.docs
-        .map(snapshot => ({ snapshot, membership: membershipFromSnapshot(snapshot) }))
-        .sort((a, b) => byLessonOrder(a.membership, b.membership));
+      const currentDocs = sortedMembershipDocs(membershipSnapshot);
       const target = currentDocs.find(item => item.membership.lessonId === lessonId);
       if (!target) return false;
 
-      const now = new Date().toISOString();
       transaction.delete(target.snapshot.ref);
-      currentDocs
-        .filter(item => item.membership.lessonId !== lessonId)
-        .forEach((item, index) => {
-          if (item.membership.lessonOrder !== index) {
-            transaction.update(item.snapshot.ref, {
-              lessonOrder: index,
-              updatedAt: now,
-              updatedBy: actorId,
-            });
-          }
-        });
+      compactLessonOrder(
+        transaction,
+        currentDocs.filter(item => item.membership.lessonId !== lessonId),
+        new Date().toISOString(),
+        actorId
+      );
       return true;
     });
   }
@@ -843,9 +809,6 @@ export class PracticeCategoryService {
         transaction.get(categoryRef),
         transaction.get(this.categoryMembershipsQuery(categoryId)),
       ]);
-      if (!categorySnapshot.exists) {
-        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
-      }
       const category = categoryFromSnapshot(categorySnapshot);
       if (category.status !== 'active') {
         throw new PracticeCategoryError('CATEGORY_ARCHIVED', 'Restore the category before reordering its lessons', 409);
@@ -927,7 +890,7 @@ export class PracticeCategoryService {
         .filter(tag => tagIds.includes(tag.id))
         .sort(byTagOrder)
         .map(tag => tag.id);
-      if (sameIds(membership.tagIds, normalizedTagIds)) return membership;
+      if (haveSameIdOrder(membership.tagIds, normalizedTagIds)) return membership;
 
       const updated = {
         ...membership,
@@ -1005,11 +968,8 @@ export class PracticeCategoryService {
   }
 
   async getLessonCategories(lessonId: string): Promise<LessonCategoryAssignments> {
-    const lessonSnapshot = await this.db.collection('lessons').doc(lessonId).get();
-    if (!lessonSnapshot.exists) {
-      throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
-    }
-    if (!isLessonDocumentData(lessonSnapshot.data())) {
+    const lessonSnapshot = await this.lessons.doc(lessonId).get();
+    if (!lessonSnapshot.exists || !isLessonDocumentData(lessonSnapshot.data())) {
       throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
     }
     return (await this.getAssignmentsForLessonIds([lessonId])).get(lessonId)!;
@@ -1017,23 +977,19 @@ export class PracticeCategoryService {
 
   async reconcileLessonCategories(
     lessonId: string,
-    desiredCategories: PracticeCategorySelection[] | string[],
+    desired: { practiceCategorySelections?: PracticeCategorySelection[]; practiceCategoryIds?: string[] },
     actorId: string
   ): Promise<LessonCategoryAssignments> {
     return runVocabularyContentMutation(this.db, async transaction => {
-      const lessonSnapshot = await transaction.get(this.db.collection('lessons').doc(lessonId));
-      if (!lessonSnapshot.exists) {
-        throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
-      }
-      if (!isLessonDocumentData(lessonSnapshot.data())) {
+      const lessonSnapshot = await transaction.get(this.lessons.doc(lessonId));
+      if (!lessonSnapshot.exists || !isLessonDocumentData(lessonSnapshot.data())) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
       }
       return this.reconcileLessonCategoriesInTransaction(transaction, {
         lessonId,
         lesson: lessonSnapshot.data()!,
-        ...(desiredCategories.length > 0 && typeof desiredCategories[0] !== 'string'
-          ? { desiredCategorySelections: desiredCategories as PracticeCategorySelection[] }
-          : { desiredCategoryIds: desiredCategories as string[] }),
+        desiredCategorySelections: desired.practiceCategorySelections,
+        desiredCategoryIds: desired.practiceCategoryIds,
         actorId,
         requireCategorisable: true,
       });
@@ -1144,12 +1100,7 @@ export class PracticeCategoryService {
       changedCategoryIds.map(categoryId => transaction.get(this.categoryMembershipsQuery(categoryId)))
     );
     const scopes = new Map(
-      changedCategoryIds.map((categoryId, index) => [
-        categoryId,
-        changedScopeSnapshots[index].docs
-          .map(snapshot => ({ snapshot, membership: membershipFromSnapshot(snapshot) }))
-          .sort((a, b) => byLessonOrder(a.membership, b.membership)),
-      ])
+      changedCategoryIds.map((categoryId, index) => [categoryId, sortedMembershipDocs(changedScopeSnapshots[index])])
     );
 
     const now = new Date().toISOString();
@@ -1160,7 +1111,7 @@ export class PracticeCategoryService {
       .filter(item => desiredSet.has(item.membership.categoryId))
       .forEach(item => {
         const tagIds = desiredTagsByCategory.get(item.membership.categoryId) ?? [];
-        if (sameIds(item.membership.tagIds, tagIds)) return;
+        if (haveSameIdOrder(item.membership.tagIds, tagIds)) return;
         const updated = {
           ...item.membership,
           tagIds,
@@ -1176,15 +1127,7 @@ export class PracticeCategoryService {
       });
     changedCategoryIds.forEach(categoryId => {
       const remaining = (scopes.get(categoryId) ?? []).filter(item => item.membership.lessonId !== input.lessonId);
-      remaining.forEach((item, index) => {
-        if (item.membership.lessonOrder !== index) {
-          transaction.update(item.snapshot.ref, {
-            lessonOrder: index,
-            updatedAt: now,
-            updatedBy: input.actorId,
-          });
-        }
-      });
+      compactLessonOrder(transaction, remaining, now, input.actorId);
 
       if (toAdd.includes(categoryId)) {
         const id = getPracticeCategoryMembershipId(categoryId, input.lessonId);
@@ -1225,13 +1168,10 @@ export class PracticeCategoryService {
   }
 
   async deleteLessonWithMemberships(lessonId: string, actorId: string): Promise<number> {
-    const lessonRef = this.db.collection('lessons').doc(lessonId);
+    const lessonRef = this.lessons.doc(lessonId);
     return runVocabularyContentMutation(this.db, async transaction => {
       const lessonSnapshot = await transaction.get(lessonRef);
-      if (!lessonSnapshot.exists) {
-        throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
-      }
-      if (!isLessonDocumentData(lessonSnapshot.data())) {
+      if (!lessonSnapshot.exists || !isLessonDocumentData(lessonSnapshot.data())) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
       }
       const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
@@ -1256,19 +1196,8 @@ export class PracticeCategoryService {
       transaction.delete(lessonRef);
       lessonMembershipDocs.forEach(item => transaction.delete(item.snapshot.ref));
       categoryScopes.forEach(snapshot => {
-        snapshot.docs
-          .map(item => ({ snapshot: item, membership: membershipFromSnapshot(item) }))
-          .filter(item => item.membership.lessonId !== lessonId)
-          .sort((a, b) => byLessonOrder(a.membership, b.membership))
-          .forEach((item, index) => {
-            if (item.membership.lessonOrder !== index) {
-              transaction.update(item.snapshot.ref, {
-                lessonOrder: index,
-                updatedAt: now,
-                updatedBy: actorId,
-              });
-            }
-          });
+        const remaining = sortedMembershipDocs(snapshot).filter(item => item.membership.lessonId !== lessonId);
+        compactLessonOrder(transaction, remaining, now, actorId);
       });
       return lessonMembershipDocs.length;
     });

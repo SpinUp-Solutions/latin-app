@@ -10,6 +10,8 @@ const mockBaseQuery = jest.fn();
 let failPublication = false;
 let failProgress = false;
 let failMockMutation = false;
+let dashboardLearningPath: unknown[] = [];
+let progressResult: Record<string, unknown> = {};
 
 jest.mock('@/src/store/api/baseQuery', () => ({
   createAuthenticatedBaseQuery:
@@ -26,6 +28,8 @@ const createStore = () =>
 
 const requestUrl = (request: unknown) =>
   typeof request === 'string' ? request : (request as { url?: string } | undefined)?.url;
+const requestCount = (url: string) =>
+  mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === url).length;
 
 describe('student dashboard cache invalidation', () => {
   beforeEach(() => {
@@ -33,13 +37,22 @@ describe('student dashboard cache invalidation', () => {
     failPublication = false;
     failProgress = false;
     failMockMutation = false;
+    dashboardLearningPath = [];
+    progressResult = {
+      lessonCompleted: false,
+      progress: 50,
+      furthestPageIndex: 1,
+      completedExerciseCount: 1,
+      requiredExerciseCount: 2,
+      exerciseProgress: [{ exerciseId: 'exercise-1', score: 100, completedAt: 'now' }],
+    };
     mockBaseQuery.mockImplementation(async (request: unknown) => {
       switch (requestUrl(request)) {
         case '/student-dashboard':
           return {
             data: {
               dashboard: {
-                learningPath: [],
+                learningPath: dashboardLearningPath,
                 practiceLessons: [],
                 mockTests: [{ id: 'mock-1' }],
               },
@@ -101,6 +114,7 @@ describe('student dashboard cache invalidation', () => {
             },
           };
         case '/progress/student-1/lesson-1':
+        case '/progress/student-1/lesson-1/complete':
           if (failProgress) {
             return {
               error: {
@@ -109,7 +123,7 @@ describe('student dashboard cache invalidation', () => {
               },
             };
           }
-          return { data: { success: true, lessonCompleted: false } };
+          return { data: { success: true, ...progressResult } };
         case '/admin/test-versions/version-a':
           return {
             data: {
@@ -136,7 +150,7 @@ describe('student dashboard cache invalidation', () => {
           return {
             data: { attempt: { id: 'attempt-1', origin: { kind: 'mock-test', mockTestId: 'mock-1' } }, resumed: false },
           };
-        case '/test-attempts/attempt-1/submit':
+        case '/test-attempts/attempt-1/sections/page-1/confirm':
           return {
             data: {
               attempt: { id: 'attempt-1', origin: { kind: 'mock-test', mockTestId: 'mock-1' }, status: 'submitted' },
@@ -286,11 +300,7 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -306,11 +316,7 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -343,11 +349,7 @@ describe('student dashboard cache invalidation', () => {
 
     await mutate(store);
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -366,39 +368,137 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-      1
-    );
+    expect(requestCount('/student-dashboard')).toBe(1);
     dashboard.unsubscribe();
   });
 
-  it('does not refetch dashboard or detail caches after rejected progress', async () => {
-    const store = createStore();
-    const dashboard = store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1'));
-    const detail = store.dispatch(
-      lessonApi.endpoints.getStudentLesson.initiate({
-        userId: 'student-1',
-        lessonId: 'lesson-1',
-      })
-    );
-    await Promise.all([dashboard, detail]);
-    failProgress = true;
+  describe('progress writes', () => {
+    const ids = { userId: 'student-1', lessonId: 'lesson-1' };
+    const pathLesson = (status: string) => ({
+      id: 'lesson-1',
+      kind: 'lesson',
+      status,
+      progress: 0,
+      furthestPageIndex: -1,
+      currentPageIndex: 0,
+    });
+    const completeExercise = (exerciseId = 'exercise-1') =>
+      lessonApi.endpoints.markExerciseComplete.initiate({ ...ids, exerciseId, score: 100 });
+    const setup = async (status: string) => {
+      dashboardLearningPath = [pathLesson(status)];
+      const store = createStore();
+      const subscriptions = [
+        store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1')),
+        store.dispatch(lessonApi.endpoints.getStudentLesson.initiate(ids)),
+      ];
+      await Promise.all(subscriptions);
+      return {
+        store,
+        lesson: () => lessonApi.endpoints.getStudentLesson.select(ids)(store.getState()).data,
+        path: () => lessonApi.endpoints.getStudentDashboard.select('student-1')(store.getState()).data?.learningPath,
+        unsubscribe: () => subscriptions.forEach(subscription => subscription.unsubscribe()),
+      };
+    };
 
-    await store.dispatch(
-      lessonApi.endpoints.markExerciseComplete.initiate({
-        userId: 'student-1',
-        lessonId: 'lesson-1',
-        exerciseId: 'exercise-1',
-        score: 1,
-      })
-    );
+    it.each([
+      ['exercise completion', () => completeExercise()],
+      ['page visit', () => lessonApi.endpoints.updatePageProgress.initiate({ ...ids, pageId: 'page-2' })],
+    ])('adopts the persisted summary for %s without refetching the lesson or dashboard', async (_name, mutate) => {
+      const { store, lesson, path, unsubscribe } = await setup('available');
+      await store.dispatch(mutate() as never);
 
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-      1
-    );
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/lessons/lesson-1')).toHaveLength(1);
-    dashboard.unsubscribe();
-    detail.unsubscribe();
+      expect([requestCount('/student-dashboard'), requestCount('/lessons/lesson-1')]).toEqual([1, 1]);
+      expect(path()).toEqual([
+        { ...pathLesson('in-progress'), progress: 50, furthestPageIndex: 1, currentPageIndex: 1 },
+      ]);
+      expect(lesson()).toMatchObject({
+        status: 'in-progress',
+        progress: 50,
+        furthestPageIndex: 1,
+        completedExerciseCount: 1,
+        exerciseProgress: progressResult.exerciseProgress,
+      });
+      unsubscribe();
+    });
+
+    it.each([
+      ['a rejected write', 'in-progress', () => (failProgress = true)],
+      ['a write to a completed lesson', 'completed', () => (progressResult.lessonCompleted = true)],
+    ])('refetches neither the lesson nor the dashboard after %s', async (_name, status, arrange) => {
+      const { store, unsubscribe } = await setup(status);
+      arrange();
+      await store.dispatch(completeExercise());
+
+      expect([requestCount('/student-dashboard'), requestCount('/lessons/lesson-1')]).toEqual([1, 1]);
+      unsubscribe();
+    });
+
+    it('refetches only the dashboard when the write completes the lesson, since that can unlock the next unit', async () => {
+      const { store, lesson, unsubscribe } = await setup('in-progress');
+      progressResult = { ...progressResult, lessonCompleted: true, progress: 100 };
+      await store.dispatch(lessonApi.endpoints.finishLesson.initiate({ ...ids, finalPageId: 'page-2' }));
+
+      await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
+      expect(requestCount('/lessons/lesson-1')).toBe(1);
+      expect(lesson()).toMatchObject({ status: 'completed', progress: 100 });
+      unsubscribe();
+    });
+
+    it('refetches the dashboard when the lesson completes before its first response arrives', async () => {
+      const nextLesson = (status: string) => ({ ...pathLesson(status), id: 'lesson-2' });
+      const path = (learningPath: unknown[]) => ({ learningPath, practiceLessons: [], mockTests: [] });
+      // The first dashboard read started before the completion write, so it still reports the next lesson locked.
+      let releaseStaleDashboard = () => {};
+      mockBaseQuery.mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            releaseStaleDashboard = () =>
+              resolve({ data: { dashboard: path([pathLesson('in-progress'), nextLesson('locked')]) } });
+          })
+      );
+      dashboardLearningPath = [pathLesson('completed'), nextLesson('available')];
+      progressResult = { ...progressResult, lessonCompleted: true, progress: 100 };
+      const store = createStore();
+      const subscription = store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1'));
+      await waitFor(() => expect(requestCount('/student-dashboard')).toBe(1));
+
+      await store.dispatch(lessonApi.endpoints.finishLesson.initiate({ ...ids, finalPageId: 'page-2' }));
+      releaseStaleDashboard();
+
+      await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
+      await waitFor(() =>
+        expect(
+          lessonApi.endpoints.getStudentDashboard.select('student-1')(store.getState()).data?.learningPath
+        ).toEqual(dashboardLearningPath)
+      );
+      subscription.unsubscribe();
+    });
+
+    it('keeps the newer summary when concurrent exercise writes resolve out of order', async () => {
+      const { store, lesson, path, unsubscribe } = await setup('in-progress');
+      const responses: Array<(data: unknown) => void> = [];
+      mockBaseQuery.mockImplementation(() => new Promise(resolve => responses.push(data => resolve({ data }))));
+      const [one, two] = ['exercise-1', 'exercise-2'].map(id => ({ exerciseId: id, score: 100, completedAt: id }));
+      const summary = (count: number, progress: number) => ({
+        ...progressResult,
+        progress,
+        furthestPageIndex: 2,
+        completedExerciseCount: count,
+        exerciseProgress: [one, two].slice(0, count),
+      });
+
+      const first = store.dispatch(completeExercise('exercise-1'));
+      const second = store.dispatch(completeExercise('exercise-2'));
+      await waitFor(() => expect(responses).toHaveLength(2));
+      responses[1](summary(2, 67));
+      await second;
+      responses[0](summary(1, 33));
+      await first;
+
+      expect(lesson()).toMatchObject({ progress: 67, completedExerciseCount: 2, exerciseProgress: [one, two] });
+      expect(path()?.[0]).toMatchObject({ status: 'in-progress', progress: 67, furthestPageIndex: 2 });
+      unsubscribe();
+    });
   });
 
   it('refetches active dashboards after placed-test version metadata changes', async () => {
@@ -417,11 +517,7 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -472,11 +568,7 @@ describe('student dashboard cache invalidation', () => {
 
     await store.dispatch(startMutation() as never);
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -513,9 +605,7 @@ describe('student dashboard cache invalidation', () => {
 
     await store.dispatch(startMutation() as never);
 
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-      1
-    );
+    expect(requestCount('/student-dashboard')).toBe(1);
     dashboard.unsubscribe();
   });
 
@@ -553,12 +643,8 @@ describe('student dashboard cache invalidation', () => {
     await store.dispatch(startMutation() as never);
 
     await waitFor(() => {
-      expect(
-        mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/tests/test-1')
-      ).toHaveLength(2);
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/mock-tests')).toHaveLength(
-        2
-      );
+      expect(requestCount('/admin/tests/test-1')).toBe(2);
+      expect(requestCount('/admin/mock-tests')).toBe(2);
     });
     detail.unsubscribe();
     mocks.unsubscribe();
@@ -584,16 +670,10 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-      1
-    );
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/tests/test-1')).toHaveLength(
-      1
-    );
-    expect(
-      mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/test-versions/version-a')
-    ).toHaveLength(1);
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/mock-tests')).toHaveLength(1);
+    expect(requestCount('/student-dashboard')).toBe(1);
+    expect(requestCount('/admin/tests/test-1')).toBe(1);
+    expect(requestCount('/admin/test-versions/version-a')).toBe(1);
+    expect(requestCount('/admin/mock-tests')).toBe(1);
     dashboard.unsubscribe();
     detail.unsubscribe();
     version.unsubscribe();
@@ -609,17 +689,24 @@ describe('student dashboard cache invalidation', () => {
           origin: { kind: 'mock-test', mockTestId: 'mock-1' },
         }),
     ],
-    ['submit', () => testApi.endpoints.submitTestAttempt.initiate({ uid: 'student-1', attemptId: 'attempt-1' })],
+    [
+      'final section confirmation',
+      () =>
+        testApi.endpoints.confirmTestSection.initiate({
+          uid: 'student-1',
+          attemptId: 'attempt-1',
+          pageId: 'page-1',
+          expectedRevision: 0,
+          requestId: '9f0c2f5e-4d5b-4a8e-9a55-3c3f2a1b7c10',
+          acknowledgeIncomplete: false,
+        }),
+    ],
   ])('refreshes mounted student mock cards after successful mock %s', async (_name, mutation) => {
     const store = createStore();
     const dashboard = store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1'));
     await dashboard;
     await store.dispatch(mutation() as never);
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -649,7 +736,7 @@ describe('student dashboard cache invalidation', () => {
         '/admin/mock-tests',
         '/admin/mock-tests/mock-1',
       ]) {
-        expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === url)).toHaveLength(2);
+        expect(requestCount(url)).toBe(2);
       }
     });
     [dashboard, detail, version, mocks, mockDetail].forEach(subscription => subscription.unsubscribe());

@@ -10,11 +10,6 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-jest.mock('next/image', () => ({
-  __esModule: true,
-  default: ({ alt }: { alt: string }) => <span>{alt}</span>,
-}));
-
 jest.mock('@/src/hooks/useAuth', () => ({
   useAuth: () => ({ user: { uid: 'student-1' }, loading: false }),
 }));
@@ -28,18 +23,12 @@ jest.mock('@/src/components/ui/lesson/lesson-player', () => ({
   default: ({ lesson }: { lesson: { id: string } }) => <div>Player {lesson.id}</div>,
 }));
 
-jest.mock('@/src/components/ui/lesson/lesson-sidebar', () => ({
-  __esModule: true,
-  default: () => <aside>Lesson sidebar</aside>,
-}));
-
-jest.mock('@/src/components/ui/lesson/practice-sidebar', () => ({
-  __esModule: true,
-  default: () => <aside>Practice sidebar</aside>,
-}));
-
 jest.mock('@/src/components/ui/core/feedback-banner', () => ({
   FeedbackBanner: () => null,
+}));
+
+jest.mock('@/src/components/student-feedback/FeedbackLessonDialog', () => ({
+  FeedbackLessonDialog: () => null,
 }));
 
 const lesson = (id: string) => ({
@@ -95,19 +84,5 @@ describe('lesson route navigation', () => {
 
     expect(screen.getByText('Player lesson-2')).toBeInTheDocument();
     expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
-  });
-
-  it('keeps sidebar open controls available in the lesson header', () => {
-    mockUseGetStudentLessonQuery.mockReturnValue({
-      data: lesson('lesson-2'),
-      currentData: lesson('lesson-2'),
-      isLoading: false,
-      error: undefined,
-    });
-
-    render(<DynamicLessonPage />);
-
-    expect(screen.getByRole('button', { name: 'Open lessons sidebar' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open practice sidebar' })).toBeInTheDocument();
   });
 });

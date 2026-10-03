@@ -1,3 +1,4 @@
+import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -59,7 +60,7 @@ export async function DELETE(
     }
 
     const wordRef = adminDb.collection(collection).doc(wordId);
-    const poolsQuery = adminDb.collection('vocabulary_pools').where('wordDocIds', 'array-contains', wordId);
+    const poolsQuery = adminDb.collection(VOCABULARY_POOL_COLLECTION).where('wordDocIds', 'array-contains', wordId);
     const challengeRef = adminDb
       .collection(VOCABULARY_WORD_DELETION_CHALLENGE_COLLECTION)
       .doc(wordDeletionChallengeDocumentId(wordId, actor.uid));

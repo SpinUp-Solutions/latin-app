@@ -5,7 +5,6 @@ import lessonEditorReducer from './slices/lessonEditorSlice';
 import clipboardReducer from './slices/clipboardSlice';
 import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
 import vocabularyReducer from './slices/vocabularySlice';
-import vocabularyEditReducer from './slices/vocabularyEditSlice';
 import advancedFiltersReducer from './slices/advancedFiltersSlice';
 import { appApi } from './api/appApi';
 import { vocabularyPoolApi } from './api/vocabularyPoolApi';
@@ -20,7 +19,6 @@ export const store = configureStore({
     clipboard: clipboardReducer,
     vocabularyPools: vocabularyPoolsReducer,
     vocabulary: vocabularyReducer,
-    vocabularyEdit: vocabularyEditReducer,
     advancedFilters: advancedFiltersReducer,
     [appApi.reducerPath]: appApi.reducer,
     [vocabularyPoolApi.reducerPath]: vocabularyPoolApi.reducer,

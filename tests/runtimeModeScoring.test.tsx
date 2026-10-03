@@ -1,23 +1,19 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import FillExercise from '@/src/components/ui/exercises/fill-exercise';
 import MultipleChoiceExercise from '@/src/components/ui/exercises/multiple-choice-exercise';
-import ClickOnMultipleWordsExercise from '@/src/components/ui/exercises/click-on-multiple-words';
 import ContentRenderer from '@/src/components/ui/lesson/content-renderer';
 import type { FillExercise as FillExerciseType } from '@/src/types/exercises/fill';
 import type { MultipleChoiceExercise as MultipleChoiceExerciseType } from '@/src/types/exercises/multiple-choice';
 import type { MatchingExercise } from '@/src/types/exercises/matching';
-import type { ClickOnMultipleWordsExercise as ClickOnMultipleWordsExerciseType } from '@/src/types/exercises/click-on-multiple-words';
 import type { GeneratedTranslationExercise } from '@/src/types/exercises/generated-translation';
 
 jest.mock('@/src/services/wordLookupService', () => ({}));
 jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
 jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({}) }));
-const mockUseGetMultiPosWordsQuery = jest.fn();
+const mockGeneratedItemsQuery = jest.fn();
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
-  useGetGeneratedExerciseWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
-  useGetMultiPosWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
-  useGetMultiParadigmWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
+  useGetGeneratedExerciseItemsQuery: (...args: unknown[]) => mockGeneratedItemsQuery(...args),
 }));
 
 const manualProgression = {
@@ -32,41 +28,10 @@ const manualProgression = {
 
 describe('exercise runtime-mode scoring', () => {
   beforeEach(() => {
-    mockUseGetMultiPosWordsQuery.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    mockGeneratedItemsQuery.mockReset();
   });
 
-  it('rounds click-selection scores passed to preview completion without changing grader precision', async () => {
-    const onComplete = jest.fn();
-    const exercise: ClickOnMultipleWordsExerciseType = {
-      id: 'click-preview',
-      type: 'click-on-multiple-words',
-      title: 'Click',
-      instructions: '',
-      itemProgressionDelay: 0,
-      feedbackConfig: {
-        ...manualProgression,
-        progressionRules: {
-          ...manualProgression.progressionRules,
-          autoAdvanceOnCorrect: true,
-          pauseForExplanation: false,
-        },
-      },
-      data: {
-        passage: 'amo amas amat',
-        correctWordIndices: [0, 1, 2],
-        allowOverSelection: false,
-      },
-    };
-
-    render(<ClickOnMultipleWordsExercise exercise={exercise} runtimeMode="preview" onComplete={onComplete} />);
-    fireEvent.click(screen.getByRole('button', { name: /Word 1: amo/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Word 2: amas/i }));
-    fireEvent.click(screen.getByRole('button', { name: /submit selections/i }));
-
-    await waitFor(() => expect(onComplete).toHaveBeenCalledWith(67));
-  });
-
-  it('does not emit accepted completion from preview or test runtime modes', () => {
+  it('does not emit accepted completion in test runtime mode', () => {
     const exercise: MultipleChoiceExerciseType = {
       id: 'mode-gated-completion',
       type: 'multiple-choice',
@@ -79,19 +44,6 @@ describe('exercise runtime-mode scoring', () => {
         options: [{ id: 'right', text: 'Right', isCorrect: true }],
       },
     };
-
-    const previewAccepted = jest.fn();
-    const { unmount } = render(
-      <MultipleChoiceExercise
-        exercise={exercise}
-        runtimeMode="preview"
-        onCompletionAccepted={previewAccepted}
-      />
-    );
-    fireEvent.click(screen.getByRole('button', { name: /right/i }));
-    fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
-    expect(previewAccepted).not.toHaveBeenCalled();
-    unmount();
 
     const testAccepted = jest.fn();
     render(<MultipleChoiceExercise exercise={exercise} runtimeMode="test" onCompletionAccepted={testAccepted} />);
@@ -127,7 +79,7 @@ describe('exercise runtime-mode scoring', () => {
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
   });
 
-  it('advances after each committed multi-item answer without grading locally', () => {
+  it('advances directly after each recorded multi-item answer without grading locally', () => {
     const onComplete = jest.fn();
     const exercise: FillExerciseType = {
       id: 'fill-test',
@@ -147,9 +99,9 @@ describe('exercise runtime-mode scoring', () => {
 
     fireEvent.change(screen.getByPlaceholderText(/type your answer/i), { target: { value: 'wrong' } });
     fireEvent.click(screen.getByRole('button', { name: /check/i }));
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
     expect(screen.getByText('Second')).toBeInTheDocument();
+    expect(onComplete).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByPlaceholderText(/type your answer/i), { target: { value: 'two' } });
     fireEvent.click(screen.getByRole('button', { name: /check/i }));
@@ -297,94 +249,51 @@ describe('exercise runtime-mode scoring', () => {
     );
   });
 
-  it('scores matching preview answers through the canonical matching grader', () => {
-    const onComplete = jest.fn();
-    const exercise: MatchingExercise = {
-      id: 'matching-preview',
-      type: 'matching',
-      title: 'Match',
-      instructions: '',
-      feedbackConfig: manualProgression,
-      data: {
-        leftColumn: [
-          { id: 'left-a', value: 'Alpha' },
-          { id: 'left-b', value: 'Beta' },
-        ],
-        rightColumn: [
-          { id: 'right-a', value: 'One' },
-          { id: 'right-b', value: 'Two' },
-        ],
-        answers: { 'left-a': 'right-a', 'left-b': 'right-b' },
-      },
-    };
+  const generatedTranslation: GeneratedTranslationExercise = {
+    id: 'generated-lesson-exercise',
+    type: 'generated-translation',
+    title: 'Generated translation',
+    instructions: '',
+    feedbackConfig: manualProgression,
+    data: { generatorConfig: { collection: 'words', wordSource: 'filters', count: 1 }, posConfigs: {} },
+  };
 
-    render(<ContentRenderer content={exercise} runtimeMode="preview" onComplete={onComplete} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Two' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Two' }));
-
-    expect(onComplete).toHaveBeenCalledWith(50);
-  });
-
-  it('allows the authoring preview to opt into generated vocabulary queries in test mode', () => {
-    mockUseGetMultiPosWordsQuery.mockReturnValue({
-      data: { words: [] },
-      isLoading: false,
-      isError: false,
-    });
-    const exercise: GeneratedTranslationExercise = {
-      id: 'generated-admin-preview',
-      type: 'generated-translation',
-      title: 'Generated translation',
-      instructions: '',
-      feedbackConfig: manualProgression,
-      data: {
-        generatorConfig: {
-          collection: 'words',
-          wordSource: 'filters',
-          count: 1,
-        },
-        posConfigs: {},
-      },
-    };
-
-    render(<ContentRenderer content={exercise} runtimeMode="test" allowGeneratedExerciseQueries />);
-
-    expect(mockUseGetMultiPosWordsQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        exercise: expect.objectContaining({ type: 'generated-translation' }),
-        source: { kind: 'admin-preview' },
-      }),
-      expect.objectContaining({ skip: false })
-    );
-    expect(screen.getByText('No vocabulary found')).toBeInTheDocument();
-  });
-
-  it('scopes generated lesson queries to the rendered lesson item', () => {
-    mockUseGetMultiPosWordsQuery.mockReturnValue({ data: { words: [] }, isLoading: false, isError: false });
-    const exercise: GeneratedTranslationExercise = {
-      id: 'generated-lesson-exercise',
-      type: 'generated-translation',
-      title: 'Generated translation',
-      instructions: '',
-      feedbackConfig: manualProgression,
-      data: {
-        generatorConfig: { collection: 'words', wordSource: 'filters', count: 1 },
-        posConfigs: {},
-      },
-    };
-
+  it('never queries generated questions in test mode, where sections carry frozen ones', () => {
     render(
       <ContentRenderer
-        content={exercise}
+        content={generatedTranslation}
+        runtimeMode="test"
+        generatedExerciseContext={{ kind: 'admin-preview' }}
+      />
+    );
+
+    expect(mockGeneratedItemsQuery).not.toHaveBeenCalled();
+  });
+
+  it('plays the questions the server resolves for the rendered lesson item', () => {
+    mockGeneratedItemsQuery.mockReturnValue({ isLoading: true });
+    const view = render(
+      <ContentRenderer
+        content={generatedTranslation}
+        pageIndex={2}
+        itemIndex={3}
+        generatedExerciseContext={{ kind: 'lesson', lessonId: 'lesson-1' }}
+      />
+    );
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
+    mockGeneratedItemsQuery.mockReturnValue({ data: { items: [{ text: 'amo', acceptedAnswers: ['love'] }] } });
+    view.rerender(
+      <ContentRenderer
+        content={generatedTranslation}
         pageIndex={2}
         itemIndex={3}
         generatedExerciseContext={{ kind: 'lesson', lessonId: 'lesson-1' }}
       />
     );
 
-    expect(mockUseGetMultiPosWordsQuery).toHaveBeenCalledWith(
+    expect(screen.getByText('amo')).toBeInTheDocument();
+    expect(mockGeneratedItemsQuery).toHaveBeenLastCalledWith(
       expect.objectContaining({
         source: {
           kind: 'lesson',
@@ -394,7 +303,7 @@ describe('exercise runtime-mode scoring', () => {
           exerciseId: 'generated-lesson-exercise',
         },
       }),
-      expect.objectContaining({ skip: false })
+      { skip: false }
     );
   });
 });

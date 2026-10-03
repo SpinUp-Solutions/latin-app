@@ -35,14 +35,10 @@ const clipboardSlice = createSlice({
     clearClipboard: state => {
       state.items = [];
     },
-
-    removeClipboardItem: (state, action: PayloadAction<number>) => {
-      state.items.splice(action.payload, 1);
-    },
   },
 });
 
-export const { copyContentItem, clearClipboard, removeClipboardItem } = clipboardSlice.actions;
+export const { copyContentItem, clearClipboard } = clipboardSlice.actions;
 
 export const pasteContentItem = (clipboardIndex: number = 0) => {
   return (dispatch: unknown, getState: () => { clipboard: ClipboardState }) => {
@@ -71,6 +67,5 @@ export const pasteContentItem = (clipboardIndex: number = 0) => {
 
 export const selectClipboardItems = (state: { clipboard: ClipboardState }) => state.clipboard.items;
 export const selectHasClipboardItems = (state: { clipboard: ClipboardState }) => state.clipboard.items.length > 0;
-export const selectLatestClipboardItem = (state: { clipboard: ClipboardState }) => state.clipboard.items[0] || null;
 
 export default clipboardSlice.reducer;

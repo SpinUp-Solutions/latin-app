@@ -1,3 +1,4 @@
+import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get('dryRun') === 'true';
-    const snapshot = await adminDb.collection('vocabulary_pools').select('name', 'searchTokens').get();
+    const snapshot = await adminDb.collection(VOCABULARY_POOL_COLLECTION).select('name', 'searchTokens').get();
 
     const updates = snapshot.docs
       .map(doc => {

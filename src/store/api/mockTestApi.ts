@@ -10,11 +10,9 @@ import type {
 } from '@/src/lib/tests/schemas';
 import type { TestUnit } from '@/src/types/learning-unit';
 import type { StudentMockTestDetail, MockTest, MockTestSummary, TestVersion } from '@/src/types/test';
-import { getAttemptSummaryTagId } from './tags';
 import { appApi } from './appApi';
-import { STUDENT_DASHBOARD_TAG } from './tags';
+import { getAttemptSummaryTagId, STUDENT_DASHBOARD_TAG, testVersionsForTestTag } from './tags';
 
-const forTest = (testId: string) => `FOR_TEST:${testId}`;
 const baseMockTags = (mockId?: string) => [
   ...(mockId ? [{ type: 'MockTest' as const, id: mockId }] : []),
   { type: 'MockTest' as const, id: 'LIST' },
@@ -24,10 +22,19 @@ const baseMockTags = (mockId?: string) => [
 const testProjectionTags = (testId: string) => [
   { type: 'LearningUnit' as const, id: testId },
   { type: 'LearningUnit' as const, id: 'LIST' },
-  { type: 'TestVersion' as const, id: forTest(testId) },
+  { type: 'TestVersion' as const, id: testVersionsForTestTag(testId) },
 ];
 const parentProjectionTags = (mock: MockTest) =>
   mock.parent.kind === 'test' ? testProjectionTags(mock.parent.testId) : [];
+const mockOwnershipTags = (result?: { mock: MockTest }) =>
+  result
+    ? [
+        ...baseMockTags(result.mock.id),
+        ...parentProjectionTags(result.mock),
+        { type: 'TestVersion' as const, id: result.mock.versionId },
+        { type: 'AttemptSummary' as const },
+      ]
+    : [];
 
 export const mockTestApi = appApi.injectEndpoints({
   endpoints: builder => ({
@@ -60,27 +67,11 @@ export const mockTestApi = appApi.injectEndpoints({
     }),
     assignMock: builder.mutation<{ mock: MockTest }, AssignVersionToMockInput>({
       query: body => ({ url: '/admin/mock-tests/assign', method: 'POST', body }),
-      invalidatesTags: result =>
-        result
-          ? [
-              ...baseMockTags(result.mock.id),
-              ...parentProjectionTags(result.mock),
-              { type: 'TestVersion', id: result.mock.versionId },
-              { type: 'AttemptSummary' },
-            ]
-          : [],
+      invalidatesTags: mockOwnershipTags,
     }),
     updateMock: builder.mutation<{ mock: MockTest }, { id: string; body: UpdateMockTestInput }>({
       query: ({ id, body }) => ({ url: `/admin/mock-tests/${id}`, method: 'PATCH', body }),
-      invalidatesTags: result =>
-        result
-          ? [
-              ...baseMockTags(result.mock.id),
-              ...parentProjectionTags(result.mock),
-              { type: 'TestVersion', id: result.mock.versionId },
-              { type: 'AttemptSummary' },
-            ]
-          : [],
+      invalidatesTags: mockOwnershipTags,
     }),
     updateMockVersion: builder.mutation<
       { version: TestVersion },
@@ -99,27 +90,13 @@ export const mockTestApi = appApi.injectEndpoints({
     }),
     archiveMock: builder.mutation<{ mock: MockTest }, string>({
       query: id => ({ url: `/admin/mock-tests/${id}/archive`, method: 'POST' }),
-      invalidatesTags: result =>
-        result
-          ? [
-              ...baseMockTags(result.mock.id),
-              ...parentProjectionTags(result.mock),
-              { type: 'TestVersion', id: result.mock.versionId },
-              { type: 'AttemptSummary' },
-            ]
-          : [],
+      invalidatesTags: mockOwnershipTags,
     }),
     reactivateStandaloneMock: builder.mutation<{ mock: MockTest }, { id: string; body: ReactivateStandaloneMockInput }>(
       {
         query: ({ id, body }) => ({ url: `/admin/mock-tests/${id}/reactivate`, method: 'POST', body }),
-        invalidatesTags: result =>
-          result
-            ? [
-                ...baseMockTags(result.mock.id),
-                { type: 'TestVersion', id: result.mock.versionId },
-                { type: 'AttemptSummary' },
-              ]
-            : [],
+        // A reactivated mock is always standalone, so it has no parent projection.
+        invalidatesTags: mockOwnershipTags,
       }
     ),
     moveMockToTest: builder.mutation<

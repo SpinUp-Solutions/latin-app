@@ -285,5 +285,3 @@ export const SentenceDiagramSurface: React.FC<SentenceDiagramSurfaceProps> = ({
     </div>
   );
 };
-
-export default SentenceDiagramSurface;

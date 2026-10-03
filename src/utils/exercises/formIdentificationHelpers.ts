@@ -1,6 +1,6 @@
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
-import { normalize } from './generatedFormIdentificationExercise';
+import { normalizeAnswer } from './helpers';
 import {
   CaseSchema,
   GenderSchema,
@@ -11,127 +11,73 @@ import {
   DegreeSchema,
   VoiceSchema,
   PersonSchema,
-  GrammaticalNumberSchema,
   PronounTypeSchema,
   PronounPersonSchema,
 } from '@/shared/types/vocabulary/schemas';
-import {
-  getSupportedVerbFormStepsForParsedPath,
-  getVerbFormKindForParsedPath,
-} from './verbFormStepCompatibility';
-import { getSelectedFormPathCompatibility, getParsedFormPathStepSupport } from './formIdentificationCompatibility';
-
-type VerbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'verb' }>;
-type NounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'noun' }>;
-type AdjectiveWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'adjective' }>;
-type PronounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'pronoun' }>;
-type AdverbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'adverb' }>;
-
-function isVerb(word: ExerciseWordResponse): word is VerbWordResponse {
-  return word.part_of_speech === 'verb';
-}
-
-function isNoun(word: ExerciseWordResponse): word is NounWordResponse {
-  return word.part_of_speech === 'noun';
-}
-
-function isAdjective(word: ExerciseWordResponse): word is AdjectiveWordResponse {
-  return word.part_of_speech === 'adjective';
-}
-
-export function isPronoun(word: ExerciseWordResponse): word is PronounWordResponse {
-  return word.part_of_speech === 'pronoun';
-}
-
-function isAdverb(word: ExerciseWordResponse): word is AdverbWordResponse {
-  return word.part_of_speech === 'adverb';
-}
+import { getSupportedVerbFormStepsForParsedPath, getVerbFormKindForParsedPath } from './verbFormStepCompatibility';
+import { getParsedFormPathStepSupport } from './formIdentificationCompatibility';
 
 export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentificationStep): string => {
-  if (isVerb(word)) {
-    switch (step) {
-      case 'conjugation':
-        return word.conjugation || '';
-      case 'tense':
-        return word.form_path?.tense || '';
-      case 'voice':
-        return word.form_path?.voice || '';
-      case 'verb_form':
-        return getVerbFormKindForParsedPath(word.form_path);
-      case 'mood':
-        return word.form_path?.mood || '';
-      case 'person':
-        return word.form_path?.person || '';
-      case 'number':
-        return word.form_path?.number || '';
-      case 'case':
-        return word.form_path?.case || '';
-      case 'gender':
-        return word.form_path?.gender || '';
-      default:
-        return '';
-    }
+  switch (word.part_of_speech) {
+    case 'verb':
+      switch (step) {
+        case 'conjugation':
+          return word.conjugation || '';
+        case 'verb_form':
+          return getVerbFormKindForParsedPath(word.form_path);
+        case 'tense':
+        case 'voice':
+        case 'mood':
+        case 'person':
+        case 'number':
+        case 'case':
+        case 'gender':
+          return word.form_path?.[step] || '';
+        default:
+          return '';
+      }
+    case 'noun':
+      switch (step) {
+        case 'declension':
+          return word.declension || '';
+        case 'gender':
+          return word.gender || '';
+        case 'case':
+        case 'number':
+          return word.form_path?.[step] || '';
+        default:
+          return '';
+      }
+    case 'adjective':
+      switch (step) {
+        case 'declension':
+          return word.declension || '';
+        case 'degree':
+        case 'case':
+        case 'number':
+        case 'gender':
+          return word.form_path?.[step] || '';
+        default:
+          return '';
+      }
+    case 'pronoun':
+      switch (step) {
+        case 'pronoun_type':
+          return word.pronoun_type || '';
+        case 'person':
+          return word.person || '';
+        case 'case':
+        case 'number':
+        case 'gender':
+          return word.form_path?.[step] || '';
+        default:
+          return '';
+      }
+    case 'adverb':
+      return step === 'degree' ? word.form_path?.degree || '' : '';
+    default:
+      return '';
   }
-
-  if (isNoun(word)) {
-    switch (step) {
-      case 'declension':
-        return word.declension || '';
-      case 'case':
-        return word.form_path?.case || '';
-      case 'number':
-        return word.form_path?.number || '';
-      case 'gender':
-        return word.gender || '';
-      default:
-        return '';
-    }
-  }
-
-  if (isAdjective(word)) {
-    switch (step) {
-      case 'declension':
-        return word.declension || '';
-      case 'degree':
-        return word.form_path?.degree || '';
-      case 'case':
-        return word.form_path?.case || '';
-      case 'number':
-        return word.form_path?.number || '';
-      case 'gender':
-        return word.form_path?.gender || '';
-      default:
-        return '';
-    }
-  }
-
-  if (isPronoun(word)) {
-    switch (step) {
-      case 'pronoun_type':
-        return word.pronoun_type || '';
-      case 'person':
-        return word.person || '';
-      case 'case':
-        return word.form_path?.case || '';
-      case 'number':
-        return word.form_path?.number || '';
-      case 'gender':
-        return word.form_path?.gender || '';
-      default:
-        return '';
-    }
-  }
-
-  if (isAdverb(word)) {
-    switch (step) {
-      case 'degree':
-        return word.form_path?.degree || '';
-      default:
-        return '';
-    }
-  }
-
-  return '';
 };
 
 export function enrichPathsWithSteps(
@@ -139,11 +85,12 @@ export function enrichPathsWithSteps(
   word: ExerciseWordResponse,
   steps: FormIdentificationStep[]
 ): Array<Record<string, string | undefined>> {
+  const isVerb = word.part_of_speech === 'verb';
   return paths.map(path => {
     const enrichedPath: Record<string, string | undefined> = { ...path };
-    const verbSupport = isVerb(word) ? getSupportedVerbFormStepsForParsedPath(path) : null;
+    const verbSupport = isVerb ? getSupportedVerbFormStepsForParsedPath(path) : null;
     steps.forEach(step => {
-      if (isVerb(word) && (!verbSupport || !verbSupport.supportedSteps.includes(step))) {
+      if (isVerb && !verbSupport?.supportedSteps.includes(step)) {
         return;
       }
       if (!enrichedPath[step]) {
@@ -161,25 +108,10 @@ export function getAnswerableStepsForWord(
 ): FormIdentificationStep[] {
   if (formPaths.length === 0) return [];
 
-  if (!isVerb(word)) {
-    const supports = formPaths.map(path => getParsedFormPathStepSupport(word.part_of_speech, path));
-    if (supports.some(support => support === null)) return [];
-
-    return steps.filter(step =>
-      supports.every(support => {
-        if (!support?.supportedSteps.includes(step)) return false;
-        return true;
-      })
-    );
-  }
-
-  const supports = formPaths.map(path => getSupportedVerbFormStepsForParsedPath(path));
-
+  const supports = formPaths.map(path => getParsedFormPathStepSupport(word.part_of_speech, path));
   if (supports.some(support => support === null)) return [];
 
-  const supportedStepSets = supports.map(support => new Set<FormIdentificationStep>(support!.supportedSteps));
-
-  return steps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
+  return steps.filter(step => supports.every(support => support!.supportedSteps.includes(step)));
 }
 
 /**
@@ -193,10 +125,8 @@ export function getFallbackAnswerableStepsForWord(
   preferredPath: Record<string, string | undefined> | null | undefined
 ): FormIdentificationStep[] {
   if (!preferredPath) return [];
-  if (isVerb(word)) {
-    return getSelectedFormPathCompatibility('verb', preferredPath, steps)?.applicableSteps ?? [];
-  }
-  return getSelectedFormPathCompatibility(word.part_of_speech, preferredPath, steps)?.applicableSteps ?? [];
+  const support = getParsedFormPathStepSupport(word.part_of_speech, preferredPath);
+  return support ? support.supportedSteps.filter(step => steps.includes(step)) : [];
 }
 
 /**
@@ -215,35 +145,19 @@ export function deduplicatePathsBySteps(
   steps: FormIdentificationStep[]
 ): Array<Record<string, string | undefined>> {
   const seen = new Set<string>();
-  const result: Array<Record<string, string | undefined>> = [];
-
-  for (const path of paths) {
-    // Create a key from only the requested step values (normalized)
+  return paths.filter(path => {
     const key = steps.map(step => (path[step] || '').toLowerCase().trim()).join('|');
-
-    if (!seen.has(key)) {
-      seen.add(key);
-      result.push(path);
-    }
-  }
-
-  return result;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
-export function extractStepValuesFromPaths<T extends { [key: string]: string | undefined }>(
-  formPaths: T[],
+export function extractStepValuesFromPaths(
+  formPaths: Array<Record<string, string | undefined>>,
   step: FormIdentificationStep
 ): string[] {
-  const values: string[] = [];
-
-  for (const formPath of formPaths) {
-    const value = formPath[step as keyof T];
-    if (value && typeof value === 'string' && !values.includes(value)) {
-      values.push(value);
-    }
-  }
-
-  return values;
+  return [...new Set(formPaths.map(path => path[step]).filter((value): value is string => Boolean(value)))];
 }
 
 export function filterPathsByPreviousAnswers<T extends Record<string, string | undefined>>(
@@ -253,45 +167,24 @@ export function filterPathsByPreviousAnswers<T extends Record<string, string | u
   const previousEntries = Object.entries(previousAnswers);
   if (previousEntries.length === 0) return paths;
 
-  return paths.filter(path => {
-    for (const [step, userAnswer] of previousEntries) {
+  return paths.filter(path =>
+    previousEntries.every(([step, userAnswer]) => {
       const pathValue = path[step];
       if (!pathValue) return false;
-
-      const acceptedVariants = getAcceptedAnswersForStep(pathValue).map(normalize);
-      const normalizedUserAnswer = normalize(userAnswer);
-
-      if (!acceptedVariants.includes(normalizedUserAnswer)) return false;
-    }
-    return true;
-  });
+      return getAcceptedAnswersForStep(pathValue).map(normalizeAnswer).includes(normalizeAnswer(userAnswer));
+    })
+  );
 }
 
 export function getAcceptedAnswersForMultipleValues(correctValues: string[]): string[] {
-  const allVariants: string[] = [];
-
-  for (const value of correctValues) {
-    const variants = getAcceptedAnswersForStep(value);
-    for (const variant of variants) {
-      if (!allVariants.includes(variant)) {
-        allVariants.push(variant);
-      }
-    }
-  }
-
-  return allVariants;
+  return [...new Set(correctValues.flatMap(getAcceptedAnswersForStep))];
 }
 
 export function formatPrimaryAnswersDisplay(
-  primaryFormPaths: Array<{ [key: string]: string | undefined }>,
+  primaryFormPaths: Array<Record<string, string | undefined>>,
   step: FormIdentificationStep
 ): string {
-  const values = extractStepValuesFromPaths(primaryFormPaths, step);
-
-  if (values.length === 0) return '';
-  if (values.length === 1) return values[0];
-
-  return values.join(' OR ');
+  return extractStepValuesFromPaths(primaryFormPaths, step).join(' OR ');
 }
 
 function generateMasculineFeminineVariants(): string[] {
@@ -342,11 +235,6 @@ const createVariantMap = () => {
   NumberSchema.options.forEach(val => {
     v[val] = val === 'singular' ? ['singular', 'sg', 'sing', 's'] : ['plural', 'pl', 'plur', 'p'];
   });
-  GrammaticalNumberSchema.options.forEach(val => {
-    if (!v[val]) {
-      v[val] = val === 'singular' ? ['singular', 'sg', 'sing', 's'] : ['plural', 'pl', 'plur', 'p'];
-    }
-  });
 
   GenderSchema.options.forEach(val => {
     const map: Record<string, string[]> = {
@@ -386,7 +274,7 @@ const createVariantMap = () => {
     v[val] = a ? [val, `${a}.`, a] : [val];
   });
 
-  const tenses: Record<string, string[]> = {
+  Object.assign(v, {
     present: ['present', 'pres.', 'pres'],
     imperfect: ['imperfect', 'imperf.', 'imperf', 'imp.', 'imp'],
     future: ['future', 'fut.', 'fut'],
@@ -403,12 +291,9 @@ const createVariantMap = () => {
       'future perf',
       'fut perfect',
     ],
-  };
-  Object.entries(tenses).forEach(([k, arr]) => {
-    v[k] = arr;
   });
 
-  const moods: Record<string, string[]> = {
+  Object.assign(v, {
     finite: ['finite', 'fin.', 'fin'],
     indicative: ['indicative', 'ind.', 'ind'],
     subjunctive: ['subjunctive', 'subj.', 'subj'],
@@ -417,9 +302,6 @@ const createVariantMap = () => {
     participle: ['participle', 'part.', 'part'],
     gerund: ['gerund', 'ger.', 'ger'],
     supine: ['supine', 'sup.', 'sup'],
-  };
-  Object.entries(moods).forEach(([k, arr]) => {
-    v[k] = arr;
   });
 
   PronounTypeSchema.options.forEach(val => {
@@ -542,43 +424,3 @@ export const getHintForStep = (word: ExerciseWordResponse, step: FormIdentificat
 
   return stepGuideMap[step];
 };
-
-export function hasValidFormData(word: ExerciseWordResponse, steps: FormIdentificationStep[]): boolean {
-  const primaryPaths = word.primary_form_paths;
-  const formPath = word.form_path;
-
-  const hasFormPaths = formPath !== null || (primaryPaths !== undefined && primaryPaths.length > 0);
-
-  if (!hasFormPaths) {
-    return false;
-  }
-
-  if (isPronoun(word)) {
-    if (!word.pronoun_type) {
-      return false;
-    }
-
-    if (steps.includes('person') && word.pronoun_type === 'personal' && !word.person) {
-      return false;
-    }
-  }
-
-  const formPaths = primaryPaths || (formPath ? [formPath] : []);
-  const answerableSteps = getAnswerableStepsForWord(
-    word,
-    steps,
-    formPaths as Array<Record<string, string | undefined>>
-  );
-
-  if (answerableSteps.length === 0) return false;
-
-  return formPaths.some(path => {
-    return answerableSteps.every(step => {
-      const pathRecord = path as Record<string, string | undefined>;
-      if (pathRecord[step]) return true;
-
-      const wordValue = extractStepValue(word, step);
-      return wordValue !== '';
-    });
-  });
-}

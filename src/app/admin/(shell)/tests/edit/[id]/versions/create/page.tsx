@@ -4,7 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { PageLoading } from '@/src/components/ui/page-loading';
-import { TestVersionEditor } from '@/src/components/ui/admin';
+import { TestVersionEditor } from '@/src/components/ui/admin/TestVersionEditor';
 import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
 import { useCreateTestVersionMutation, useGetTestByIdQuery } from '@/src/store/api/testApi';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';

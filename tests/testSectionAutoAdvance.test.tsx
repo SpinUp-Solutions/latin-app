@@ -1,18 +1,11 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import ContentRenderer from '@/src/components/ui/lesson/content-renderer';
-import { SectionedTestProvider } from '@/src/components/ui/test/sectioned-test-context';
 import type { Page } from '@/src/types/page';
-import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 
 jest.mock('@/src/services/wordLookupService', () => ({}));
 jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
 jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({ grade: jest.fn() }) }));
-jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
-  useGetGeneratedExerciseWordsQuery: () => ({}),
-  useGetMultiPosWordsQuery: () => ({}),
-  useGetMultiParadigmWordsQuery: () => ({}),
-}));
 const fixtures = [
   { type: 'fill', data: { items: [{ text: 'First' }, { text: 'Second' }] } },
   {
@@ -46,15 +39,13 @@ it.each(fixtures)('records and advances $type in one action, completing once', f
     feedbackConfig: { escalationLevels: [] },
   } as unknown as Page['items'][number];
   render(
-    <SectionedTestProvider value>
-      <ContentRenderer
-        content={content}
-        runtimeMode="test"
-        onAnswer={answer}
-        onComplete={complete}
-        resolvedExerciseState={{ items: fixture.resolved ?? [] }}
-      />
-    </SectionedTestProvider>
+    <ContentRenderer
+      content={content}
+      runtimeMode="test"
+      onAnswer={answer}
+      onComplete={complete}
+      resolvedExerciseState={{ items: fixture.resolved ?? [] }}
+    />
   );
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'one' } });
   fireEvent.click(screen.getByRole('button', { name: /check/i }));
@@ -83,11 +74,7 @@ it('advances text-selection directly and finishes once', () => {
       ],
     },
   } as unknown as Page['items'][number];
-  render(
-    <SectionedTestProvider value>
-      <ContentRenderer content={content} runtimeMode="test" onAnswer={answer} onComplete={complete} />
-    </SectionedTestProvider>
-  );
+  render(<ContentRenderer content={content} runtimeMode="test" onAnswer={answer} onComplete={complete} />);
   fireEvent.click(screen.getByText('Puella'));
   expect(screen.getByText('Second')).toBeVisible();
   fireEvent.click(screen.getByText('cantat'));
@@ -105,11 +92,7 @@ it('saves translation drafts and advances without calling an AI grading route', 
     feedbackConfig: { escalationLevels: [] },
     data: { items: [{ latinText: 'First' }, { latinText: 'Second' }] },
   } as unknown as Page['items'][number];
-  render(
-    <SectionedTestProvider value>
-      <ContentRenderer content={content} runtimeMode="test" onAnswer={answer} onComplete={complete} />
-    </SectionedTestProvider>
-  );
+  render(<ContentRenderer content={content} runtimeMode="test" onAnswer={answer} onComplete={complete} />);
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'one' } });
   expect(answer).toHaveBeenLastCalledWith(
     expect.objectContaining({ answer: { type: 'translation-grading', translations: ['one', ''] } })
@@ -143,9 +126,7 @@ it.each([false, true])('saves MC draft selections immediately but completes only
   const complete = jest.fn();
   const answer = jest.fn();
   render(
-    <SectionedTestProvider value>
-      <ContentRenderer content={multipleChoice(multiple)} runtimeMode="test" onAnswer={answer} onComplete={complete} />
-    </SectionedTestProvider>
+    <ContentRenderer content={multipleChoice(multiple)} runtimeMode="test" onAnswer={answer} onComplete={complete} />
   );
   fireEvent.click(screen.getByRole('button', { name: /amo/ }));
   expect(answer).toHaveBeenLastCalledWith(
@@ -169,15 +150,13 @@ it('restores an editable MC draft and saves deselection without marking it compl
   const complete = jest.fn();
   const answer = jest.fn();
   render(
-    <SectionedTestProvider value>
-      <ContentRenderer
-        content={multipleChoice()}
-        runtimeMode="test"
-        initialAnswer={{ type: 'multiple-choice', selectedOptionIds: ['a', 'b'] }}
-        onAnswer={answer}
-        onComplete={complete}
-      />
-    </SectionedTestProvider>
+    <ContentRenderer
+      content={multipleChoice()}
+      runtimeMode="test"
+      initialAnswer={{ type: 'multiple-choice', selectedOptionIds: ['a', 'b'] }}
+      onAnswer={answer}
+      onComplete={complete}
+    />
   );
   expect(screen.getByRole('button', { name: /amo/ })).toHaveAttribute('aria-pressed', 'true');
   fireEvent.click(screen.getByRole('button', { name: /amo/ }));
@@ -189,22 +168,4 @@ it('restores an editable MC draft and saves deselection without marking it compl
   );
   expect(screen.getByRole('button', { name: 'Submit Answer' })).toBeDisabled();
   expect(complete).not.toHaveBeenCalled();
-});
-
-it('preserves legacy MC recording and restored-answer behavior', () => {
-  const complete = jest.fn();
-  const answer = jest.fn();
-  const { rerender } = render(
-    <ContentRenderer content={multipleChoice()} runtimeMode="test" onAnswer={answer} onComplete={complete} />
-  );
-  fireEvent.click(screen.getByRole('button', { name: /amo/ }));
-  expect(answer).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Submit Answer' }));
-  expect(complete).toHaveBeenCalledTimes(1);
-  const initialAnswer: ExerciseAnswer = { type: 'multiple-choice', selectedOptionIds: ['a'] };
-  rerender(
-    <ContentRenderer key="resume" content={multipleChoice()} runtimeMode="test" initialAnswer={initialAnswer} />
-  );
-  expect(screen.getByRole('button', { name: /amo/ })).toBeDisabled();
-  expect(screen.queryByRole('button', { name: 'Submit Answer' })).not.toBeInTheDocument();
 });

@@ -1,23 +1,13 @@
 import { z } from 'zod';
 import { firestoreDocumentIdSchema, nonEmptyIdSchema } from '@/src/lib/learning-units/schemas';
 import type { Exercise } from '@/src/types/exercises';
-import type { TestEligibleExerciseType } from '@/src/lib/content/registry';
 import { isExerciseType } from '@/src/lib/content/registry';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
-import type { RenderableContentItem } from '@/src/types/page';
 import type { TestAttemptExerciseResult, TestAttemptOrigin, TestTranslationGrades } from '@/src/types/test';
 import { compareDiagramAnnotationSets } from '@/src/features/sentence-diagramming/model';
 import { normalizeSentenceDiagramFeedbackContent } from '@/src/features/sentence-diagramming/model';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
 import { validateGeneratedTranslationExercise } from '@/src/utils/exercises/generatedTranslationExercise';
-import {
-  normalize,
-  scoreSingleFieldFormIdentificationAnswer,
-  validateGeneratedFormIdentificationExercise,
-  validateMultiAnswerStep,
-  validatePartialMultiAnswerPaths,
-} from '@/src/utils/exercises/generatedFormIdentificationExercise';
-import { getAcceptedAnswersForStep } from '@/src/utils/exercises/formIdentificationHelpers';
 import { validateClickOnMultipleWords } from '@/src/utils/exercises/clickOnMultipleWords';
 import { validateFillEmboldedTextExercise } from '@/src/utils/exercises/fillEmboldedTextExercise';
 import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
@@ -26,46 +16,27 @@ import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleCh
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
 import { validateTableFillExercise } from '@/src/utils/exercises/tableFillExercise';
 import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelectionExercise';
-import { maxPointsFor } from './grading';
-import type { FrozenTestDeliveryState } from './delivery';
 import {
-  projectClickOnMultipleWordsExercise,
-  projectFillEmboldedTextExercise,
-  projectFillExercise,
-  projectGeneratedFormIdentificationExercise,
-  projectGeneratedTranslationExercise,
-  projectListeningPassageContent,
-  projectMatchingExercise,
-  projectMultipleChoiceExercise,
-  projectOddOneOutExercise,
-  projectSentenceDiagrammingExercise,
-  projectTableContent,
-  projectTableFillExercise,
-  projectTextContent,
-  projectTextSelectionExercise,
-  projectTranslationGradingExercise,
-  projectVocabularyContent,
-  projectVocabularyPoolContent,
+  isMultiAnswerItem,
+  isStepItem,
+  maxPointsFor,
+  scoreGeneratedFormIdentificationItems,
+  type ExerciseOfType,
+} from './grading';
+import type { ResolvedFormIdentificationItem } from './generated-exercises';
+import {
+  projectSupportingContent,
+  projectVocabularyPool,
+  sanitizeExercise,
+  type FrozenTestDeliveryState,
 } from './delivery';
-import type {
-  FormIdentificationItem,
-  MultiAnswerFormIdentificationItem,
-  SingleFieldFormIdentificationItem,
-} from '@/src/types/exercises/schemas/form-identification';
 import { estimateFirestoreDocumentBytes } from './firestore-size';
-import { testAttemptOriginSchema } from './schemas';
+import { isoTimestampSchema, testAttemptOriginSchema } from './schemas';
 import { EXERCISE_ANSWER_SCHEMAS } from './answer-schemas';
 import { ANNOTATION_SPECS, type AnnotationKind } from '@/src/features/sentence-diagramming/annotation-spec';
 
 export const TEST_RESULT_REVIEW_VERSION = 1;
 export const MAX_TEST_RESULT_REVIEW_DOCUMENT_BYTES = 900 * 1024;
-
-const isoTimestampSchema = z
-  .string()
-  .refine(
-    value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value,
-    'Expected a canonical ISO-8601 timestamp'
-  );
 
 const reviewPointsSchema = z
   .object({
@@ -659,13 +630,9 @@ export function isTestResultReviewDocumentWithinSizeLimit(
   return true;
 }
 
-type ExerciseOfType<T extends TestEligibleExerciseType> = Extract<Exercise, { type: T }>;
 type AnswerOfType<T extends ExerciseAnswer['type']> = Extract<ExerciseAnswer, { type: T }>;
 
-const savedAnswer = <T extends ExerciseAnswer['type']>(
-  exerciseType: T,
-  answer: ExerciseAnswer | unknown | undefined
-): AnswerOfType<T> | null => {
+const savedAnswer = <T extends ExerciseAnswer['type']>(exerciseType: T, answer: unknown): AnswerOfType<T> | null => {
   if (!answer || typeof answer !== 'object') return null;
   if ((answer as { type?: unknown }).type === exerciseType) return answer as AnswerOfType<T>;
   return null;
@@ -681,8 +648,6 @@ const pointsForPart = (
   maxPoints: totalAvailableUnits > 0 ? (maxPoints * partAvailableUnits) / totalAvailableUnits : maxPoints,
 });
 
-const projectedQuestion = <Question>(projection: unknown): Question => (projection as { data: Question }).data;
-
 export interface BuildSubmittedReviewInput {
   attemptId: string;
   studentId: string;
@@ -690,12 +655,12 @@ export interface BuildSubmittedReviewInput {
   origin: TestAttemptOrigin;
   submittedAt: string;
   deliveryState: FrozenTestDeliveryState;
-  answers: Record<string, ExerciseAnswer | unknown>;
+  answers: Record<string, unknown>;
   translationGrades: TestTranslationGrades;
   exerciseResults: Record<string, TestAttemptExerciseResult>;
 }
 
-function buildMatchingReview(exercise: ExerciseOfType<'matching'>, answer: ExerciseAnswer | unknown) {
+function buildMatchingReview(exercise: ExerciseOfType<'matching'>, answer: unknown) {
   const student = savedAnswer('matching', answer);
   const answerEntries = Object.entries(exercise.data.answers);
   const pairs = answerEntries.map(([leftId, rightId]) => {
@@ -722,17 +687,15 @@ function buildMatchingReview(exercise: ExerciseOfType<'matching'>, answer: Exerc
     return byLeftId;
   });
   return {
-    question: projectedQuestion(projectMatchingExercise(exercise)),
     answerKey: { pairs },
     itemResults: { rounds },
   };
 }
 
-function buildFillReview(exercise: ExerciseOfType<'fill'>, answer: ExerciseAnswer | unknown) {
+function buildFillReview(exercise: ExerciseOfType<'fill'>, answer: unknown) {
   const student = savedAnswer('fill', answer);
   const totalParts = exercise.data.items.length;
   return {
-    question: projectedQuestion(projectFillExercise(exercise)),
     answerKey: {
       items: exercise.data.items.map(item => ({
         text: item.text,
@@ -754,11 +717,10 @@ function buildFillReview(exercise: ExerciseOfType<'fill'>, answer: ExerciseAnswe
   };
 }
 
-function buildMultipleChoiceReview(exercise: ExerciseOfType<'multiple-choice'>, answer: ExerciseAnswer | unknown) {
+function buildMultipleChoiceReview(exercise: ExerciseOfType<'multiple-choice'>, answer: unknown) {
   const student = savedAnswer('multiple-choice', answer);
   const correct = student ? validateMultipleChoiceExercise(student.selectedOptionIds, exercise).isCorrect : false;
   return {
-    question: projectedQuestion(projectMultipleChoiceExercise(exercise)),
     answerKey: {
       options: exercise.data.options.map(option => ({
         id: option.id,
@@ -775,13 +737,12 @@ function buildMultipleChoiceReview(exercise: ExerciseOfType<'multiple-choice'>, 
   };
 }
 
-function buildOddOneOutReview(exercise: ExerciseOfType<'odd-one-out'>, answer: ExerciseAnswer | unknown) {
+function buildOddOneOutReview(exercise: ExerciseOfType<'odd-one-out'>, answer: unknown) {
   const student = savedAnswer('odd-one-out', answer);
   const correct = student
     ? validateOddOneOutExercise(student.selectedItemId, student.explanation, exercise).isCorrect
     : false;
   return {
-    question: projectedQuestion(projectOddOneOutExercise(exercise)),
     answerKey: {
       items: exercise.data.items.map(item => ({ id: item.id, text: item.text, isOddOneOut: item.isOddOneOut })),
     },
@@ -795,11 +756,10 @@ function buildOddOneOutReview(exercise: ExerciseOfType<'odd-one-out'>, answer: E
   };
 }
 
-function buildTextSelectionReview(exercise: ExerciseOfType<'text-selection'>, answer: ExerciseAnswer | unknown) {
+function buildTextSelectionReview(exercise: ExerciseOfType<'text-selection'>, answer: unknown) {
   const student = savedAnswer('text-selection', answer);
   const totalParts = exercise.data.questions.length;
   return {
-    question: projectedQuestion(projectTextSelectionExercise(exercise)),
     answerKey: {
       questions: exercise.data.questions.map(question => ({
         id: question.id,
@@ -823,11 +783,10 @@ function buildTextSelectionReview(exercise: ExerciseOfType<'text-selection'>, an
   };
 }
 
-function buildFillEmboldedTextReview(exercise: ExerciseOfType<'fill-embolded-text'>, answer: ExerciseAnswer | unknown) {
+function buildFillEmboldedTextReview(exercise: ExerciseOfType<'fill-embolded-text'>, answer: unknown) {
   const student = savedAnswer('fill-embolded-text', answer);
   const totalParts = exercise.data.words.length;
   return {
-    question: projectedQuestion(projectFillEmboldedTextExercise(exercise)),
     answerKey: {
       words: exercise.data.words.map(word => ({
         wordIndex: word.wordIndex,
@@ -850,16 +809,12 @@ function buildFillEmboldedTextReview(exercise: ExerciseOfType<'fill-embolded-tex
   };
 }
 
-function buildSentenceDiagrammingReview(
-  exercise: ExerciseOfType<'sentence-diagramming'>,
-  answer: ExerciseAnswer | unknown
-) {
+function buildSentenceDiagrammingReview(exercise: ExerciseOfType<'sentence-diagramming'>, answer: unknown) {
   const student = savedAnswer('sentence-diagramming', answer);
   const annotations = student?.annotations ?? [];
   const solution = exercise.data.solutionAnnotations ?? [];
   const comparison = compareDiagramAnnotationSets(annotations, solution, exercise.data.tokens);
   return {
-    question: projectedQuestion(projectSentenceDiagrammingExercise(exercise)),
     answerKey: {
       latin: exercise.data.latin,
       translation: exercise.data.translation,
@@ -878,7 +833,7 @@ function buildSentenceDiagrammingReview(
   };
 }
 
-function buildTableFillReview(exercise: ExerciseOfType<'table-fill'>, answer: ExerciseAnswer | unknown) {
+function buildTableFillReview(exercise: ExerciseOfType<'table-fill'>, answer: unknown) {
   const student = savedAnswer('table-fill', answer);
   const validation = student ? validateTableFillExercise(student.answers, exercise) : null;
   const blankCells = exercise.data.rows.flatMap(row =>
@@ -887,7 +842,6 @@ function buildTableFillReview(exercise: ExerciseOfType<'table-fill'>, answer: Ex
       .map(column => ({ rowId: row.id, columnId: column.id }))
   );
   return {
-    question: projectedQuestion(projectTableFillExercise(exercise)),
     answerKey: {
       rows: exercise.data.rows.map(row => ({
         id: row.id,
@@ -919,14 +873,10 @@ function buildTableFillReview(exercise: ExerciseOfType<'table-fill'>, answer: Ex
   };
 }
 
-function buildClickOnMultipleWordsReview(
-  exercise: ExerciseOfType<'click-on-multiple-words'>,
-  answer: ExerciseAnswer | unknown
-) {
+function buildClickOnMultipleWordsReview(exercise: ExerciseOfType<'click-on-multiple-words'>, answer: unknown) {
   const student = savedAnswer('click-on-multiple-words', answer);
   const validation = student ? validateClickOnMultipleWords(new Set(student.selectedWordIndices), exercise) : null;
   return {
-    question: projectedQuestion(projectClickOnMultipleWordsExercise(exercise)),
     answerKey: { correctWordIndices: exercise.data.correctWordIndices },
     itemResults: {
       selectedWordIndices: student?.selectedWordIndices ?? [],
@@ -939,12 +889,11 @@ function buildClickOnMultipleWordsReview(
 
 function buildGeneratedTranslationReview(
   exercise: ExerciseOfType<'generated-translation'>,
-  answer: ExerciseAnswer | unknown,
+  answer: unknown,
   resolvedItems: GeneratedTranslationItem[]
 ) {
   const student = savedAnswer('generated-translation', answer);
   return {
-    question: projectedQuestion(projectGeneratedTranslationExercise(exercise)),
     answerKey: {
       items: resolvedItems.map(item => ({ text: item.text, acceptedAnswers: item.acceptedAnswers })),
     },
@@ -962,94 +911,13 @@ function buildGeneratedTranslationReview(
   };
 }
 
-const isMultiAnswerItem = (item: unknown): item is MultiAnswerFormIdentificationItem =>
-  Boolean(item) && 'stepIndex' in (item as object) && 'expectedAnswerCount' in (item as object);
-const isStepItem = (item: unknown): item is FormIdentificationItem =>
-  Boolean(item) && 'step' in (item as object) && 'acceptedAnswers' in (item as object);
-
-type FormItemUnitScore = { earnedUnits: number; availableUnits: number };
-
-function scoreGeneratedFormReviewItems(
-  exercise: ExerciseOfType<'generated-form-identification'>,
-  answers: Record<string, string>,
-  resolvedItems: Array<FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem>
-) {
-  const scores = new Map<string, FormItemUnitScore>();
-
-  if (exercise.data.mode === 'single-field') {
-    for (const item of resolvedItems) {
-      if (isMultiAnswerItem(item) || isStepItem(item)) continue;
-      scores.set(item.id, scoreSingleFieldFormIdentificationAnswer(answers[item.id] ?? '', item));
-    }
-    return scores;
-  }
-
-  if (exercise.data.requireAllPrimaryAnswers) {
-    const groups = new Map<string, MultiAnswerFormIdentificationItem[]>();
-    for (const item of resolvedItems) {
-      if (!isMultiAnswerItem(item)) continue;
-      groups.set(item.wordId, [...(groups.get(item.wordId) ?? []), item]);
-    }
-    for (const group of groups.values()) {
-      const ordered = [...group].sort((left, right) => left.stepIndex - right.stepIndex);
-      const slots: string[][] = [];
-      for (const item of ordered) {
-        const step = validateMultiAnswerStep(answers[item.id] ?? '', item);
-        let earnedUnits = 0;
-        if (step.isCorrect) {
-          slots[item.stepIndex] = step.answerSlots;
-          const completedItems = ordered.slice(0, item.stepIndex + 1);
-          if (completedItems.every(entry => slots[entry.stepIndex])) {
-            const completedSlots = completedItems.map(entry => slots[entry.stepIndex]!);
-            const completedSteps = completedItems.map(entry => entry.step);
-            if (validatePartialMultiAnswerPaths(completedSlots, completedSteps, item.primaryFormPaths).isCorrect) {
-              earnedUnits = 1;
-            }
-          }
-        }
-        scores.set(item.id, { earnedUnits, availableUnits: 1 });
-      }
-    }
-    return scores;
-  }
-
-  const groups = new Map<string, FormIdentificationItem[]>();
-  for (const item of resolvedItems) {
-    if (!isStepItem(item)) continue;
-    groups.set(item.wordId, [...(groups.get(item.wordId) ?? []), item]);
-  }
-  for (const group of groups.values()) {
-    const firstItem = group[0];
-    let compatiblePaths = [...firstItem.primaryFormPaths, ...firstItem.optionalFormPaths];
-    for (const item of group) {
-      const submitted = normalize(answers[item.id] ?? '');
-      const pathsForStep = compatiblePaths.filter(path => Boolean(path[item.step]));
-      let earnedUnits = 0;
-      if (pathsForStep.length === 0) {
-        earnedUnits = validateGeneratedFormIdentificationExercise(answers[item.id] ?? '', item).isCorrect ? 1 : 0;
-      } else {
-        const matchingPaths = pathsForStep.filter(path => {
-          const expected = path[item.step];
-          return expected ? getAcceptedAnswersForStep(expected).map(normalize).includes(submitted) : false;
-        });
-        if (matchingPaths.length > 0) {
-          earnedUnits = 1;
-          compatiblePaths = matchingPaths;
-        }
-      }
-      scores.set(item.id, { earnedUnits, availableUnits: 1 });
-    }
-  }
-  return scores;
-}
-
 function buildGeneratedFormIdentificationReview(
   exercise: ExerciseOfType<'generated-form-identification'>,
-  answer: ExerciseAnswer | unknown,
-  resolvedItems: Array<FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem>
+  answer: unknown,
+  resolvedItems: ResolvedFormIdentificationItem[]
 ) {
   const student = savedAnswer('generated-form-identification', answer);
-  const scores = scoreGeneratedFormReviewItems(exercise, student?.answers ?? {}, resolvedItems);
+  const scores = new Map(scoreGeneratedFormIdentificationItems(exercise, student?.answers ?? {}, resolvedItems));
   const totalAvailableUnits = [...scores.values()].reduce((total, score) => total + score.availableUnits, 0);
   const items = resolvedItems.map(item => {
     if (isMultiAnswerItem(item)) {
@@ -1094,7 +962,6 @@ function buildGeneratedFormIdentificationReview(
     };
   });
   return {
-    question: projectedQuestion(projectGeneratedFormIdentificationExercise(exercise)),
     answerKey: { items },
     itemResults: { answers },
   };
@@ -1102,12 +969,11 @@ function buildGeneratedFormIdentificationReview(
 
 function buildTranslationGradingReview(
   exercise: ExerciseOfType<'translation-grading'>,
-  answer: ExerciseAnswer | unknown,
+  answer: unknown,
   translationGrades: TestTranslationGrades[string] | undefined
 ) {
   const student = savedAnswer('translation-grading', answer);
   return {
-    question: projectedQuestion(projectTranslationGradingExercise(exercise)),
     answerKey: {
       items: exercise.data.items.map(item => ({
         latinText: item.latinText,
@@ -1130,21 +996,43 @@ function buildTranslationGradingReview(
   };
 }
 
-function buildReviewSupportingItem(item: RenderableContentItem): TestResultReviewSupportingItem {
-  switch (item.type) {
-    case 'text':
-    case 'emphasis':
-      return reviewSupportingItemSchema.parse(projectTextContent(item));
-    case 'table':
-      return reviewSupportingItemSchema.parse(projectTableContent(item));
-    case 'vocabulary':
-      return reviewSupportingItemSchema.parse(projectVocabularyContent(item));
-    case 'vocabulary-pool':
-      return reviewSupportingItemSchema.parse(projectVocabularyPoolContent(item));
-    case 'listening-passage':
-      return reviewSupportingItemSchema.parse(projectListeningPassageContent(item));
+function buildExerciseReviewDetails(
+  exercise: Exercise,
+  answer: unknown,
+  resolvedItems: unknown[],
+  translationGrades: TestTranslationGrades
+) {
+  switch (exercise.type) {
+    case 'matching':
+      return buildMatchingReview(exercise, answer);
+    case 'fill':
+      return buildFillReview(exercise, answer);
+    case 'multiple-choice':
+      return buildMultipleChoiceReview(exercise, answer);
+    case 'odd-one-out':
+      return buildOddOneOutReview(exercise, answer);
+    case 'text-selection':
+      return buildTextSelectionReview(exercise, answer);
+    case 'fill-embolded-text':
+      return buildFillEmboldedTextReview(exercise, answer);
+    case 'sentence-diagramming':
+      return buildSentenceDiagrammingReview(exercise, answer);
+    case 'table-fill':
+      return buildTableFillReview(exercise, answer);
+    case 'click-on-multiple-words':
+      return buildClickOnMultipleWordsReview(exercise, answer);
+    case 'generated-translation':
+      return buildGeneratedTranslationReview(exercise, answer, resolvedItems as GeneratedTranslationItem[]);
+    case 'generated-form-identification':
+      return buildGeneratedFormIdentificationReview(
+        exercise,
+        answer,
+        resolvedItems as ResolvedFormIdentificationItem[]
+      );
+    case 'translation-grading':
+      return buildTranslationGradingReview(exercise, answer, translationGrades[exercise.id]);
     default:
-      throw new Error(`Content type ${item.type} is not eligible for test review`);
+      throw new Error(`Exercise type ${(exercise as Exercise).type} is not eligible for test review`);
   }
 }
 
@@ -1159,109 +1047,21 @@ function buildReviewExerciseItem(
   if (Math.abs(result.maxPoints - maxPointsFor(exercise)) > 1e-9) {
     throw new Error(`Submitted result for exercise ${exercise.id} does not match its frozen maximum points`);
   }
-  const base = {
+  return reviewExerciseItemSchema.parse({
     id: exercise.id,
+    type: exercise.type,
     title: exercise.title || exercise.type,
     instructions: exercise.instructions,
     audioPath: exercise.audioPath,
     maxPoints: maxPointsFor(exercise),
-    studentAnswer: savedAnswer(exercise.type as ExerciseAnswer['type'], answer) as ExerciseAnswer | null,
+    question: (sanitizeExercise(exercise) as { data: unknown }).data,
+    studentAnswer: savedAnswer(exercise.type as ExerciseAnswer['type'], answer),
     result: {
       awardedPoints: result.awardedPoints,
       maxPoints: result.maxPoints,
     },
-  };
-
-  switch (exercise.type) {
-    case 'matching':
-      return matchingReviewSchema.parse({
-        ...base,
-        type: 'matching',
-        ...buildMatchingReview(exercise as ExerciseOfType<'matching'>, answer),
-      });
-    case 'fill':
-      return fillReviewSchema.parse({
-        ...base,
-        type: 'fill',
-        ...buildFillReview(exercise as ExerciseOfType<'fill'>, answer),
-      });
-    case 'multiple-choice':
-      return multipleChoiceReviewSchema.parse({
-        ...base,
-        type: 'multiple-choice',
-        ...buildMultipleChoiceReview(exercise as ExerciseOfType<'multiple-choice'>, answer),
-      });
-    case 'odd-one-out':
-      return oddOneOutReviewSchema.parse({
-        ...base,
-        type: 'odd-one-out',
-        ...buildOddOneOutReview(exercise as ExerciseOfType<'odd-one-out'>, answer),
-      });
-    case 'text-selection':
-      return textSelectionReviewSchema.parse({
-        ...base,
-        type: 'text-selection',
-        ...buildTextSelectionReview(exercise as ExerciseOfType<'text-selection'>, answer),
-      });
-    case 'fill-embolded-text':
-      return fillEmboldedTextReviewSchema.parse({
-        ...base,
-        type: 'fill-embolded-text',
-        ...buildFillEmboldedTextReview(exercise as ExerciseOfType<'fill-embolded-text'>, answer),
-      });
-    case 'sentence-diagramming':
-      return sentenceDiagrammingReviewSchema.parse({
-        ...base,
-        type: 'sentence-diagramming',
-        ...buildSentenceDiagrammingReview(exercise as ExerciseOfType<'sentence-diagramming'>, answer),
-      });
-    case 'table-fill':
-      return tableFillReviewSchema.parse({
-        ...base,
-        type: 'table-fill',
-        ...buildTableFillReview(exercise as ExerciseOfType<'table-fill'>, answer),
-      });
-    case 'click-on-multiple-words':
-      return clickOnMultipleWordsReviewSchema.parse({
-        ...base,
-        type: 'click-on-multiple-words',
-        ...buildClickOnMultipleWordsReview(exercise as ExerciseOfType<'click-on-multiple-words'>, answer),
-      });
-    case 'generated-translation':
-      return generatedTranslationReviewSchema.parse({
-        ...base,
-        type: 'generated-translation',
-        ...buildGeneratedTranslationReview(
-          exercise as ExerciseOfType<'generated-translation'>,
-          answer,
-          resolvedItems as GeneratedTranslationItem[]
-        ),
-      });
-    case 'generated-form-identification':
-      return generatedFormIdentificationReviewSchema.parse({
-        ...base,
-        type: 'generated-form-identification',
-        ...buildGeneratedFormIdentificationReview(
-          exercise as ExerciseOfType<'generated-form-identification'>,
-          answer,
-          resolvedItems as Array<
-            FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem
-          >
-        ),
-      });
-    case 'translation-grading':
-      return translationGradingReviewSchema.parse({
-        ...base,
-        type: 'translation-grading',
-        ...buildTranslationGradingReview(
-          exercise as ExerciseOfType<'translation-grading'>,
-          answer,
-          input.translationGrades[exercise.id]
-        ),
-      });
-    default:
-      throw new Error(`Exercise type ${(exercise as Exercise).type} is not eligible for test review`);
-  }
+    ...buildExerciseReviewDetails(exercise, answer, resolvedItems, input.translationGrades),
+  });
 }
 
 function buildReviewPage(
@@ -1270,7 +1070,7 @@ function buildReviewPage(
   resolvedExercises: FrozenTestDeliveryState['resolvedExercises']
 ): TestResultReviewPage {
   const items = page.items.map(item => {
-    if (!isExerciseType(item.type)) return buildReviewSupportingItem(item);
+    if (!isExerciseType(item.type)) return reviewSupportingItemSchema.parse(projectSupportingContent(item));
     const exercise = item as Exercise;
     return buildReviewExerciseItem(exercise, input, resolvedExercises[exercise.id]?.items ?? []);
   });
@@ -1296,22 +1096,7 @@ export function buildSubmittedReview(input: BuildSubmittedReviewInput): TestResu
   const content: TestResultReviewContent = {
     pages,
     ...(input.deliveryState.vocabularyPool
-      ? {
-          vocabularyPool: {
-            id: input.deliveryState.vocabularyPool.id,
-            name: input.deliveryState.vocabularyPool.name,
-            items: input.deliveryState.vocabularyPool.items.map(item => ({
-              id: item.id,
-              latin: item.latin,
-              english: item.english,
-              pronunciation: item.pronunciation,
-              audioPath: item.audioPath,
-              example: item.example,
-              partOfSpeech: item.partOfSpeech,
-              notes: item.notes,
-            })),
-          },
-        }
+      ? { vocabularyPool: projectVocabularyPool(input.deliveryState.vocabularyPool) }
       : {}),
   };
 

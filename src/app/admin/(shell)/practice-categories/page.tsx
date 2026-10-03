@@ -32,14 +32,14 @@ import {
   CategoryFormDialog,
   CategoryFormSubmission,
   ConfirmActionDialog,
-  getCategoryCounts,
   InlineLoadError,
   LoadingRows,
   PRACTICE_LESSON_TYPES,
   parsePracticeCategoryContext,
   practiceLessonTypeLabel,
-  useBrowserNavigationProtection,
 } from '@/src/components/admin/practice-categories/category-admin-shared';
+import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
+import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import {
@@ -49,7 +49,6 @@ import {
   DropdownMenuTrigger,
 } from '@/src/components/ui/dropdown-menu';
 import { Input } from '@/src/components/ui/input';
-import { Tabs } from '@/src/components/ui/tabs';
 import { getApiErrorMessage, hasApiErrorStatus } from '@/src/store/api/baseQuery';
 import {
   practiceCategoryApi,
@@ -69,19 +68,6 @@ import { haveSameIdOrder, orderByIds } from '@/src/utils/orderByIds';
 import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
 
 type CategoryAction = 'archive' | 'restore' | 'delete';
-
-interface PendingContextNavigation {
-  kind: 'context';
-  lessonType: PracticeLessonType;
-  status: PracticeCategoryStatus;
-}
-
-interface PendingHrefNavigation {
-  kind: 'href';
-  href: string;
-}
-
-type PendingNavigation = PendingContextNavigation | PendingHrefNavigation;
 
 const EMPTY_CATEGORIES: PracticeCategoryWithCounts[] = [];
 
@@ -121,7 +107,7 @@ function SortableCategoryRow({
     id: category.id,
     disabled: !orderingEnabled,
   });
-  const counts = getCategoryCounts(category);
+  const { assignedLessonCount: assigned, liveLessonCount: live, draftLessonCount: draft } = category;
 
   return (
     <div
@@ -183,18 +169,18 @@ function SortableCategoryRow({
         {category.description && <p className="mt-1 line-clamp-2 text-sm text-roman-stone">{category.description}</p>}
         <div
           className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600"
-          aria-label={`${counts.assigned} assigned lessons, ${counts.live} live, ${counts.draft} draft`}>
+          aria-label={`${assigned} assigned lessons, ${live} live, ${draft} draft`}>
           <span>
-            <strong className="font-medium text-gray-800">{counts.assigned}</strong> assigned
+            <strong className="font-medium text-gray-800">{assigned}</strong> assigned
           </span>
           <span>
-            <strong className="font-medium text-gray-800">{counts.live}</strong> live
+            <strong className="font-medium text-gray-800">{live}</strong> live
           </span>
           <span>
-            <strong className="font-medium text-gray-800">{counts.draft}</strong> draft
+            <strong className="font-medium text-gray-800">{draft}</strong> draft
           </span>
         </div>
-        {category.status === 'archived' && counts.assigned > 0 && (
+        {category.status === 'archived' && assigned > 0 && (
           <p className="mt-2 text-xs text-amber-700">
             Remove all assigned lessons before permanently deleting this category.
           </p>
@@ -227,7 +213,7 @@ function SortableCategoryRow({
               <DropdownMenuItem onSelect={() => onAction('restore')}>
                 <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" /> Restore
               </DropdownMenuItem>
-              {counts.assigned === 0 && (
+              {assigned === 0 && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => onAction('delete')}>
@@ -253,8 +239,6 @@ function PracticeCategoriesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<PracticeCategoryWithCounts | null>(null);
   const [action, setAction] = useState<{ kind: CategoryAction; category: PracticeCategoryWithCounts } | null>(null);
-  const [discardNavigationOpen, setDiscardNavigationOpen] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation | null>(null);
   const focusAfterLoad = useRef<{ id?: string; name?: string; lessonType: PracticeLessonType } | null>(null);
   const {
     currentData: cachedCategories,
@@ -284,18 +268,10 @@ function PracticeCategoriesPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  useBrowserNavigationProtection(dirty, 'category order changes');
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const { lessonType: nextType, status: nextStatus } = parsePracticeCategoryContext(window.location.search);
-    setLessonType(nextType);
-    setStatus(nextStatus);
-    params.set('lessonType', nextType);
-    params.set('status', nextStatus);
-    window.history.replaceState(window.history.state, '', `${window.location.pathname}?${params.toString()}`);
-    setUrlReady(true);
-  }, []);
+  const navigationGuard = useUnsavedNavigationGuard(
+    dirty,
+    'Your reordered categories have not been saved. Leaving this view will restore the last server-confirmed order.'
+  );
 
   const setUrlContext = useCallback((nextType: PracticeLessonType, nextStatus: PracticeCategoryStatus) => {
     const params = new URLSearchParams(window.location.search);
@@ -303,6 +279,14 @@ function PracticeCategoriesPage() {
     params.set('status', nextStatus);
     window.history.replaceState(window.history.state, '', `${window.location.pathname}?${params.toString()}`);
   }, []);
+
+  useEffect(() => {
+    const { lessonType: nextType, status: nextStatus } = parsePracticeCategoryContext(window.location.search);
+    setLessonType(nextType);
+    setStatus(nextStatus);
+    setUrlContext(nextType, nextStatus);
+    setUrlReady(true);
+  }, [setUrlContext]);
 
   useEffect(() => {
     const target = focusAfterLoad.current;
@@ -330,45 +314,23 @@ function PracticeCategoriesPage() {
     setCategoryOrder(null);
     setLessonType(nextType);
     setStatus(nextStatus);
-    setUrlContext(nextType, nextStatus);
+    // Drop the guard's Back entry first, so the new query is written to this page's own history entry.
+    void navigationGuard.replaceAfterSave(() => setUrlContext(nextType, nextStatus));
   };
 
   const guardContextChange = (nextType: PracticeLessonType, nextStatus: PracticeCategoryStatus) => {
     if (orderPending) return;
     if (nextType === lessonType && nextStatus === status) return;
-    if (dirty) {
-      setPendingNavigation({ kind: 'context', lessonType: nextType, status: nextStatus });
-      setDiscardNavigationOpen(true);
-      return;
-    }
-    applyContext(nextType, nextStatus);
+    navigationGuard.requestNavigation(() => applyContext(nextType, nextStatus));
   };
 
   const guardHref = (href: string) => {
     if (orderPending) return;
-    if (dirty) {
-      setPendingNavigation({ kind: 'href', href });
-      setDiscardNavigationOpen(true);
-      return;
-    }
-    router.push(href);
+    navigationGuard.requestNavigation(() => router.push(href));
   };
 
   const focusListHeading = () => {
     requestAnimationFrame(() => document.getElementById('category-list-heading')?.focus());
-  };
-
-  const continuePendingNavigation = () => {
-    const destination = pendingNavigation;
-    setCategoryOrder(null);
-    setDiscardNavigationOpen(false);
-    setPendingNavigation(null);
-    if (!destination) return;
-    if (destination.kind === 'context') {
-      applyContext(destination.lessonType, destination.status);
-    } else {
-      router.push(destination.href);
-    }
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
@@ -460,13 +422,13 @@ function PracticeCategoriesPage() {
 
   const actionDescription = (() => {
     if (!action) return '';
-    const counts = getCategoryCounts(action.category);
+    const assigned = action.category.assignedLessonCount;
     if (action.kind === 'archive') {
       return (
         <>
           <p>
-            <strong>{action.category.name}</strong> currently has {counts.assigned} assigned{' '}
-            {counts.assigned === 1 ? 'lesson' : 'lessons'}.
+            <strong>{action.category.name}</strong> currently has {assigned} assigned{' '}
+            {assigned === 1 ? 'lesson' : 'lessons'}.
           </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>Lessons will not be deleted or unpublished.</li>
@@ -512,14 +474,12 @@ function PracticeCategoriesPage() {
             </Button>
           }
         />
-        <Tabs value={lessonType} onValueChange={value => guardContextChange(value as PracticeLessonType, status)}>
-          <LessonTypeTabs
-            value={lessonType}
-            onValueChange={value => guardContextChange(value as PracticeLessonType, status)}
-            lessonTypes={PRACTICE_LESSON_TYPE_TABS}
-            disabled={orderPending}
-          />
-        </Tabs>
+        <LessonTypeTabs
+          value={lessonType}
+          onValueChange={value => guardContextChange(value as PracticeLessonType, status)}
+          lessonTypes={PRACTICE_LESSON_TYPE_TABS}
+          disabled={orderPending}
+        />
 
         <section className="rounded-xl border bg-white/70 p-4 shadow-sm sm:p-6" aria-labelledby="category-list-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -758,18 +718,7 @@ function PracticeCategoriesPage() {
         onConfirm={confirmCategoryAction}
       />
 
-      <ConfirmActionDialog
-        open={discardNavigationOpen}
-        onOpenChange={open => {
-          setDiscardNavigationOpen(open);
-          if (!open) setPendingNavigation(null);
-        }}
-        title="Discard unsaved category order?"
-        description="Your reordered categories have not been saved. Leaving this view will restore the last server-confirmed order."
-        confirmLabel="Discard and continue"
-        destructive
-        onConfirm={continuePendingNavigation}
-      />
+      <UnsavedNavigationDialog guard={navigationGuard} />
     </>
   );
 }

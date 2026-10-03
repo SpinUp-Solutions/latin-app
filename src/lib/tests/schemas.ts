@@ -8,10 +8,10 @@ import {
   formatFormIdentificationConfigurationIssue,
   getGeneratedFormIdentificationConfigurationIssues,
 } from '@/src/utils/exercises/formIdentificationConfiguration';
-import { getTestVersionSummaryFields } from './domain';
+import { getTestVersionSummaryFields, type TestVersionSummaryFields } from './domain';
 
 const optionalAuditFieldSchema = z.string().min(1).optional();
-const isoTimestampSchema = z
+export const isoTimestampSchema = z
   .string()
   .refine(
     value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value,
@@ -140,15 +140,9 @@ function addFormIdentificationConfigurationIssues(
 
 export const testVersionInputSchema = testVersionInputShapeSchema.superRefine(refineTestVersionContent);
 
-const testVersionUpdateShapeSchema = z
-  .object({
-    name: testVersionContentShape.name,
-    pages: testVersionContentShape.pages,
-    vocabularyPoolId: testVersionContentShape.vocabularyPoolId,
-  })
-  .strict();
-
-export const updateTestVersionInputSchema = testVersionUpdateShapeSchema.superRefine(refineTestVersionContent);
+export const updateTestVersionInputSchema = testVersionInputShapeSchema
+  .omit({ id: true })
+  .superRefine(refineTestVersionContent);
 
 export const duplicateTestVersionInputSchema = z
   .object({
@@ -173,13 +167,11 @@ const testVersionDocumentShapeSchema = z
 
 export const testVersionSummaryDocumentSchema = testVersionDocumentShapeSchema.omit({ pages: true });
 
-export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRefine((value, context) => {
-  // Existing active versions remain readable for backward compatibility. All
-  // create, update, activation, and duplication paths pass through the strict
-  // input validator before a new active document is written.
-  refineTestVersionContent(value, context, { validateExerciseConfigurations: false });
+function addDerivedSummaryIssues(
+  value: TestVersionSummaryFields & Pick<z.infer<typeof testVersionInputShapeSchema>, 'pages'>,
+  context: z.RefinementCtx
+) {
   const derived = getTestVersionSummaryFields(value.pages);
-
   (Object.keys(derived) as (keyof typeof derived)[]).forEach(field => {
     if (value[field] !== derived[field]) {
       context.addIssue({
@@ -189,6 +181,14 @@ export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRef
       });
     }
   });
+}
+
+export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRefine((value, context) => {
+  // Existing active versions remain readable for backward compatibility. All
+  // create, update, activation, and duplication paths pass through the strict
+  // input validator before a new active document is written.
+  refineTestVersionContent(value, context, { validateExerciseConfigurations: false });
+  addDerivedSummaryIssues(value, context);
 });
 
 const testVersionDraftDocumentShapeSchema = z
@@ -209,17 +209,7 @@ const testVersionDraftDocumentShapeSchema = z
 
 export const testVersionDraftDocumentSchema = testVersionDraftDocumentShapeSchema.superRefine((value, context) => {
   addFormIdentificationConfigurationIssues(value.pages, context);
-  const derived = getTestVersionSummaryFields(value.pages);
-
-  (Object.keys(derived) as (keyof typeof derived)[]).forEach(field => {
-    if (value[field] !== derived[field]) {
-      context.addIssue({
-        code: 'custom',
-        message: `${field} must be derived from pages`,
-        path: [field],
-      });
-    }
-  });
+  addDerivedSummaryIssues(value, context);
 });
 
 const mockTestParentSchema = z.discriminatedUnion('kind', [
@@ -278,14 +268,7 @@ export const createStandaloneMockInputSchema = z
   .strict();
 
 export const assignVersionToMockInputSchema = z
-  .object({
-    testId: firestoreDocumentIdSchema,
-    versionId: firestoreDocumentIdSchema,
-    title: z.string().trim().min(1),
-    description: z.string().trim().default(''),
-    passingPercentage: passingPercentageSchema,
-    isLive: z.boolean(),
-  })
+  .object({ testId: firestoreDocumentIdSchema, versionId: firestoreDocumentIdSchema, ...mockSettingsShape })
   .strict();
 
 export const updateMockTestInputSchema = z
@@ -382,13 +365,14 @@ const inProgressTestAttemptDocumentSchema = z
   .object({
     ...testAttemptBaseShape,
     status: z.literal('in-progress'),
-    flowVersion: z.literal(1).optional(),
-    sections: z.record(z.string(), sectionStateSchema).optional(),
+    flowVersion: z.literal(1),
+    sections: z.record(z.string(), sectionStateSchema),
     answers: z.record(z.string(), z.unknown()),
     translationGrades: z.record(z.string(), z.record(z.string(), testTranslationItemGradeSchema)).default({}),
+    /** Leases from the retired pre-section flow; older documents may still carry an empty map. */
     translationGradeReservations: z
       .record(z.string(), z.record(z.string(), testTranslationGradeReservationSchema))
-      .default({}),
+      .optional(),
     translationGradeRequestWindows: z
       .record(z.string(), z.record(z.string(), testTranslationGradeRequestWindowSchema))
       .default({}),
@@ -397,45 +381,38 @@ const inProgressTestAttemptDocumentSchema = z
   .strict()
   .superRefine((value, context) => {
     const pages = value.deliveryState.pages;
-    if (value.flowVersion === 1) {
-      const sections = value.sections;
-      let unlocked = false;
-      let invalid =
-        !sections ||
-        Object.keys(sections).length !== pages.length ||
-        new Set(pages.map(p => p.id)).size !== pages.length;
-      for (const page of pages) {
-        const section = sections?.[page.id];
-        if (!section) {
-          invalid = true;
-          continue;
-        }
-        if (section.phase === 'confirmed') {
-          if (unlocked || !section.confirmedAt || section.confirmation) invalid = true;
-        } else {
-          if (section.confirmedAt || (unlocked && section.phase !== 'answering')) invalid = true;
-          if (
-            unlocked &&
-            (section.revision !== 0 ||
-              section.saveMutations ||
-              page.items.some(item => value.answers[item.id] !== undefined))
-          )
-            invalid = true;
-          unlocked = true;
-        }
-        const receipts = Object.values(section.saveMutations ?? {});
+    const sections = value.sections;
+    let unlocked = false;
+    let invalid = Object.keys(sections).length !== pages.length || new Set(pages.map(p => p.id)).size !== pages.length;
+    for (const page of pages) {
+      const section = sections[page.id];
+      if (!section) {
+        invalid = true;
+        continue;
+      }
+      if (section.phase === 'confirmed') {
+        if (unlocked || !section.confirmedAt || section.confirmation) invalid = true;
+      } else {
+        if (section.confirmedAt || (unlocked && section.phase !== 'answering')) invalid = true;
         if (
-          receipts.some(receipt => receipt.expectedRevision >= section.revision) ||
-          new Set(receipts.map(receipt => receipt.expectedRevision)).size !== receipts.length
+          unlocked &&
+          (section.revision !== 0 ||
+            section.saveMutations ||
+            page.items.some(item => value.answers[item.id] !== undefined))
         )
           invalid = true;
-        if ((section.phase === 'confirming') !== Boolean(section.confirmation)) invalid = true;
+        unlocked = true;
       }
-      if (invalid || !unlocked)
-        context.addIssue({ code: 'custom', message: 'Invalid section workflow state', path: ['sections'] });
-    } else if (value.sections) {
-      context.addIssue({ code: 'custom', message: 'Legacy attempts cannot contain section state', path: ['sections'] });
+      const receipts = Object.values(section.saveMutations ?? {});
+      if (
+        receipts.some(receipt => receipt.expectedRevision >= section.revision) ||
+        new Set(receipts.map(receipt => receipt.expectedRevision)).size !== receipts.length
+      )
+        invalid = true;
+      if ((section.phase === 'confirming') !== Boolean(section.confirmation)) invalid = true;
     }
+    if (invalid || !unlocked)
+      context.addIssue({ code: 'custom', message: 'Invalid section workflow state', path: ['sections'] });
     if (value.versionId !== value.deliveryState.versionId) {
       context.addIssue({
         code: 'custom',
@@ -522,6 +499,45 @@ export const studentMockResultMigrationDocumentSchema = z
   })
   .strict();
 
+/** Trend points a stored summary keeps per origin, matching the mock card's score trend. */
+export const ATTEMPT_SUMMARY_TREND_LIMIT = 12;
+
+const attemptResultSummarySchema = submittedAttemptResultProjectionSchema
+  .extend({ attemptId: firestoreDocumentIdSchema })
+  .strict();
+
+/**
+ * One student's submitted results for one origin, maintained when an attempt
+ * is submitted. A summary exists only for an origin with a submitted attempt.
+ */
+export const testAttemptSummaryDocumentSchema = z
+  .object({
+    id: firestoreDocumentIdSchema,
+    kind: z.literal('summary'),
+    studentId: z.string().min(1),
+    origin: testAttemptOriginSchema,
+    attemptCount: z.number().int().positive(),
+    best: attemptResultSummarySchema,
+    latest: attemptResultSummarySchema,
+    /** Oldest first. */
+    recentResults: z.array(submittedAttemptTrendProjectionSchema).min(1).max(ATTEMPT_SUMMARY_TREND_LIMIT),
+    updatedAt: isoTimestampSchema,
+  })
+  .strict();
+
+/**
+ * Marks a student's summaries as complete: every origin without a summary has
+ * no submitted attempt. It shares the collection so one query returns both.
+ */
+export const testAttemptSummaryMarkerDocumentSchema = z
+  .object({
+    id: firestoreDocumentIdSchema,
+    kind: z.literal('marker'),
+    studentId: z.string().min(1),
+    completedAt: isoTimestampSchema,
+  })
+  .strict();
+
 export const testAttemptDocumentSchema = z.union([
   inProgressTestAttemptDocumentSchema,
   submittedTestAttemptDocumentSchema,
@@ -542,7 +558,7 @@ export const startTestAttemptInputSchema = z.object({ origin: testAttemptOriginS
 
 export const saveTestAttemptAnswersInputSchema = z
   .object({
-    section: sectionWriteSchema.optional(),
+    section: sectionWriteSchema,
     answers: z.record(
       z.string().trim().min(1).max(1500),
       z.unknown().refine(value => value !== undefined, 'answer is required; use null to clear it')
@@ -551,14 +567,6 @@ export const saveTestAttemptAnswersInputSchema = z
   .strict()
   .refine(value => Object.keys(value.answers).length > 0, 'At least one answer is required')
   .refine(value => Object.keys(value.answers).length <= 100, 'No more than 100 answers may be saved at once');
-
-export const gradeTestTranslationInputSchema = z
-  .object({
-    exerciseId: firestoreDocumentIdSchema,
-    itemIndex: z.number().int().nonnegative().max(499),
-    userTranslation: z.string().trim().min(1).max(10_000),
-  })
-  .strict();
 
 export const createTestUnitInputSchema = z
   .object({
@@ -613,4 +621,3 @@ export type DuplicateStandaloneMockVersionIntoTestInput = z.infer<
 export type ReorderMockTestsInput = z.infer<typeof reorderMockTestsInputSchema>;
 export type StartTestAttemptInput = z.infer<typeof startTestAttemptInputSchema>;
 export type SaveTestAttemptAnswersInput = z.infer<typeof saveTestAttemptAnswersInputSchema>;
-export type GradeTestTranslationInput = z.infer<typeof gradeTestTranslationInputSchema>;

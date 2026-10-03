@@ -2,23 +2,19 @@
 
 import React, { useState } from 'react';
 import { MultipleChoiceExercise } from '@/src/types/exercise';
-import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { useSingleAnswerExercise } from '@/src/hooks/useSingleAnswerExercise';
 import { FeedbackDisplay } from '../feedback';
 import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleChoiceExercise';
 import { Button } from '@/src/components/ui/button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { ExerciseIntro } from './exercise-intro';
 import { cn } from '@/src/lib/utils';
-import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type {
   ExerciseAnswer,
   ExerciseAnswerHandler,
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
-import { gradeExercisePercentage } from '@/src/lib/tests/grading';
-import { useSectionedTest } from '@/src/components/ui/test/sectioned-test-context';
 
 interface Props {
   exercise: MultipleChoiceExercise;
@@ -27,7 +23,6 @@ interface Props {
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
-  /** @deprecated Use runtimeMode="test". */
 }
 
 const MultipleChoiceExerciseComponent: React.FC<Props> = ({
@@ -38,44 +33,36 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
   onAnswer,
   initialAnswer,
 }) => {
-  const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
-  const testAnswerMode = mode === 'test';
-  const sectioned = useSectionedTest() && testAnswerMode;
   const restoredOptionIds = initialAnswer?.type === 'multiple-choice' ? initialAnswer.selectedOptionIds : [];
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredOptionIds);
-  // Sectioned selections are saved drafts. Resuming must still let students
-  // finish selecting options before they mark this exercise complete.
-  const [hasSubmitted, setHasSubmitted] = useState(!sectioned && restoredOptionIds.length > 0);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression(
-    {
-      totalItems: 1,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    }
-  );
-
   const {
+    testAnswerMode,
+    hasSubmitted,
+    isProcessing,
+    resetRequired,
     isCorrect,
     message,
     level,
     showExplanation,
-    handleCorrect,
-    handleIncorrect,
-    clearFeedback,
-    shouldResetExercise,
-    resetExercise,
-  } = useExerciseFeedback(exercise.feedbackConfig);
-
-  const resetRequired = mode === 'practice' && shouldResetExercise;
+    isAwaitingConfirmation,
+    confirmAdvance,
+    submit,
+    tryAgain,
+    startOver,
+  } = useSingleAnswerExercise({
+    exercise,
+    runtimeMode,
+    // Restored test selections are saved drafts. Resuming must still let
+    // students finish selecting options before they mark this exercise complete.
+    initiallySubmitted: false,
+    onAnswer,
+    onComplete,
+    onCompletionAccepted,
+  });
 
   const handleExerciseReset = () => {
-    cancelPendingAdvance();
+    startOver();
     setSelectedOptionIds([]);
-    setHasSubmitted(false);
-    setIsProcessing(false);
-    resetExercise();
   };
 
   const handleOptionSelect = (optionId: string) => {
@@ -90,46 +77,20 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
         : [...selectedOptionIds, optionId]
       : [optionId];
     setSelectedOptionIds(nextOptionIds);
-    if (sectioned) onAnswer?.({ type: 'multiple-choice', selectedOptionIds: nextOptionIds });
+    if (testAnswerMode) onAnswer?.({ type: 'multiple-choice', selectedOptionIds: nextOptionIds });
   };
 
   const handleSubmit = () => {
     if (selectedOptionIds.length === 0 || hasSubmitted || isProcessing || resetRequired) return;
-
-    setIsProcessing(true);
-    setHasSubmitted(true);
-    if (testAnswerMode) {
-      onAnswer?.({ type: 'multiple-choice', selectedOptionIds });
-      setIsProcessing(false);
-      onComplete?.(0);
-      return;
-    }
-
-    const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'multiple-choice', selectedOptionIds }));
-    const validation = validateMultipleChoiceExercise(selectedOptionIds, exercise);
-
-    if (validation.isCorrect) {
-      handleCorrect(true);
-      const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
-        hasVisibleFeedbackContent(exercise.data.explanation);
-
-      autoAdvanceIfEnabled(() => {
-        setIsProcessing(false);
-        onComplete?.(score);
-      }, hasVisibleExplanation);
-      if (!assessmentMode) onCompletionAccepted?.(score);
-    } else {
-      handleIncorrect();
-      setIsProcessing(false);
-      if (assessmentMode) onComplete?.(score);
-    }
+    submit(
+      { type: 'multiple-choice', selectedOptionIds },
+      () => validateMultipleChoiceExercise(selectedOptionIds, exercise).isCorrect
+    );
   };
 
   const handleReset = () => {
     setSelectedOptionIds([]);
-    setHasSubmitted(false);
-    clearFeedback();
+    tryAgain();
   };
 
   const getOptionClassName = (optionId: string) => {
@@ -139,11 +100,11 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
 
     const option = exercise.data.options.find(opt => opt.id === optionId);
     const isSelected = selectedOptionIds.includes(optionId);
-    const shouldRevealAnswers = !assessmentMode && (isCorrect || level?.showAnswer);
+    const shouldRevealAnswers = !testAnswerMode && (isCorrect || level?.showAnswer);
 
     if (option?.isCorrect && shouldRevealAnswers) {
       return 'bg-green-50 border-green-300 text-green-900';
-    } else if (!assessmentMode && isSelected && !option?.isCorrect) {
+    } else if (!testAnswerMode && isSelected && !option?.isCorrect) {
       return 'bg-red-50 border-red-300 text-red-900';
     }
 
@@ -201,7 +162,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
         )}
 
         {/* Try Again Button */}
-        {hasSubmitted && isCorrect === false && !assessmentMode && !resetRequired && (
+        {hasSubmitted && isCorrect === false && !testAnswerMode && !resetRequired && (
           <div className="flex justify-center">
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
@@ -209,7 +170,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
           </div>
         )}
 
-        {!assessmentMode && (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={message}

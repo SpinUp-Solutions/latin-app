@@ -1,8 +1,6 @@
 import {
-  calculateProfileCost,
   calculateModelCost,
   calculateTokenUsageCost,
-  normalizeOpenAIUsage,
   OPENAI_MODEL_CATALOG,
   parseOpenAIUsage,
   TRANSLATION_GRADING_PROFILES,
@@ -21,7 +19,8 @@ describe('AI evaluation pricing and cache contracts', () => {
       output_tokens_details: { reasoning_tokens: 120 },
     };
 
-    expect(normalizeOpenAIUsage(usage)).toEqual({
+    const tokens = parseOpenAIUsage(usage)!;
+    expect(tokens).toEqual({
       promptTokens: 1_000,
       completionTokens: 500,
       totalTokens: 1_500,
@@ -31,7 +30,7 @@ describe('AI evaluation pricing and cache contracts', () => {
       reasoningTokens: 120,
     });
 
-    const cost = calculateProfileCost(usage, TRANSLATION_GRADING_PROFILES.candidate);
+    const cost = calculateTokenUsageCost(tokens, TRANSLATION_GRADING_PROFILES.candidate.pricing);
     expect(cost.tokens.reasoningTokens).toBe(120);
     expect(cost.inputCost).toBeCloseTo((700 * 0.2 + 200 * 0.02 + 100 * 0.25) / 1_000_000);
     expect(cost.outputCost).toBeCloseTo((500 * 1.2) / 1_000_000);
@@ -59,15 +58,15 @@ describe('AI evaluation pricing and cache contracts', () => {
   });
 
   it('treats GPT-5.4-mini cache writes as ordinary input pricing', () => {
-    const cost = calculateProfileCost(
+    const cost = calculateModelCost(
       {
         input_tokens: 100,
         output_tokens: 20,
         total_tokens: 120,
         input_tokens_details: { cached_tokens: 40, cache_write_tokens: 30 },
       },
-      TRANSLATION_GRADING_PROFILES.baseline
-    );
+      TRANSLATION_GRADING_PROFILES.baseline.model
+    )!;
 
     expect(cost.inputCost).toBeCloseTo((30 * 0.75 + 40 * 0.075 + 30 * 0.75) / 1_000_000);
     expect(cost.tokens.ordinaryInputTokens).toBe(30);

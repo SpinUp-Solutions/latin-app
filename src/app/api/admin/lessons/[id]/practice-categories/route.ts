@@ -22,11 +22,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
     const actor = await verifyAdminAccess(request);
     const { id } = await params;
     const input = reconcilePracticeCategoryAssignmentsSchema.parse(await request.json().catch(() => null));
-    const assignments = await practiceCategoryService.reconcileLessonCategories(
-      id,
-      input.practiceCategorySelections ?? input.practiceCategoryIds ?? [],
-      actor.uid
-    );
+    const assignments = await practiceCategoryService.reconcileLessonCategories(id, input, actor.uid);
     return NextResponse.json({ success: true, ...assignments });
   } catch (error) {
     return practiceCategoryRouteErrorResponse(error, 'update lesson practice categories');

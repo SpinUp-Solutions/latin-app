@@ -69,7 +69,3 @@ export function parseExerciseAnswer(value: unknown): ExerciseAnswer {
 
   return schema.parse(value) as ExerciseAnswer;
 }
-
-export function isAnswerForExercise(answer: ExerciseAnswer, exerciseType: string): boolean {
-  return answer.type === exerciseType;
-}

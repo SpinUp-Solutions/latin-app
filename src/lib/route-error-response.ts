@@ -11,16 +11,14 @@ interface RouteDomainError extends Error {
 /**
  * Builds a route error mapper that recognizes admin-access failures, Zod
  * validation errors, and the given domain error classes. Anything else is
- * logged and reported as a generic 500 for the supplied action.
+ * logged and reported as a generic 500 for the supplied action, even when it
+ * has a numeric `status`: cloud SDK errors do, and their messages can contain
+ * URLs or credentials.
  */
 export function createRouteErrorResponse(...domainErrorClasses: Array<new (...args: never[]) => RouteDomainError>) {
   return function routeErrorResponse(error: unknown, action: string) {
-    if (error instanceof Error && 'status' in error && typeof error.status === 'number') {
-      const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined;
-      return NextResponse.json({ error: error.message, ...(code ? { code } : {}) }, { status: error.status });
-    }
     if (error instanceof AdminAccessError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json({ error: error.message, ...(error.code ? { code: error.code } : {}) }, { status: error.status });
     }
     if (error instanceof ZodError) {
       return NextResponse.json(

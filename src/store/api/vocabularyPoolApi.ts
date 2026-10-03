@@ -255,48 +255,6 @@ export const vocabularyPoolApi = createApi({
       onQueryStarted: refreshPoolLists,
     }),
 
-    addWordsToPool: builder.mutation<
-      { pool: VocabularyPool; addedCount: number; duplicateCount: number; invalidIds: string[] },
-      { poolId: string; wordDocIds: string[] }
-    >({
-      query: ({ poolId, wordDocIds }) => ({
-        url: `/admin/vocabulary-pools/${poolId}/words`,
-        method: 'POST',
-        body: { wordDocIds },
-      }),
-      transformResponse: (response: {
-        success: boolean;
-        data: { pool: VocabularyPool; addedCount: number; duplicateCount: number; invalidIds: string[] };
-      }) => response.data,
-      invalidatesTags: (_result, error) =>
-        error
-          ? []
-          : [
-              { type: 'PoolContent', id: 'ALL' },
-              { type: 'PoolUsage', id: 'MANAGEMENT' },
-              { type: 'AvailableWords', id: 'LIST' },
-            ],
-      onQueryStarted: refreshPoolLists,
-    }),
-
-    removeWordsFromPool: builder.mutation<{ pool: VocabularyPool }, { poolId: string; wordDocIds: string[] }>({
-      query: ({ poolId, wordDocIds }) => ({
-        url: `/admin/vocabulary-pools/${poolId}/words`,
-        method: 'DELETE',
-        body: { wordDocIds },
-      }),
-      transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data,
-      invalidatesTags: (_result, error) =>
-        error
-          ? []
-          : [
-              { type: 'PoolContent', id: 'ALL' },
-              { type: 'PoolUsage', id: 'MANAGEMENT' },
-              { type: 'AvailableWords', id: 'LIST' },
-            ],
-      onQueryStarted: refreshPoolLists,
-    }),
-
     getWordsForPoolSelection: builder.query<
       { words: Word[]; hasMore: boolean; lastWordId: string | null },
       { filters: PoolFilters; limit?: number; lastWordId?: string | null }
@@ -359,8 +317,6 @@ export const {
   usePreparePoolDeletionMutation,
   useUpdatePoolMutation,
   useDeletePoolMutation,
-  useAddWordsToPoolMutation,
-  useRemoveWordsFromPoolMutation,
   useGetWordsForPoolSelectionQuery,
 } = vocabularyPoolApi;
 

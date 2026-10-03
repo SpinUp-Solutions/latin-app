@@ -119,7 +119,6 @@ function AdminLessonPreviewPage() {
             <SimpleRichDisplay content={previewLesson.title} />
           </h2>
           <LessonPlayer
-            key={previewLesson.id}
             lesson={previewLesson}
             trackProgress={false}
             generatedExerciseContext={{ kind: 'admin-preview' }}

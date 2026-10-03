@@ -26,10 +26,6 @@ import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 import { ExerciseReviewView } from './exercise-review-views';
 
-// ---------------------------------------------------------------------------
-// Supporting content (passages, tables, vocabulary, audio)
-// ---------------------------------------------------------------------------
-
 const SupportingContentView = ({
   item,
   poolId,
@@ -90,10 +86,8 @@ const SupportingContentView = ({
   }
 };
 
-// ---------------------------------------------------------------------------
-// Accordion model: one entry per exercise; supporting items attach to the
-// following exercise on the same page (or the last one when trailing).
-// ---------------------------------------------------------------------------
+// One accordion entry per exercise; supporting items attach to the following
+// exercise on the same page (or the last one when trailing).
 
 interface ReviewAccordionEntry {
   id: string;
@@ -152,10 +146,6 @@ const buildAccordionEntries = (result: StudentTestResult): ReviewAccordionEntry[
   }
   return entries;
 };
-
-// ---------------------------------------------------------------------------
-// Review view
-// ---------------------------------------------------------------------------
 
 export function TestResultReviewView({ result }: { result: StudentTestResult }) {
   const { attempt, review } = result;

@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 interface GeneratedExerciseSummaryProps {
   collection: string;
   count: number | 'all';
+  uniqueWordCount?: number | null;
   partOfSpeech: string | undefined;
   selectedFormCount: number | undefined;
 }
@@ -11,6 +12,7 @@ interface GeneratedExerciseSummaryProps {
 export const GeneratedExerciseSummary: React.FC<GeneratedExerciseSummaryProps> = ({
   collection,
   count,
+  uniqueWordCount,
   partOfSpeech,
   selectedFormCount,
 }) => {
@@ -26,6 +28,11 @@ export const GeneratedExerciseSummary: React.FC<GeneratedExerciseSummaryProps> =
             <div>
               <strong>Number of Questions:</strong> {count === 'all' ? 'All matching words' : count}
             </div>
+            {uniqueWordCount ? (
+              <div>
+                <strong>Unique Words:</strong> {uniqueWordCount}
+              </div>
+            ) : null}
             <div>
               <strong>Part of Speech:</strong> {partOfSpeech || 'All'}
             </div>
