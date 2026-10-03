@@ -102,8 +102,8 @@ jest.mock('@/src/components/ui/admin/content-editor/MultiParadigmConfigSection',
   MultiParadigmConfigSection: () => null,
 }));
 
-jest.mock('@/src/components/ui/admin/vocabulary/AdvancedFiltersPanel', () => ({
-  AdvancedFiltersPanel: () => null,
+jest.mock('@/src/components/ui/admin/vocabulary/WordFiltersPanel', () => ({
+  WordFiltersPanel: () => null,
 }));
 
 jest.mock('@/src/utils/exercises/formIdentificationConfiguration', () => ({

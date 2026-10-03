@@ -5,11 +5,10 @@ import lessonEditorReducer from './slices/lessonEditorSlice';
 import clipboardReducer from './slices/clipboardSlice';
 import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
 import vocabularyReducer from './slices/vocabularySlice';
-import advancedFiltersReducer from './slices/advancedFiltersSlice';
 import { appApi } from './api/appApi';
 import { vocabularyPoolApi } from './api/vocabularyPoolApi';
 import { vocabularyApi } from './api/vocabularyApi';
-import { advancedVocabularyApi } from './api/advancedVocabularyApi';
+import { generatedExerciseApi } from './api/generatedExerciseApi';
 import { vocabularyWordRequestsApi } from './api/vocabularyWordRequestsApi';
 
 export const store = configureStore({
@@ -19,11 +18,10 @@ export const store = configureStore({
     clipboard: clipboardReducer,
     vocabularyPools: vocabularyPoolsReducer,
     vocabulary: vocabularyReducer,
-    advancedFilters: advancedFiltersReducer,
     [appApi.reducerPath]: appApi.reducer,
     [vocabularyPoolApi.reducerPath]: vocabularyPoolApi.reducer,
     [vocabularyApi.reducerPath]: vocabularyApi.reducer,
-    [advancedVocabularyApi.reducerPath]: advancedVocabularyApi.reducer,
+    [generatedExerciseApi.reducerPath]: generatedExerciseApi.reducer,
     [vocabularyWordRequestsApi.reducerPath]: vocabularyWordRequestsApi.reducer,
   },
   middleware: getDefaultMiddleware =>
@@ -33,7 +31,7 @@ export const store = configureStore({
       appApi.middleware,
       vocabularyPoolApi.middleware,
       vocabularyApi.middleware,
-      advancedVocabularyApi.middleware,
+      generatedExerciseApi.middleware,
       vocabularyWordRequestsApi.middleware
     ),
 });

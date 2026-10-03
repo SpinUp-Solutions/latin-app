@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import {
-  requireVocabularyWordsCollection,
-  VocabularyWordCollectionError,
-} from '@/src/lib/vocabulary/word-collection.server';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 const serializeTimestamp = (value: unknown): string | undefined => {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
@@ -35,10 +32,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await verifyAdminAccess(request);
-    const { searchParams } = new URL(request.url);
-    const collection = requireVocabularyWordsCollection(searchParams.get('collection'));
-
-    const snapshot = await adminDb.collection(collection).get();
+    const snapshot = await adminDb.collection(VOCABULARY_WORDS_COLLECTION).get();
 
     const words = snapshot.docs.map(doc => {
       const data = doc.data();
@@ -49,7 +43,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    const filename = `vocabulary-backup-${collection}-${timestamp}.json`;
+    const filename = `vocabulary-backup-${VOCABULARY_WORDS_COLLECTION}-${timestamp}.json`;
 
     return new NextResponse(JSON.stringify(words, null, 2), {
       status: 200,
@@ -61,9 +55,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    if (error instanceof VocabularyWordCollectionError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
     console.error('Error creating backup:', error);
     return NextResponse.json(

@@ -10,18 +10,12 @@ import {
 } from '@/src/types/vocabulary-pool';
 import { Word } from '@/src/types/admin-vocabulary';
 import { createAuthenticatedBaseQuery } from './baseQuery';
-import { buildAdvancedFilterParams, POOL_WORD_FIELDS } from '@/src/utils/wordFilters';
+import { buildWordFilterParams, POOL_WORD_FIELDS } from '@/src/utils/wordFilters';
 import type { PoolFilters } from '@/src/types/pool-filters';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormParadigm } from '@/src/types/exercises/paradigm';
 import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 import type { CreateVocabularyPoolFromPoolsRequest } from '@/shared/types/vocabulary/pool-requests';
-
-interface POSSummaryData {
-  summary: Record<PartOfSpeech, number>;
-  totalWords: number;
-  poolId: string;
-}
 
 interface ParadigmSummaryData {
   paradigmSummary: Partial<Record<FormParadigm, number>>;
@@ -164,15 +158,6 @@ export const vocabularyPoolApi = createApi({
       ],
     }),
 
-    getPoolPOSSummary: builder.query<POSSummaryData, string>({
-      query: poolId => `/admin/vocabulary-pools/${poolId}/pos-summary`,
-      transformResponse: (response: { success: boolean; data: POSSummaryData }) => response.data,
-      providesTags: (result, error, poolId) => [
-        { type: 'PoolContent', id: 'ALL' },
-        { type: 'Pool', id: `${poolId}-pos-summary` },
-      ],
-    }),
-
     getPoolParadigmSummary: builder.query<ParadigmSummaryData, string>({
       query: poolId => `/admin/vocabulary-pools/${poolId}/paradigm-summary`,
       transformResponse: (response: { success: boolean; data: ParadigmSummaryData }) => response.data,
@@ -260,7 +245,7 @@ export const vocabularyPoolApi = createApi({
       { filters: PoolFilters; limit?: number; lastWordId?: string | null }
     >({
       query: ({ filters, limit = 50, lastWordId }) => {
-        const params = buildAdvancedFilterParams(filters, {
+        const params = buildWordFilterParams(filters, {
           select: [...POOL_WORD_FIELDS],
           limit,
           lastWordId: lastWordId || undefined,
@@ -309,7 +294,6 @@ export const {
   useGetPoolQuery,
   useGetStudentPoolQuery,
   useGetPoolSummaryQuery,
-  useGetPoolPOSSummaryQuery,
   useGetPoolParadigmSummaryQuery,
   useCreatePoolMutation,
   useCreatePoolFromPoolsMutation,

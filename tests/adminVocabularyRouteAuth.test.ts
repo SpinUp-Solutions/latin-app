@@ -8,14 +8,11 @@ const routes = [
   'src/app/api/admin/vocabulary-pools/usages/route.ts',
   'src/app/api/admin/vocabulary-pools/[poolId]/route.ts',
   'src/app/api/admin/vocabulary-pools/[poolId]/deletion-challenge/route.ts',
-  'src/app/api/admin/vocabulary-pools/[poolId]/words/route.ts',
   'src/app/api/admin/vocabulary-pools/[poolId]/summary/route.ts',
-  'src/app/api/admin/vocabulary-pools/[poolId]/pos-summary/route.ts',
   'src/app/api/admin/vocabulary-pools/[poolId]/paradigm-summary/route.ts',
   'src/app/api/admin/words/route.ts',
   'src/app/api/admin/words/[wordId]/route.ts',
   'src/app/api/admin/words/backup/route.ts',
-  'src/app/api/admin/words/migrate/route.ts',
 ];
 
 describe('admin vocabulary API authorization', () => {

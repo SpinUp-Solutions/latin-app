@@ -10,7 +10,7 @@ import { ExerciseProgress } from './exercise-progress';
 import { ExerciseIntro } from './exercise-intro';
 import { applySequentialItemResult } from './sequential-item-result';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { type GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
+import { type GeneratedExerciseQuerySource } from '@/src/store/api/generatedExerciseApi';
 import { Card, CardContent } from '../card';
 import { ExerciseMessageCard } from './exercise-status-card';
 import { GeneratedExerciseItems } from './generated-exercise-items';

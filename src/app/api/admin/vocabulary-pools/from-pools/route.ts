@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createVocabularyPoolFromPoolsRequestSchema } from '@/shared/types/vocabulary/pool-requests';
-import {
-  createVocabularyPoolFromPools,
-  VocabularyPoolFromPoolsError,
-} from '@/src/lib/vocabulary-pools/from-pools.server';
+import { createLinkedVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { createRouteErrorResponse } from '@/src/lib/route-error-response';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -11,7 +8,7 @@ import { adminDb } from '@/src/services/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
-const routeErrorResponse = createRouteErrorResponse(VocabularyPoolFromPoolsError, VocabularyPoolStateError);
+const routeErrorResponse = createRouteErrorResponse(VocabularyPoolStateError);
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -27,7 +24,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
     const input = createVocabularyPoolFromPoolsRequestSchema.parse(body);
-    const { _copyRequest: _privateRequest, ...pool } = await createVocabularyPoolFromPools(adminDb, actor.uid, input);
+    const created: Record<string, unknown> = await createLinkedVocabularyPool(adminDb, actor.uid, input);
+    const { _copyRequest: _privateRequest, ...pool } = created;
 
     return NextResponse.json(
       {

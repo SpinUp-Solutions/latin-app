@@ -11,7 +11,6 @@ const guardedTransactionWriters = [
   'src/app/api/admin/words/route.ts',
   'src/app/api/admin/vocabulary-pools/route.ts',
   'src/app/api/admin/vocabulary-pools/[poolId]/route.ts',
-  'src/app/api/admin/vocabulary-pools/[poolId]/words/route.ts',
   'src/app/api/admin/vocabulary-word-requests/[id]/approve/route.ts',
   'src/lib/learning-units/learning-path-service.ts',
   'src/lib/practice-categories/service.ts',

@@ -1,11 +1,7 @@
-import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
+import { VOCABULARY_POOL_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import {
-  requireVocabularyWordsCollection,
-  VocabularyWordCollectionError,
-} from '@/src/lib/vocabulary/word-collection.server';
 import {
   prepareVocabularyContentRevisionBump,
   VOCABULARY_CONTENT_STATE_COLLECTION,
@@ -44,8 +40,6 @@ export async function DELETE(
   try {
     const actor = await verifyAdminAccess(request);
     const { wordId } = await params;
-    const { searchParams } = new URL(request.url);
-    const collection = requireVocabularyWordsCollection(searchParams.get('collection'));
     const requestBody = await request.json().catch(() => ({}));
     const confirmationToken = typeof requestBody.confirmationToken === 'string' ? requestBody.confirmationToken : null;
 
@@ -59,7 +53,7 @@ export async function DELETE(
       );
     }
 
-    const wordRef = adminDb.collection(collection).doc(wordId);
+    const wordRef = adminDb.collection(VOCABULARY_WORDS_COLLECTION).doc(wordId);
     const poolsQuery = adminDb.collection(VOCABULARY_POOL_COLLECTION).where('wordDocIds', 'array-contains', wordId);
     const challengeRef = adminDb
       .collection(VOCABULARY_WORD_DELETION_CHALLENGE_COLLECTION)
@@ -196,9 +190,6 @@ export async function DELETE(
         { success: false, error: error.message, ...(error.code ? { code: error.code } : {}) },
         { status: error.status }
       );
-    }
-    if (error instanceof VocabularyWordCollectionError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
     if (error instanceof Error && error.message === 'Word not found') {
       return NextResponse.json({ success: false, error: error.message }, { status: 404 });

@@ -170,7 +170,6 @@ jest.mock('@/src/lib/verifyAdminAccess', () => {
 });
 import { POST as createRoute } from '@/src/app/api/admin/vocabulary-pools/from-pools/route';
 import { GET as getPool, PUT as updateRoute } from '@/src/app/api/admin/vocabulary-pools/[poolId]/route';
-import { POST as addWords, DELETE as removeWords } from '@/src/app/api/admin/vocabulary-pools/[poolId]/words/route';
 import { POST as prepareDeletion } from '@/src/app/api/admin/vocabulary-pools/[poolId]/deletion-challenge/route';
 import { GET as listPools } from '@/src/app/api/admin/vocabulary-pools/route';
 const request = (method: string, body: unknown) => ({ method, json: async () => body }) as NextRequest;
@@ -247,11 +246,8 @@ test('update endpoint persists metadata.isActive changes', async () => {
   expect(mockDb.docs.get(poolPath('inactive-copy'))?.metadata.isActive).toBe(false);
 });
 
-test('individual inherited removals are rejected by both mutation routes', async () => {
+test('individual inherited removals are rejected', async () => {
   const pool = await create();
-  const deletion = await removeWords(request('DELETE', { wordDocIds: ['a'] }), params(pool.id));
-  expect(deletion.status).toBe(409);
-  expect((await deletion.json()).code).toBe('VOCABULARY_POOL_INHERITED_WORD');
   const replacement = await updateRoute(request('PUT', { wordDocIds: ['own'] }), params(pool.id));
   expect(replacement.status).toBe(409);
   expect((await replacement.json()).code).toBe('VOCABULARY_POOL_INHERITED_WORD');
@@ -370,11 +366,10 @@ test('existing lock blocks changes and is never removed or replaced', async () =
   expect(mockDb.docs.get(path)).toEqual({ ownerId: 'another-operation' });
 });
 
-test('unauthorized create/update/removal fail before touching the database', async () => {
+test('unauthorized create/update fail before touching the database', async () => {
   mockAuthorized = false;
   expect((await createRoute(request('POST', input()))).status).toBe(401);
   expect((await updateRoute(request('PUT', { sourcePoolIds: [] }), params('lesson-3'))).status).toBe(401);
-  expect((await removeWords(request('DELETE', { wordDocIds: ['a'] }), params('lesson-3'))).status).toBe(401);
   expect(mockDb.writes).toEqual([]);
 });
 
@@ -383,18 +378,6 @@ test.each([false, true])('missing/deleting direct words cannot be added (deletin
   else mockDb.docs.delete(`${VOCABULARY_WORDS_COLLECTION}/own`);
   await expect(create()).rejects.toMatchObject({ code: 'VOCABULARY_POOL_WORDS_MISSING' });
   expect([...mockDb.docs.keys()].filter(key => key.includes('/linked-'))).toEqual([]);
-});
-
-test('adding 400 words through the endpoint is bounded and inherited duplicates remain inherited', async () => {
-  const pool = await create();
-  const ids = Array.from({ length: 399 }, (_, i) => `added-${i}`);
-  ids.forEach(id => mockDb.docs.set(`${VOCABULARY_WORDS_COLLECTION}/${id}`, { word: id }));
-  const response = await addWords(request('POST', { wordDocIds: [...ids, 'a'] }), params(pool.id));
-  expect(response.status).toBe(200);
-  const body = await response.json();
-  expect(body.data.addedCount).toBe(399);
-  expect(body.data.duplicateCount).toBe(1);
-  expect(mockDb.docs.get(poolPath(pool.id))?.wordDocIds).not.toContain('a');
 });
 
 test('word-count list ordering and pages use current effective counts', async () => {

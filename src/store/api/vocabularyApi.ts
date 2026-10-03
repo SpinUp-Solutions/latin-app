@@ -5,7 +5,6 @@ import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
 import { z, ZodError } from 'zod';
 
 type ZodIssue = z.core.$ZodIssue;
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { vocabularyPoolApi } from './vocabularyPoolApi';
 
 interface WordsResponse {
@@ -19,7 +18,6 @@ interface WordsResponse {
       wordType?: string;
       search?: string;
     };
-    collection?: string;
   };
 }
 
@@ -58,16 +56,14 @@ export const vocabularyApi = createApi({
         search?: string;
         limit?: number;
         lastWordId?: string | null;
-        collection?: string;
       }
     >({
-      query: ({ wordType, search, limit = 20, lastWordId, collection = VOCABULARY_WORDS_COLLECTION }) => {
+      query: ({ wordType, search, limit = 20, lastWordId }) => {
         const params = new URLSearchParams({ limit: limit.toString() });
 
         if (wordType && wordType !== 'all') params.append('wordType', wordType);
         if (search) params.append('search', search);
         if (lastWordId) params.append('lastWordId', lastWordId);
-        if (collection) params.append('collection', collection);
 
         return `/admin/words?${params}`;
       },
@@ -82,7 +78,6 @@ export const vocabularyApi = createApi({
         return {
           wordType: queryArgs.wordType,
           search: queryArgs.search,
-          collection: queryArgs.collection || VOCABULARY_WORDS_COLLECTION,
         };
       },
       merge: (currentCache, newData, { arg }) => {
@@ -104,12 +99,6 @@ export const vocabularyApi = createApi({
         if (!previousArg) return true;
         if (currentArg?.search !== previousArg.search) return true;
         if (currentArg?.wordType !== previousArg.wordType) return true;
-        if (
-          (currentArg?.collection || VOCABULARY_WORDS_COLLECTION) !==
-          (previousArg.collection || VOCABULARY_WORDS_COLLECTION)
-        ) {
-          return true;
-        }
         return currentArg?.lastWordId !== previousArg.lastWordId;
       },
       providesTags: result =>
@@ -118,24 +107,18 @@ export const vocabularyApi = createApi({
           : [{ type: 'WordList', id: 'LIST' }],
     }),
 
-    getWordTypeCounts: builder.query<Record<string, number>, { collection?: string } | void>({
-      query: arg => {
-        const collection = arg?.collection || VOCABULARY_WORDS_COLLECTION;
-        return `/admin/words?countsOnly=true&collection=${encodeURIComponent(collection)}`;
-      },
+    getWordTypeCounts: builder.query<Record<string, number>, void>({
+      query: () => '/admin/words?countsOnly=true',
       transformResponse: (response: WordsResponse) => response.data.wordTypeCounts || {},
       providesTags: [{ type: 'WordCounts', id: 'COUNTS' }],
     }),
 
-    updateWord: builder.mutation<
-      VocabularyWordWithId,
-      { wordId: string; updates: Partial<VocabularyWord>; collection?: string }
-    >({
-      query: ({ wordId, updates, collection = VOCABULARY_WORDS_COLLECTION }) => {
+    updateWord: builder.mutation<VocabularyWordWithId, { wordId: string; updates: Partial<VocabularyWord> }>({
+      query: ({ wordId, updates }) => {
         return {
           url: '/admin/words',
           method: 'PUT',
-          body: { wordId, updates, collection },
+          body: { wordId, updates },
         };
       },
       transformResponse: (response: { success: boolean; updatedData: VocabularyWordWithId }) => {
@@ -193,15 +176,12 @@ export const vocabularyApi = createApi({
       ],
     }),
 
-    createWord: builder.mutation<
-      VocabularyWordWithId,
-      { wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'>; collection?: string }
-    >({
-      query: ({ wordData, collection = VOCABULARY_WORDS_COLLECTION }) => {
+    createWord: builder.mutation<VocabularyWordWithId, { wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'> }>({
+      query: ({ wordData }) => {
         return {
           url: '/admin/words',
           method: 'POST',
-          body: { ...wordData, collection },
+          body: wordData,
         };
       },
       transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => {
