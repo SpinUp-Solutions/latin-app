@@ -20,16 +20,14 @@
     "serve:prod": "npm run build:prod && npm run start:prod",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "jest --config jest.config.mjs",
+    "test": "jest",
     "test:firestore-rules": "firebase emulators:exec --only firestore --project demo-latin-app \"node tests/firestoreVocabularyRules.emulator.mjs && node tests/firestoreFeedbackRules.emulator.mjs && node tests/firestoreTestAttemptRules.emulator.mjs\"",
-    "test:storage-rules": "firebase emulators:exec --only storage --project demo-latin-app \"node tests/storageFeedbackRules.emulator.mjs && jest --config jest.config.mjs --runInBand tests/studentFeedbackAttachments.emulator.test.ts\"",
-    "test:watch": "jest --config jest.config.mjs --watch",
-    "test:e2e": "node tests/e2e/preflight.mjs && playwright test --config=playwright.config.ts",
-    "test:e2e:assessment": "node tests/e2e/preflight.mjs && playwright test tests/e2e/assessment-acceptance.spec.ts --config=playwright.config.ts",
-    "test:e2e:feedback": "node tests/e2e/preflight.mjs && playwright test tests/e2e/feedback-acceptance.spec.ts --config=playwright.config.ts",
-    "test:e2e:assessment:repeat-score": "node tests/e2e/preflight.mjs && playwright test tests/e2e/assessment-acceptance.spec.ts --config=playwright.config.ts --workers=1 --repeat-each=2 --grep \"score-only normal submission\"",
-    "test:e2e:ui": "playwright test --ui --config=playwright.config.ts",
-    "test:e2e:debug": "playwright test --debug --config=playwright.config.ts",
+    "test:storage-rules": "firebase emulators:exec --only storage --project demo-latin-app \"node tests/storageFeedbackRules.emulator.mjs && jest --runInBand tests/studentFeedbackAttachments.emulator.test.ts\"",
+    "test:watch": "jest --watch",
+    "test:e2e": "node tests/e2e/preflight.mjs && playwright test",
+    "test:e2e:assessment:repeat-score": "npm run test:e2e -- assessment-acceptance --workers=1 --repeat-each=2 --grep \"score-only normal submission\"",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
     "functions": "npm run functions:dev",
     "functions:dev": "firebase use dev && firebase deploy --only functions",
@@ -134,8 +132,5 @@
   },
   "overrides": {
     "undici": "5.28.4"
-  },
-  "jest": {
-    "testEnvironment": "jest-environment-jsdom"
   }
 }
