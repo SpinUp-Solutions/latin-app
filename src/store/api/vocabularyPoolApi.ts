@@ -1,5 +1,4 @@
 import type { ThunkDispatch, UnknownAction } from '@reduxjs/toolkit';
-import { createApi } from '@reduxjs/toolkit/query/react';
 import {
   VocabularyPool,
   VocabularyPoolSummary,
@@ -9,7 +8,8 @@ import {
   VocabularyPoolUsageResponse,
 } from '@/src/types/vocabulary-pool';
 import { Word } from '@/src/types/admin-vocabulary';
-import { createAuthenticatedBaseQuery } from './baseQuery';
+import { appApi, withSubscriptionDefaults } from './appApi';
+import { STUDENT_POOLS_TAG } from './tags';
 import { buildWordFilterParams, POOL_WORD_FIELDS } from '@/src/utils/wordFilters';
 import type { PoolFilters } from '@/src/types/pool-filters';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
@@ -37,14 +37,7 @@ interface GetPoolsArgs {
   lastPoolId?: string | null;
 }
 
-export const vocabularyPoolApi = createApi({
-  reducerPath: 'vocabularyPoolApi',
-  baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['PoolContent', 'Pool', 'PoolList', 'PoolUsage', 'AvailableWords'],
-  keepUnusedDataFor: 60 * 5,
-  refetchOnMountOrArgChange: 300,
-  refetchOnFocus: false,
-  refetchOnReconnect: true,
+export const vocabularyPoolApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getVocabularyPoolUsages: builder.query<VocabularyPoolUsageResponse, void>({
       query: () => '/admin/vocabulary-pools/usages',
@@ -145,7 +138,7 @@ export const vocabularyPoolApi = createApi({
       providesTags: (result, error, poolId) => [
         { type: 'PoolContent', id: 'ALL' },
         { type: 'Pool', id: `student-${poolId}` },
-        { type: 'Pool', id: 'STUDENT_LIST' },
+        STUDENT_POOLS_TAG,
       ],
     }),
 
@@ -288,23 +281,47 @@ export const vocabularyPoolApi = createApi({
   }),
 });
 
+/**
+ * Pool data changes only through admin mutations, which invalidate it, and a
+ * student pool takes several requests to load. Pool queries are therefore not
+ * refetched when the tab regains focus, and a remount reuses data up to five
+ * minutes old.
+ */
+const POOL_REFETCH_POLICY = { refetchOnFocus: false, refetchOnMountOrArgChange: 300 } as const;
+
+export const useGetVocabularyPoolUsagesQuery = withSubscriptionDefaults(
+  vocabularyPoolApi.useGetVocabularyPoolUsagesQuery,
+  POOL_REFETCH_POLICY
+);
+export const useGetPoolsQuery = withSubscriptionDefaults(vocabularyPoolApi.useGetPoolsQuery, POOL_REFETCH_POLICY);
+export const useGetPoolQuery = withSubscriptionDefaults(vocabularyPoolApi.useGetPoolQuery, POOL_REFETCH_POLICY);
+export const useGetStudentPoolQuery = withSubscriptionDefaults(
+  vocabularyPoolApi.useGetStudentPoolQuery,
+  POOL_REFETCH_POLICY
+);
+export const useGetPoolSummaryQuery = withSubscriptionDefaults(
+  vocabularyPoolApi.useGetPoolSummaryQuery,
+  POOL_REFETCH_POLICY
+);
+export const useGetPoolParadigmSummaryQuery = withSubscriptionDefaults(
+  vocabularyPoolApi.useGetPoolParadigmSummaryQuery,
+  POOL_REFETCH_POLICY
+);
+export const useGetWordsForPoolSelectionQuery = withSubscriptionDefaults(
+  vocabularyPoolApi.useGetWordsForPoolSelectionQuery,
+  POOL_REFETCH_POLICY
+);
+
 export const {
-  useGetVocabularyPoolUsagesQuery,
-  useGetPoolsQuery,
-  useGetPoolQuery,
-  useGetStudentPoolQuery,
-  useGetPoolSummaryQuery,
-  useGetPoolParadigmSummaryQuery,
   useCreatePoolMutation,
   useCreatePoolFromPoolsMutation,
   useDuplicatePoolMutation,
   usePreparePoolDeletionMutation,
   useUpdatePoolMutation,
   useDeletePoolMutation,
-  useGetWordsForPoolSelectionQuery,
 } = vocabularyPoolApi;
 
-type PoolCacheState = { vocabularyPoolApi: ReturnType<typeof vocabularyPoolApi.reducer> };
+type PoolCacheState = Parameters<typeof vocabularyPoolApi.util.selectInvalidatedBy>[0];
 /** Always replace accumulated pages after a mutation, including pending first-page searches. */
 async function refreshPoolLists(
   _arg: unknown,

@@ -1,11 +1,10 @@
-import { createApi } from '@reduxjs/toolkit/query/react';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
-import { createAuthenticatedBaseQuery } from './baseQuery';
+import { appApi } from './appApi';
+import { STUDENT_POOLS_TAG } from './tags';
 import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
 import { z, ZodError } from 'zod';
 
 type ZodIssue = z.core.$ZodIssue;
-import { vocabularyPoolApi } from './vocabularyPoolApi';
 
 interface WordsResponse {
   success: boolean;
@@ -40,14 +39,7 @@ export interface VocabularySearchResult {
   dictionary_entry: string | null;
 }
 
-export const vocabularyApi = createApi({
-  reducerPath: 'vocabularyApi',
-  baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['Word', 'WordList', 'WordCounts'],
-  keepUnusedDataFor: 60 * 5,
-  refetchOnMountOrArgChange: 30,
-  refetchOnFocus: true,
-  refetchOnReconnect: true,
+export const vocabularyApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getWords: builder.query<
       { words: VocabularyWordWithId[]; hasMore: boolean; lastWordId: string | null },
@@ -134,45 +126,21 @@ export const vocabularyApi = createApi({
         }
       },
       async onQueryStarted({ wordId, updates }, { dispatch, queryFulfilled, getState }) {
-        const patchResults: { undo: () => void }[] = [];
-
-        const state = getState() as {
-          vocabularyApi?: { queries?: Record<string, { data?: { words?: VocabularyWordWithId[] } }> };
-        };
-        const cachedQueries = state.vocabularyApi?.queries || {};
-
-        Object.entries(cachedQueries).forEach(([key, value]) => {
-          if (key.startsWith('getWords') && value?.data?.words) {
-            const argsMatch = key.match(/getWords\((.*)\)/);
-            if (argsMatch) {
-              try {
-                const originalArgs = JSON.parse(argsMatch[1]);
-                const patchResult = dispatch(
-                  vocabularyApi.util.updateQueryData('getWords', originalArgs, draft => {
-                    const word = draft.words.find(w => w.id === wordId);
-                    if (word) {
-                      Object.assign(word, updates);
-                    }
-                  })
-                );
-                patchResults.push(patchResult);
-              } catch (e) {
-                console.error('Error parsing query args:', e);
-              }
-            }
-          }
-        });
-
-        try {
-          await queryFulfilled;
-          dispatch(vocabularyPoolApi.util.invalidateTags([{ type: 'Pool', id: 'STUDENT_LIST' }]));
-        } catch {
-          patchResults.forEach(patch => patch.undo());
-        }
+        // Show the edit in every loaded word list at once; a failed save rolls it back.
+        const patches = vocabularyApi.util.selectCachedArgsForQuery(getState(), 'getWords').map(cachedArgs =>
+          dispatch(
+            vocabularyApi.util.updateQueryData('getWords', cachedArgs, draft => {
+              const word = draft.words.find(candidate => candidate.id === wordId);
+              if (word) Object.assign(word, updates);
+            })
+          )
+        );
+        await queryFulfilled.catch(() => patches.forEach(patch => patch.undo()));
       },
       invalidatesTags: (result, error, { wordId }) => [
         { type: 'Word', id: wordId },
         { type: 'WordList', id: 'LIST' },
+        ...(error ? [] : [STUDENT_POOLS_TAG]),
       ],
     }),
 
@@ -217,20 +185,13 @@ export const vocabularyApi = createApi({
         ...(confirmationToken ? { body: { confirmationToken } } : {}),
       }),
       transformResponse: (response: DeleteWordResponse) => response,
-      async onQueryStarted(_argument, { dispatch, queryFulfilled }) {
-        try {
-          await queryFulfilled;
-          dispatch(vocabularyPoolApi.util.invalidateTags([{ type: 'Pool', id: 'STUDENT_LIST' }]));
-        } catch {
-          // Failed deletions leave cached pool content unchanged.
-        }
-      },
       invalidatesTags: result =>
         result?.success
           ? [
               { type: 'Word', id: 'LIST' },
               { type: 'WordList', id: 'LIST' },
               { type: 'WordCounts', id: 'COUNTS' },
+              STUDENT_POOLS_TAG,
             ]
           : [],
     }),

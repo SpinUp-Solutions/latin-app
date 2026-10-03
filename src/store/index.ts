@@ -6,10 +6,7 @@ import clipboardReducer from './slices/clipboardSlice';
 import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
 import vocabularyReducer from './slices/vocabularySlice';
 import { appApi } from './api/appApi';
-import { vocabularyPoolApi } from './api/vocabularyPoolApi';
-import { vocabularyApi } from './api/vocabularyApi';
 import { generatedExerciseApi } from './api/generatedExerciseApi';
-import { vocabularyWordRequestsApi } from './api/vocabularyWordRequestsApi';
 
 export const store = configureStore({
   reducer: {
@@ -19,21 +16,12 @@ export const store = configureStore({
     vocabularyPools: vocabularyPoolsReducer,
     vocabulary: vocabularyReducer,
     [appApi.reducerPath]: appApi.reducer,
-    [vocabularyPoolApi.reducerPath]: vocabularyPoolApi.reducer,
-    [vocabularyApi.reducerPath]: vocabularyApi.reducer,
     [generatedExerciseApi.reducerPath]: generatedExerciseApi.reducer,
-    [vocabularyWordRequestsApi.reducerPath]: vocabularyWordRequestsApi.reducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
       serializableCheck: false,
-    }).concat(
-      appApi.middleware,
-      vocabularyPoolApi.middleware,
-      vocabularyApi.middleware,
-      generatedExerciseApi.middleware,
-      vocabularyWordRequestsApi.middleware
-    ),
+    }).concat(appApi.middleware, generatedExerciseApi.middleware),
 });
 
 setupListeners(store.dispatch);
