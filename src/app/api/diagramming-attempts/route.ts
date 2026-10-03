@@ -11,6 +11,7 @@ import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import type { Lesson } from '@/src/types/lesson';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -228,7 +229,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ id: document.id }, { status: 201 });
   } catch (error) {
-    console.error('diagramming_attempt_write_failed', error);
-    return NextResponse.json({ error: 'Unable to record diagramming attempt' }, { status: 500 });
+    return routeErrorResponse(error, 'record diagramming attempt', { surface: 'diagramming_attempt_write_failed' });
   }
 }
