@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminStorage } from '@/src/services/firebase-admin';
-import { getAuth } from 'firebase-admin/auth';
+import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { parseLessonAudioPath } from '@/src/lib/lesson-audio-path.server';
 
 export async function POST(req: NextRequest) {
-  const authToken = req.headers.get('authorization')?.split('Bearer ')[1];
-  if (!authToken) {
-    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  }
-
-  try {
-    // Verify the user is authenticated
-    await getAuth().verifyIdToken(authToken);
-  } catch (error) {
-    console.error('Error verifying auth token for signed URL:', error);
+  if (!(await verifyRequestAuth(req))) {
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 

@@ -7,7 +7,8 @@ import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
 import { parseExerciseAnswer } from '@/src/lib/tests/answer-schemas';
 import { testAttemptDocumentSchema } from '@/src/lib/tests/schemas';
-import { adminAuth, adminDb } from '@/src/services/firebase-admin';
+import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
+import { adminDb } from '@/src/services/firebase-admin';
 import type { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import type { Lesson } from '@/src/types/lesson';
 
@@ -129,16 +130,8 @@ async function resolveTestAuditSource(
 
 export async function POST(request: NextRequest) {
   try {
-    const authorization = request.headers.get('authorization');
-    const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : null;
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    let user: { uid: string };
-    try {
-      user = await adminAuth.verifyIdToken(token);
-    } catch {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const user = await verifyRequestAuth(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const requestBody: unknown = await request.json();
     if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) {
