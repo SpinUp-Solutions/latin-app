@@ -71,6 +71,7 @@ class FakeQuery {
     const version = () => this.documents.versions.get(key) ?? 1;
     const ref = {
       id,
+      path: key,
       get: async () => {
         this.documents.reads.push(key);
         return snapshot(id, this.collections[this.collectionName]?.[id], ref, version());
@@ -127,8 +128,36 @@ const createFakeDb = (collections: Record<string, Record<string, RecordData>>) =
   const documents: DocumentLog = { reads: [], versions: new Map() };
   const db = {
     collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog, queryLog, documents),
-    runTransaction: <T>(run: (transaction: unknown) => Promise<T>) =>
-      run({ get: (target: { get: () => Promise<unknown> }) => target.get(), getAll: db.getAll }),
+    /**
+     * Applies a transaction's updates only if every document it read is unchanged,
+     * and otherwise runs it again, as Firestore does.
+     */
+    runTransaction: async <T>(run: (transaction: unknown) => Promise<T>): Promise<T> => {
+      for (let attempt = 1; ; attempt += 1) {
+        const versionsRead = new Map<string, number>();
+        const updates: Array<() => Promise<void>> = [];
+        const observe = <S>(read: S): S => {
+          const document = read as { ref?: { path?: string }; updateTime?: number };
+          if (document.ref?.path && document.updateTime !== undefined) {
+            versionsRead.set(document.ref.path, document.updateTime);
+          }
+          return read;
+        };
+        const result = await run({
+          get: async (target: { get: () => Promise<unknown> }) => observe(await target.get()),
+          getAll: async (...inputs: Parameters<typeof db.getAll>) => (await db.getAll(...inputs)).map(observe),
+          update: (ref: { update: (changes: RecordData) => Promise<void> }, changes: RecordData) => {
+            updates.push(() => ref.update(changes));
+          },
+        });
+        const unchanged = [...versionsRead].every(([path, version]) => (documents.versions.get(path) ?? 1) === version);
+        if (unchanged) {
+          for (const update of updates) await update();
+          return result;
+        }
+        if (attempt === 5) throw Object.assign(new Error('Too much contention on these documents'), { code: 10 });
+      }
+    },
     getAll: async (
       ...inputs: Array<{ get?: () => Promise<ReturnType<typeof snapshot>> } | { fieldMask: string[] }>
     ) => {
@@ -149,7 +178,8 @@ const createFakeDb = (collections: Record<string, Record<string, RecordData>>) =
             Object.fromEntries(
               fieldMask.filter(field => value[field] !== undefined).map(field => [field, value[field]])
             ),
-            full.ref
+            full.ref,
+            full.updateTime
           );
         })
       );
@@ -1180,15 +1210,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     });
 
     it('stores a completion that a lesson edit produced, with its completion time', async () => {
-      const twoExerciseLesson = staleLesson({
-        pages: [
-          { id: 'page-1', items: [{ id: 'exercise-a', type: 'fill', title: 'A' }] },
-          { id: 'page-2', items: [{ id: 'exercise-b', type: 'fill', title: 'B' }] },
-        ],
-        totalPages: 2,
-        totalExercises: 2,
-      });
-      const { service, stored, documents } = setup(twoExerciseLesson, staleProgress({ furthestPageIndex: 1 }));
+      const { service, stored, documents } = setup(twoExerciseLesson(), staleProgress({ furthestPageIndex: 1 }));
 
       expect(await editedUnit(service)).toMatchObject({ status: 'completed', progress: 100 });
       expect(stored()).toMatchObject({
@@ -1206,30 +1228,83 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
       expect(documents.reads.sort()).toEqual(['learningPaths/default', 'lessons/edited']);
     });
 
-    it('leaves a progress record alone when the student wrote to it after it was read', async () => {
-      const { service, stored, db } = setup(staleLesson(), staleProgress());
-      const studentWrite = staleProgress({
-        progress: 100,
-        status: 'completed',
-        progressLessonVersion: 2,
-        updatedAt: 'during the dashboard load',
+    const twoExerciseLesson = () =>
+      staleLesson({
+        pages: [
+          { id: 'page-1', items: [{ id: 'exercise-a', type: 'fill', title: 'A' }] },
+          { id: 'page-2', items: [{ id: 'exercise-b', type: 'fill', title: 'B' }] },
+        ],
+        totalPages: 2,
+        totalExercises: 2,
       });
-      // The student's write lands after the dashboard has read the record and before it stores the summary.
+    /** Runs `change` once, after the refresh has read the progress record and before it stores the summary. */
+    const changeAfterRefreshReads = (db: ReturnType<typeof setup>['db'], change: () => Promise<void>) => {
       const getAll = db.getAll;
+      let changed = false;
       db.getAll = async (...refs: Parameters<typeof getAll>) => {
         const snapshots = await getAll(...refs);
-        if (snapshots.some(document => document.id === 'user_edited')) {
-          await db.collection('userProgress').doc('user_edited').update(studentWrite);
+        if (!changed && snapshots.some(document => document.id === 'user_edited')) {
+          changed = true;
+          await change();
         }
         return snapshots;
       };
+    };
+
+    it('does not store a completion against a lesson that gained an exercise before the write', async () => {
+      const { service, stored, db, documents } = setup(twoExerciseLesson(), staleProgress({ furthestPageIndex: 1 }));
+      changeAfterRefreshReads(db, () =>
+        db
+          .collection('lessons')
+          .doc('edited')
+          .update(staleLesson({ version: 3 }))
+      );
       const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
       await editedUnit(service);
 
+      expect(stored()).toEqual(
+        staleProgress({
+          furthestPageIndex: 1,
+          progress: 67,
+          completedExerciseCount: 2,
+          requiredExerciseCount: 3,
+          progressLessonVersion: 3,
+        })
+      );
+      documents.reads.length = 0;
+      expect(await editedUnit(service)).toMatchObject({ status: 'in-progress', progress: 67 });
+      expect(documents.reads).not.toContain('userProgress/user_edited');
+      consoleError.mockRestore();
+    });
+
+    it('leaves a progress record alone when the student wrote to it after it was read', async () => {
+      const { service, stored, db } = setup(staleLesson(), staleProgress());
+      const studentWrite = staleProgress({
+        status: 'completed',
+        completedAt: 'during the dashboard load',
+        progressLessonVersion: 2,
+        exerciseProgress: [
+          ...exerciseHistory,
+          { exerciseId: 'exercise-c', score: 100, completedAt: 'during the dashboard load' },
+        ],
+        updatedAt: 'during the dashboard load',
+      });
+      changeAfterRefreshReads(db, () => db.collection('userProgress').doc('user_edited').update(studentWrite));
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      expect(await editedUnit(service)).toMatchObject({ status: 'completed', progress: 100 });
+
       expect(stored()).toEqual(studentWrite);
       expect(consoleError).not.toHaveBeenCalled();
       consoleError.mockRestore();
+    });
+
+    it('fails the dashboard when a stale record cannot be read, rather than showing it as untouched', async () => {
+      const { service, db } = setup(staleLesson(), staleProgress());
+      changeAfterRefreshReads(db, () => Promise.reject(new Error('Firestore unavailable')));
+
+      await expect(service.getDashboard('user')).rejects.toThrow('Firestore unavailable');
     });
 
     it('does not rewrite a record that predates the current progress schema', async () => {
