@@ -25,13 +25,12 @@ export const POOL_WORD_FIELDS = [
   'section',
 ] as const;
 
-export const buildAdvancedFilterParams = (
+export const buildWordFilterParams = (
   filters: PoolFilters,
   options?: {
     select?: string[];
     limit?: number;
     lastWordId?: string;
-    fetchAll?: boolean;
   }
 ): URLSearchParams => {
   const params = new URLSearchParams();
@@ -84,9 +83,7 @@ export const buildAdvancedFilterParams = (
     params.append('select', options.select.join(','));
   }
 
-  if (options?.fetchAll) {
-    params.append('fetchAll', 'true');
-  } else if (options?.limit !== undefined) {
+  if (options?.limit !== undefined) {
     params.append('limit', String(options.limit));
   }
 

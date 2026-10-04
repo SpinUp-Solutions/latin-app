@@ -29,11 +29,6 @@ export async function runVocabularyContentMutation<T>(
   });
 }
 
-export async function assertVocabularyContentMutationUnlocked(db: Firestore): Promise<void> {
-  const lock = await db.collection(CONTENT_SYNC_LOCK_COLLECTION).doc(CONTENT_SYNC_LOCK_ID).get();
-  if (lock.exists) throw new VocabularyContentSyncLockError();
-}
-
 const STORAGE_MUTATION_LOCK_LEASE_MS = 24 * 60 * 60 * 1000;
 
 /** Holds the singleton lock across a multi-transaction or cross-service mutation. */

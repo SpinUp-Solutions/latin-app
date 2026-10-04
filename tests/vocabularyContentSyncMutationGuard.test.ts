@@ -1,17 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  assertVocabularyContentMutationUnlocked,
   runVocabularyContentMutation,
   runVocabularyContentStorageMutation,
 } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 const guardedTransactionWriters = [
-  'src/app/api/admin/lessons/route.ts',
+  'src/lib/learning-units/lesson-save.server.ts',
+  'src/app/api/admin/lessons/recovery/[id]/route.ts',
   'src/app/api/admin/words/route.ts',
   'src/app/api/admin/vocabulary-pools/route.ts',
   'src/app/api/admin/vocabulary-pools/[poolId]/route.ts',
-  'src/app/api/admin/vocabulary-pools/[poolId]/words/route.ts',
   'src/app/api/admin/vocabulary-word-requests/[id]/approve/route.ts',
   'src/lib/learning-units/learning-path-service.ts',
   'src/lib/practice-categories/service.ts',
@@ -35,19 +34,6 @@ describe('vocabulary content maintenance mutation guard', () => {
       code: 'VOCABULARY_CONTENT_SYNC_IN_PROGRESS',
     });
     expect(callback).not.toHaveBeenCalled();
-  });
-
-  it('rejects Storage mutations while the same maintenance lock is active', async () => {
-    const db = {
-      collection: () => ({
-        doc: () => ({ get: async () => ({ exists: true, data: () => ({ ownerId: 'sync-owner' }) }) }),
-      }),
-    };
-
-    await expect(assertVocabularyContentMutationUnlocked(db as never)).rejects.toMatchObject({
-      status: 409,
-      code: 'VOCABULARY_CONTENT_SYNC_IN_PROGRESS',
-    });
   });
 
   it('owns the singleton lock for the full Storage callback and releases only its own lock', async () => {

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react';
-import { useGetGeneratedExerciseItemsQuery } from '@/src/store/api/advancedVocabularyApi';
+import { useGetGeneratedExerciseItemsQuery } from '@/src/store/api/generatedExerciseApi';
 
 export const RetainedPracticeSession = createContext(false);
 

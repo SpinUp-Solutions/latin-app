@@ -21,9 +21,9 @@ import {
 import { VerbConjugationSchema, type VerbConjugation } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import type { PoolFilters } from '@/src/types/pool-filters';
 
-interface AdvancedFiltersPanelProps {
+interface WordFiltersPanelProps {
   filters: PoolFilters & { limit?: number | 'all' };
-  onFiltersChange: (updates: Partial<AdvancedFiltersPanelProps['filters']>) => void;
+  onFiltersChange: (updates: Partial<WordFiltersPanelProps['filters']>) => void;
   onReset: () => void;
   onApply?: () => void;
   isLoading?: boolean;
@@ -62,7 +62,7 @@ const DEPONENT_OPTIONS = [
   { value: 'false', label: 'Not Deponent' },
 ] as const;
 
-export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
+export const WordFiltersPanel: React.FC<WordFiltersPanelProps> = ({
   filters,
   onFiltersChange,
   onReset,

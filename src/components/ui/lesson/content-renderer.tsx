@@ -51,7 +51,7 @@ import type {
   SingleFieldFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
 import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
-import type { GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
+import type { GeneratedExerciseQuerySource } from '@/src/store/api/generatedExerciseApi';
 
 export interface ResolvedGeneratedExerciseState {
   items: unknown[];

@@ -1,13 +1,13 @@
 import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
-import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 import { toVocabularyPoolSummary } from '@/src/utils/vocabularyPoolSummary';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,15 +60,6 @@ export async function GET(
       data: { pool },
     });
   } catch (error) {
-    if (error instanceof VocabularyPoolStateError)
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    console.error('Error fetching vocabulary pool summary:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return routeErrorResponse(error, 'fetch vocabulary pool summary');
   }
 }

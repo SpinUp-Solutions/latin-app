@@ -1,22 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
-import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { RequestError } from '@/src/lib/domain-error';
+import { parseLessonSaveInput, saveLessonInTransaction } from '@/src/lib/learning-units/lesson-save.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { getLessonContentCounts } from '@/src/utils/lessonSummary';
-import {
-  optionalPracticeCategoryIdsSchema,
-  optionalPracticeCategorySelectionsSchema,
-} from '@/src/lib/practice-categories/schemas';
-import { practiceCategoryService } from '@/src/lib/practice-categories/service';
-import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
-import {
-  assertLegacyNormalPlacementChangeAllowedInTransaction,
-  assertPlacedLessonReplacementAllowedInTransaction,
-} from '@/src/lib/learning-units/learning-path-service';
-import { lessonAuthoringInputSchema, lessonUnitDocumentSchema } from '@/src/lib/learning-units/schemas';
-import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 interface RouteParams {
@@ -25,15 +13,8 @@ interface RouteParams {
   }>;
 }
 
-class RecoveryRouteError extends Error {
-  constructor(
-    message: string,
-    public readonly status: 400 | 403 | 404 | 409
-  ) {
-    super(message);
-    this.name = 'RecoveryRouteError';
-  }
-}
+const recoveryNotFound = () => new RequestError(404, 'RECOVERY_NOT_FOUND', 'Recovery item not found');
+const recoveryForbidden = () => new RequestError(403, 'RECOVERY_FORBIDDEN', 'Forbidden');
 
 // POST - Retry save from recovery (creates or updates the lesson)
 export async function POST(request: NextRequest, { params }: RouteParams) {
@@ -43,130 +24,41 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { id: recoveryId } = await params;
     const recoveryRef = adminDb.collection('lesson_recovery').doc(recoveryId);
     const result = await runVocabularyContentMutation(adminDb, async transaction => {
-      const recoveryDoc = await transaction.get(recoveryRef);
-      if (!recoveryDoc.exists) {
-        throw new RecoveryRouteError('Recovery item not found', 404);
-      }
-      const recoveryData = recoveryDoc.data();
-      if (!recoveryData) {
-        throw new RecoveryRouteError('Recovery data is empty', 404);
-      }
-      if (recoveryData.userId !== user.uid) {
-        throw new RecoveryRouteError('Forbidden', 403);
-      }
+      const recoveryData = (await transaction.get(recoveryRef)).data();
+      if (!recoveryData) throw recoveryNotFound();
+      if (recoveryData.userId !== user.uid) throw recoveryForbidden();
       if (recoveryData.status !== 'pending') {
-        throw new RecoveryRouteError('Recovery item is no longer pending', 409);
+        throw new RequestError(409, 'RECOVERY_NOT_PENDING', 'Recovery item is no longer pending');
       }
 
-      const rawLesson = recoveryData.rawLessonData as Lesson;
-      if (!isLessonDocumentData(rawLesson)) {
-        throw new RecoveryRouteError('Recovery item does not contain a lesson', 400);
-      }
-      if (rawLesson.showWordSearch !== undefined && typeof rawLesson.showWordSearch !== 'boolean') {
-        throw new RecoveryRouteError('showWordSearch must be a boolean', 400);
-      }
-      const fallbackCategoryIds = rawLesson.practiceCategories?.map(category => category.id);
-      const practiceCategorySelections = optionalPracticeCategorySelectionsSchema.parse(
-        rawLesson.practiceCategorySelections
-      );
-      const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(
-        rawLesson.practiceCategoryIds ?? fallbackCategoryIds
-      );
-      const lesson = lessonAuthoringInputSchema.parse(rawLesson);
-      const lessonRef = adminDb.collection(LEARNING_UNITS_COLLECTION).doc(lesson.id);
-      const existingLessonDoc = await transaction.get(lessonRef);
-      const lessonExists = existingLessonDoc.exists;
-      const existingLesson = existingLessonDoc.data();
-      if (lessonExists && !isLessonDocumentData(existingLesson)) {
-        throw new RecoveryRouteError('A test cannot be recovered through the lesson endpoint', 404);
-      }
-      const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
-      const now = new Date().toISOString();
-      const lessonData = lessonUnitDocumentSchema.parse({
-        ...lesson,
-        kind: 'lesson' as const,
-        totalPages,
-        totalItems,
-        totalExercises,
-        updatedAt: now,
-        updatedBy: user.uid,
-        ...(lessonExists
-          ? {
-              createdAt: existingLesson?.createdAt || now,
-              createdBy: existingLesson?.createdBy || user.uid,
-              version: (existingLesson?.version || 0) + 1,
-              showWordSearch:
-                rawLesson.showWordSearch ??
-                (typeof existingLesson?.showWordSearch === 'boolean' ? existingLesson.showWordSearch : true),
-              isLive: existingLesson?.isLive ?? false,
-              liveOrder: existingLesson?.liveOrder ?? null,
-              publishedAt: existingLesson?.publishedAt || null,
-              publishedBy: existingLesson?.publishedBy || null,
-            }
-          : {
-              createdAt: now,
-              createdBy: user.uid,
-              version: 1,
-              showWordSearch: rawLesson.showWordSearch ?? false,
-              isLive: false,
-              liveOrder: null,
-              publishedAt: null,
-              publishedBy: null,
-            }),
-      });
-
-      await assertLegacyNormalPlacementChangeAllowedInTransaction(
+      // A recovered payload may carry the joined categories instead of their IDs.
+      const rawLesson = recoveryData.rawLessonData as Partial<Lesson> | undefined;
+      const fallbackCategoryIds = rawLesson?.practiceCategories?.map(category => category.id);
+      const saved = await saveLessonInTransaction(
         transaction,
         adminDb,
-        lessonExists ? existingLesson : undefined,
-        lessonData
+        parseLessonSaveInput(rawLesson, fallbackCategoryIds),
+        user.uid,
+        'create-or-update'
       );
-      await assertPlacedLessonReplacementAllowedInTransaction(transaction, adminDb, lesson.id, {
-        type: lessonData.type,
-        pages: lessonData.pages,
-      });
-      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
-        transaction,
-        adminDb,
-        lessonExists ? existingLesson : undefined,
-        lessonData
-      );
-      const assignments = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
-        lessonId: lesson.id,
-        lesson: lessonData,
-        ...(practiceCategorySelections !== undefined
-          ? { desiredCategorySelections: practiceCategorySelections }
-          : { desiredCategoryIds: lessonExists ? practiceCategoryIds : (practiceCategoryIds ?? []) }),
-        actorId: user.uid,
-      });
-      applyVocabularyPoolAssignmentRevisions();
-      transaction.set(lessonRef, lessonData);
-      transaction.update(recoveryRef, { status: 'recovered', recoveredAt: now });
-      return { lessonExists, lessonData, assignments };
+      transaction.update(recoveryRef, { status: 'recovered', recoveredAt: saved.lesson.updatedAt });
+      return saved;
     });
 
-    const lesson = result.lessonData;
+    const { lesson } = result;
     console.log(
-      `[RECOVERY] ${result.lessonExists ? 'Updated' : 'Created'} lesson "${lesson.title}" (${lesson.id}) from recovery by user ${user.uid}`
+      `[RECOVERY] ${result.created ? 'Created' : 'Updated'} lesson "${lesson.title}" (${lesson.id}) from recovery by user ${user.uid}`
     );
 
     return NextResponse.json({
       success: true,
-      lesson: {
-        ...result.lessonData,
-        practiceCategorySelections: result.assignments.practiceCategorySelections,
-        practiceCategoryIds: result.assignments.practiceCategoryIds,
-        practiceCategories: result.assignments.practiceCategories,
-      },
-      message: result.lessonExists
-        ? 'Lesson updated successfully from recovery'
-        : 'Lesson created successfully from recovery',
+      lesson,
+      message: result.created
+        ? 'Lesson created successfully from recovery'
+        : 'Lesson updated successfully from recovery',
     });
   } catch (error) {
-    if (error instanceof RecoveryRouteError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    return practiceCategoryRouteErrorResponse(error, 'retry lesson from recovery');
+    return routeErrorResponse(error, 'retry lesson from recovery');
   }
 }
 
@@ -178,14 +70,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { id: recoveryId } = await params;
 
     const recoveryDoc = await adminDb.collection('lesson_recovery').doc(recoveryId).get();
-    if (!recoveryDoc.exists) {
-      return NextResponse.json({ error: 'Recovery item not found' }, { status: 404 });
-    }
-
-    const recoveryData = recoveryDoc.data();
-    if (recoveryData?.userId !== user.uid) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    if (!recoveryDoc.exists) throw recoveryNotFound();
+    if (recoveryDoc.data()?.userId !== user.uid) throw recoveryForbidden();
 
     // Discarded rather than deleted to keep an audit trail.
     await adminDb.collection('lesson_recovery').doc(recoveryId).update({
@@ -200,12 +86,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       message: 'Recovery item discarded',
     });
   } catch (error) {
-    console.error('Error deleting recovery item:', error);
-    if (error instanceof Error) {
-      if (error.message === 'Unauthorized' || error.message === 'Forbidden') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    }
-    return NextResponse.json({ error: 'Failed to delete recovery item' }, { status: 500 });
+    return routeErrorResponse(error, 'discard recovery item');
   }
 }

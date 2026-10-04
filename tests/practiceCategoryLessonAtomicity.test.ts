@@ -11,7 +11,8 @@ jest.mock('@/src/lib/verifyAdminAccess', () => ({
 }));
 
 jest.mock('@/src/lib/practice-categories/service', () => {
-  class PracticeCategoryError extends Error {
+  const { DomainError } = jest.requireActual<typeof import('@/src/lib/domain-error')>('@/src/lib/domain-error');
+  class PracticeCategoryError extends DomainError {
     constructor(
       public readonly code: string,
       message: string,

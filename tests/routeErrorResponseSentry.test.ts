@@ -1,21 +1,23 @@
-import { createRouteErrorResponse } from '@/src/lib/route-error-response';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
+import { DomainError } from '@/src/lib/domain-error';
 import { AdminAccessError } from '@/src/lib/admin-access-error';
 import { captureException } from '@sentry/nextjs';
 import { ZodError } from 'zod';
 
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
-class DomainBoom extends Error {
+class DomainBoom extends DomainError {
   readonly code = 'DOMAIN_BOOM';
   readonly status = 409;
-  constructor(message = 'domain boom') {
+  constructor(
+    message = 'domain boom',
+    readonly details?: Record<string, unknown>
+  ) {
     super(message);
   }
 }
 
-const routeErrorResponse = createRouteErrorResponse(DomainBoom);
-
-describe('createRouteErrorResponse Sentry reporting', () => {
+describe('routeErrorResponse', () => {
   beforeEach(() => {
     (captureException as jest.Mock).mockClear();
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -48,13 +50,21 @@ describe('createRouteErrorResponse Sentry reporting', () => {
     expect(captureException).not.toHaveBeenCalled();
   });
 
-  it('does not report registered domain errors', () => {
-    const response = routeErrorResponse(new DomainBoom(), 'update') as unknown as { status: number };
+  it('answers a domain error with its status, message and code, without reporting it', () => {
+    const response = routeErrorResponse(new DomainBoom(), 'update') as unknown as { status: number; body: unknown };
     expect(response.status).toBe(409);
+    expect(response.body).toEqual({ error: 'domain boom', code: 'DOMAIN_BOOM' });
     expect(captureException).not.toHaveBeenCalled();
   });
 
-  it('never passes through the message of an unregistered error that has a status', () => {
+  it('includes the details of a domain error in the response body', () => {
+    const response = routeErrorResponse(new DomainBoom('incomplete', { missing: ['a'] }), 'finish') as unknown as {
+      body: unknown;
+    };
+    expect(response.body).toEqual({ error: 'incomplete', code: 'DOMAIN_BOOM', missing: ['a'] });
+  });
+
+  it('never passes through the message of an error that is not a domain error, even one with a status', () => {
     const sdkError = Object.assign(new Error('POST https://iamcredentials.googleapis.com/ sa@project.iam'), {
       status: 403,
       code: 'ERR_BAD_REQUEST',

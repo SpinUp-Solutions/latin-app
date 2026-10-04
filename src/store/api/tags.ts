@@ -18,6 +18,17 @@ export const APP_API_TAG_TYPES = [
   'FeedbackList',
   'FeedbackDetail',
   'FeedbackCount',
+  // Vocabulary words, pools and word requests.
+  'Word',
+  'WordList',
+  'WordCounts',
+  'PoolContent',
+  'Pool',
+  'PoolList',
+  'PoolUsage',
+  'AvailableWords',
+  'VocabularyWordRequest',
+  'VocabularyWordRequestList',
 ] as const;
 
 export const PRACTICE_CATEGORY_ASSIGNMENTS_TAG = {
@@ -29,6 +40,9 @@ export const PRACTICE_CATEGORY_ASSIGNMENTS_TAG = {
 export const STUDENT_DASHBOARD_TAG = {
   type: 'StudentLearningPath' as const,
 };
+
+/** Student pool playback. Editing or deleting a word changes what every loaded pool shows. */
+export const STUDENT_POOLS_TAG = { type: 'Pool' as const, id: 'STUDENT_LIST' };
 
 /** TestVersion tag id covering every version listed on one test's detail page. */
 export const testVersionsForTestTag = (testId: string) => `FOR_TEST:${testId}`;

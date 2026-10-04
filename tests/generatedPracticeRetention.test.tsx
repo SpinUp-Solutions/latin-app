@@ -2,7 +2,7 @@ import React from 'react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { advancedVocabularyApi } from '@/src/store/api/advancedVocabularyApi';
+import { generatedExerciseApi } from '@/src/store/api/generatedExerciseApi';
 import { RetainedLessonPages } from '@/src/components/ui/lesson/retained-lesson-pages';
 import PageTemplate from '@/src/components/ui/lesson/page-template';
 import type { Page } from '@/src/types/lesson';
@@ -50,8 +50,8 @@ it('retains the generated sample and progress after the real query cache expires
     },
   });
   const store = configureStore({
-    reducer: { [advancedVocabularyApi.reducerPath]: advancedVocabularyApi.reducer },
-    middleware: getDefault => getDefault().concat(advancedVocabularyApi.middleware),
+    reducer: { [generatedExerciseApi.reducerPath]: generatedExerciseApi.reducer },
+    middleware: getDefault => getDefault().concat(generatedExerciseApi.middleware),
   });
   const viewAt = (index: number) => (
     <Provider store={store}>
@@ -77,7 +77,7 @@ it('retains the generated sample and progress after the real query cache expires
   await act(async () => {
     jest.advanceTimersByTime(65000);
   });
-  expect(Object.keys(store.getState()[advancedVocabularyApi.reducerPath].queries)).toHaveLength(0);
+  expect(Object.keys(store.getState()[generatedExerciseApi.reducerPath].queries)).toHaveLength(0);
   mockQuery.mockResolvedValue({ data: { items: [] } });
   view.rerender(viewAt(0));
   await act(async () => {});
@@ -86,6 +86,6 @@ it('retains the generated sample and progress after the real query cache expires
   expect(screen.getByRole('textbox')).toHaveValue('draft two');
   expect(screen.getByText('1 of 2 complete (50%)')).toBeInTheDocument();
   cleanup();
-  store.dispatch(advancedVocabularyApi.util.resetApiState());
+  store.dispatch(generatedExerciseApi.util.resetApiState());
   jest.useRealTimers();
 });

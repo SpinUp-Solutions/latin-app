@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { updateTestVersionDraftInputSchema } from '@/src/lib/tests/schemas';
 import { testAuthoringService } from '@/src/lib/tests/authoring-service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -17,6 +17,6 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const result = await testAuthoringService.updateTestVersionDraft(testId, versionId, input, actor.uid);
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    return testRouteErrorResponse(error, 'save inactive test version');
+    return routeErrorResponse(error, 'save inactive test version');
   }
 }

@@ -4,7 +4,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
 import { TestVersionPreview } from '@/src/components/ui/admin/test-version/TestVersionPreview';
-import { advancedVocabularyApi } from '@/src/store/api/advancedVocabularyApi';
+import { generatedExerciseApi } from '@/src/store/api/generatedExerciseApi';
 import type { Page } from '@/src/types/page';
 
 const mockBaseQuery = jest.fn();
@@ -83,8 +83,8 @@ const pages = [
 
 function renderPreview(previewPages: Page[]) {
   const store = configureStore({
-    reducer: { [advancedVocabularyApi.reducerPath]: advancedVocabularyApi.reducer },
-    middleware: get => get().concat(advancedVocabularyApi.middleware),
+    reducer: { [generatedExerciseApi.reducerPath]: generatedExerciseApi.reducer },
+    middleware: get => get().concat(generatedExerciseApi.middleware),
   });
   const view = (next: Page[]) => (
     <Provider store={store}>

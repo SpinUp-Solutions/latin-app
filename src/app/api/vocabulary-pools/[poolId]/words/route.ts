@@ -1,10 +1,10 @@
-import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { Word } from '@/src/types/admin-vocabulary';
-import { AdminAccessError, verifyAuthenticatedAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAuthenticatedAccess } from '@/src/lib/verifyAdminAccess';
 import { getReadableVocabularyPool, loadVocabularyPoolWords } from '@/src/lib/vocabulary-pools/archive.server';
 import { toVocabularyPoolStudyItems } from '@/src/utils/vocabularyPoolStudy';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 const MAX_STUDY_POOL_WORDS = 200;
@@ -56,15 +56,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    if (error instanceof VocabularyPoolStateError)
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    console.error('Error fetching vocabulary pool words:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return routeErrorResponse(error, 'fetch vocabulary pool words');
   }
 }

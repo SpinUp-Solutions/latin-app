@@ -1,8 +1,9 @@
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { MAX_VOCABULARY_POOL_WORD_ADDITIONS } from '@/src/lib/vocabulary-pools/limits';
+import { DomainError } from '@/src/lib/domain-error';
 
-export class VocabularyPoolWordMembershipError extends Error {
+export class VocabularyPoolWordMembershipError extends DomainError {
   readonly status = 409;
   readonly code = 'VOCABULARY_POOL_WORDS_MISSING';
 

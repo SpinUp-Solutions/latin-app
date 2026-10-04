@@ -29,7 +29,6 @@ import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { fetchVocabularyBackup } from '@/src/services/vocabularyBackupService';
 
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
@@ -53,19 +52,15 @@ function AdminVocabularyPage() {
     pools: { id: string; name: string }[];
     confirmationToken: string;
   } | null>(null);
-  const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
   const searchPending = filters.search !== debouncedSearch;
   const queryArgs = {
     wordType: filters.wordType,
     search: debouncedSearch,
     lastWordId: searchPending ? null : lastWordId,
-    collection: TARGET_COLLECTION,
   };
 
   const { data, isLoading, isFetching } = useGetWordsQuery(queryArgs);
-  const { data: wordTypeCounts = {}, isLoading: countsLoading } = useGetWordTypeCountsQuery({
-    collection: TARGET_COLLECTION,
-  });
+  const { data: wordTypeCounts = {}, isLoading: countsLoading } = useGetWordTypeCountsQuery();
   const [updateWord, { isLoading: updating }] = useUpdateWordMutation();
   const [createWord, { isLoading: creating }] = useCreateWordMutation();
   const [deleteWord] = useDeleteWordMutation();
@@ -129,7 +124,7 @@ function AdminVocabularyPage() {
       delete cleanedUpdates.random_index;
 
       console.debug('VocabularyPage cleaned updates', cleanedUpdates);
-      await updateWord({ wordId: selectedWordId, updates: cleanedUpdates, collection: TARGET_COLLECTION }).unwrap();
+      await updateWord({ wordId: selectedWordId, updates: cleanedUpdates }).unwrap();
       toast.success('Word updated successfully');
       return true;
     } catch (error) {
@@ -153,7 +148,6 @@ function AdminVocabularyPage() {
 
         const created = await createWord({
           wordData: wordData as Omit<VocabularyWord, 'createdAt' | 'updatedAt'>,
-          collection: TARGET_COLLECTION,
         }).unwrap();
 
         toast.success('Word created successfully');
@@ -239,7 +233,7 @@ function AdminVocabularyPage() {
 
   const handleBackup = async () => {
     try {
-      const { blob, filename } = await fetchVocabularyBackup(TARGET_COLLECTION);
+      const { blob, filename } = await fetchVocabularyBackup();
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = objectUrl;

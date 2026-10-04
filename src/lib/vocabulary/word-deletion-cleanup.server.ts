@@ -2,11 +2,14 @@ import { FieldPath, type Firestore } from 'firebase-admin/firestore';
 import { VOCABULARY_POOL_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { RequestError } from '@/src/lib/domain-error';
 
 export const WORD_DELETION_POOL_CLEANUP_BATCH_SIZE = 150;
 const CLEANED_POOL_NAME_SAMPLE_SIZE = 20;
 export const WORD_DELETION_POOL_SCAN_PAGE_SIZE = 200;
 export const WORD_DELETION_POOL_WARNING_SAMPLE_SIZE = 100;
+
+export const wordNotFound = () => new RequestError(404, 'WORD_NOT_FOUND', 'Word not found');
 
 type PendingDeletion = { actorUid?: unknown; tokenHash?: unknown };
 
@@ -59,7 +62,7 @@ export async function cleanupVocabularyWordPoolReferences(
   while (true) {
     const chunk = await runVocabularyContentMutation(db, async transaction => {
       const [wordDoc, currentPools] = await Promise.all([transaction.get(wordRef), transaction.get(poolsQuery)]);
-      if (!wordDoc.exists) throw new Error('Word not found');
+      if (!wordDoc.exists) throw wordNotFound();
       if (!isAuthorizedPendingDeletion(wordDoc.data()?._deletionPending, input.actorUid, input.tokenHash)) {
         throw new Error('Word deletion cleanup is not authorized');
       }

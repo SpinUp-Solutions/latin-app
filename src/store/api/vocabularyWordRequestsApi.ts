@@ -1,5 +1,4 @@
-import { createApi } from '@reduxjs/toolkit/query/react';
-import { createAuthenticatedBaseQuery } from './baseQuery';
+import { appApi, withSubscriptionDefaults } from './appApi';
 import type {
   RootWordCandidate,
   VocabularyWordRequest,
@@ -13,10 +12,7 @@ interface ApiResponse<T> {
   data: T;
 }
 
-export const vocabularyWordRequestsApi = createApi({
-  reducerPath: 'vocabularyWordRequestsApi',
-  baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['VocabularyWordRequest', 'VocabularyWordRequestList'],
+export const vocabularyWordRequestsApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getVocabularyWordRequests: builder.query<VocabularyWordRequest[], { status?: VocabularyWordRequestStatus }>({
       query: ({ status = 'pending' } = {}) => `/admin/vocabulary-word-requests?status=${status}`,
@@ -93,8 +89,13 @@ export const vocabularyWordRequestsApi = createApi({
   }),
 });
 
+/** The review page edits a request in place, so the list is refreshed by its own mutations only. */
+export const useGetVocabularyWordRequestsQuery = withSubscriptionDefaults(
+  vocabularyWordRequestsApi.useGetVocabularyWordRequestsQuery,
+  { refetchOnFocus: false, refetchOnReconnect: false, refetchOnMountOrArgChange: false }
+);
+
 export const {
-  useGetVocabularyWordRequestsQuery,
   useCreateVocabularyWordRequestMutation,
   useUpdateVocabularyWordRequestMutation,
   useApproveVocabularyWordRequestMutation,

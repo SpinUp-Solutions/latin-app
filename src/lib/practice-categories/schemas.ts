@@ -147,17 +147,6 @@ export const optionalPracticeCategoryIdsSchema = z
   .refine(uniqueIds, 'practiceCategoryIds must not contain duplicates')
   .optional();
 
-export const reconcilePracticeCategoryAssignmentsSchema = z
-  .object({
-    practiceCategorySelections: optionalPracticeCategorySelectionsSchema,
-    practiceCategoryIds: optionalPracticeCategoryIdsSchema,
-  })
-  .strict()
-  .refine(
-    value => value.practiceCategorySelections !== undefined || value.practiceCategoryIds !== undefined,
-    'practiceCategorySelections or practiceCategoryIds is required'
-  );
-
 export type CreatePracticeCategoryInput = z.infer<typeof createPracticeCategorySchema>;
 export type UpdatePracticeCategoryInput = z.infer<typeof updatePracticeCategorySchema>;
 export type CreatePracticeTagInput = z.infer<typeof createPracticeTagSchema>;

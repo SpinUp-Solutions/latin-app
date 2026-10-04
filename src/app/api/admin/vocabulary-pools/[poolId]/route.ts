@@ -11,7 +11,7 @@ import { FieldPath } from 'firebase-admin/firestore';
 import type { Word } from '@/src/types/admin-vocabulary';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { buildPoolSearchTokens } from '@/src/utils/vocabularyPoolSummary';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { scanVocabularyPoolUsages } from '@/src/lib/vocabulary-pools/usage.server';
 import {
   deletionChallengeDocumentId,
@@ -26,24 +26,22 @@ import {
   VOCABULARY_POOL_ARCHIVE_COLLECTION,
   VOCABULARY_POOL_COLLECTION,
   VOCABULARY_POOL_DELETION_CHALLENGE_COLLECTION,
-  VocabularyPoolArchiveIntegrityError,
   writeVocabularyPoolWordArchive,
 } from '@/src/lib/vocabulary-pools/archive.server';
 import {
   isVocabularyPoolCreationPending,
   VocabularyPoolStateError,
 } from '@/src/lib/vocabulary-pools/pool-state.server';
-import { VocabularyPoolWordMembershipError } from '@/src/lib/vocabulary-pools/word-membership.server';
 import {
   runVocabularyContentExclusiveMutation,
   runVocabularyContentMutation,
-  VocabularyContentSyncLockError,
 } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import {
   VOCABULARY_CONTENT_STATE_COLLECTION,
   VOCABULARY_CONTENT_STATE_ID,
   vocabularyContentRevision,
 } from '@/src/lib/vocabulary-pools/content-revision.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,43 +50,6 @@ const serializePoolMetadata = (metadata: FirebaseFirestore.DocumentData) => ({
   createdAt: metadata.createdAt?.toDate ? metadata.createdAt.toDate() : metadata.createdAt,
   updatedAt: metadata.updatedAt?.toDate ? metadata.updatedAt.toDate() : metadata.updatedAt,
 });
-
-const routeErrorResponse = (error: unknown, action: string) => {
-  if (error instanceof z.ZodError)
-    return NextResponse.json(
-      { success: false, error: 'Invalid pool update', code: 'VALIDATION_ERROR' },
-      { status: 400 }
-    );
-  if (error instanceof AdminAccessError) {
-    return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-  }
-  if (error instanceof VocabularyPoolDeletionError) {
-    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-  }
-  if (error instanceof VocabularyPoolArchiveIntegrityError) {
-    return NextResponse.json(
-      { success: false, error: error.message, code: 'VOCABULARY_POOL_ARCHIVE_INCOMPLETE' },
-      { status: 409 }
-    );
-  }
-  if (error instanceof VocabularyPoolWordMembershipError) {
-    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-  }
-  if (error instanceof VocabularyPoolStateError) {
-    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-  }
-  if (error instanceof VocabularyContentSyncLockError) {
-    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-  }
-
-  console.error(`Error ${action} vocabulary pool:`, error);
-  const notFound = error instanceof Error && error.message.includes('not found');
-  const status = notFound ? 404 : 500;
-  return NextResponse.json(
-    { success: false, error: notFound ? error.message : `Failed to ${action} vocabulary pool` },
-    { status }
-  );
-};
 
 export async function GET(
   request: NextRequest,
@@ -100,12 +61,12 @@ export async function GET(
 
     const poolDoc = await adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(poolId).get();
     if (!poolDoc.exists) {
-      throw new Error('Pool not found');
+      throw new VocabularyPoolStateError('Pool not found', 'VOCABULARY_POOL_NOT_FOUND', 404);
     }
 
     const poolData = await resolveVocabularyPool(adminDb, poolId, poolDoc.data() ?? {});
     if (!poolData) {
-      throw new Error('Pool data not found');
+      throw new VocabularyPoolStateError('Pool not found', 'VOCABULARY_POOL_NOT_FOUND', 404);
     }
 
     if (isVocabularyPoolCreationPending(poolData)) {
@@ -197,7 +158,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    return routeErrorResponse(error, 'fetch');
+    return routeErrorResponse(error, 'fetch vocabulary pool');
   }
 }
 
@@ -280,7 +241,7 @@ export async function PUT(
       },
     });
   } catch (error) {
-    return routeErrorResponse(error, 'update');
+    return routeErrorResponse(error, 'update vocabulary pool');
   }
 }
 
@@ -475,6 +436,6 @@ export async function DELETE(
       message: 'Pool deleted successfully',
     });
   } catch (error) {
-    return routeErrorResponse(error, 'delete');
+    return routeErrorResponse(error, 'delete vocabulary pool');
   }
 }

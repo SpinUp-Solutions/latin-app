@@ -6,8 +6,9 @@ import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import type { Lesson } from '@/src/types/lesson';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
 import { assertLegacyNormalPlacementAllowedInTransaction } from '@/src/lib/learning-units/learning-path-service';
-import { LearningPathServiceError } from '@/src/lib/learning-units/learning-path-errors';
+import { RequestError } from '@/src/lib/domain-error';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 interface UpdateRequest {
   lessonIds: string[];
@@ -18,16 +19,6 @@ interface UpdateRequest {
 }
 
 const LESSON_TYPES = new Set<UpdateRequest['lessonType']>(['normal', 'vocab', 'sentence-diagramming', 'listening']);
-
-class PublishStatusError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-    readonly details: Record<string, unknown> = {}
-  ) {
-    super(message);
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,15 +59,19 @@ export async function POST(request: NextRequest) {
       const lessonDocs = await transaction.getAll(...lessonRefs);
       const lessons = lessonDocs.map((lessonDoc, index) => {
         if (!lessonDoc.exists) {
-          throw new PublishStatusError(404, `Lesson ${lessonIds[index]} not found`);
+          throw new RequestError(404, 'LESSON_NOT_FOUND', `Lesson ${lessonIds[index]} not found`);
         }
 
         const data = lessonDoc.data();
         if (!isLessonDocumentData(data)) {
-          throw new PublishStatusError(400, `Document ${lessonIds[index]} is not a lesson`);
+          throw new RequestError(400, 'LESSON_INVALID', `Document ${lessonIds[index]} is not a lesson`);
         }
         if ((data.type || 'normal') !== lessonType) {
-          throw new PublishStatusError(409, `Lesson ${lessonIds[index]} does not belong to the active lesson type`);
+          throw new RequestError(
+            409,
+            'LESSON_TYPE_MISMATCH',
+            `Lesson ${lessonIds[index]} does not belong to the active lesson type`
+          );
         }
 
         return { data: data as Partial<Lesson>, ref: lessonRefs[index] };
@@ -95,7 +90,11 @@ export async function POST(request: NextRequest) {
         currentTypeLiveIds.length !== expectedLiveIds.size ||
         currentTypeLiveIds.some(id => !expectedLiveIds.has(id))
       ) {
-        throw new PublishStatusError(409, 'Live lessons changed since the page loaded. Refresh and try again.');
+        throw new RequestError(
+          409,
+          'STALE_LIVE_LESSONS',
+          'Live lessons changed since the page loaded. Refresh and try again.'
+        );
       }
 
       let nextOrder = startOrder;
@@ -111,7 +110,7 @@ export async function POST(request: NextRequest) {
         const requestedIds = new Set(lessonIds);
 
         if (currentTypeLiveIds.length > 0 && currentTypeLiveIds.every(id => requestedIds.has(id))) {
-          throw new PublishStatusError(409, 'At least one lesson of this type must remain live');
+          throw new RequestError(409, 'LAST_LIVE_LESSON', 'At least one lesson of this type must remain live');
         }
       }
 
@@ -122,7 +121,9 @@ export async function POST(request: NextRequest) {
         if (isLive) {
           const progressionErrors = validateLessonProgression({ pages: lessonData.pages || [] });
           if (progressionErrors.length > 0) {
-            throw new PublishStatusError(400, `Cannot publish lesson ${lessonRef.id}`, { progressionErrors });
+            throw new RequestError(400, 'LESSON_PROGRESSION_INVALID', `Cannot publish lesson ${lessonRef.id}`, {
+              progressionErrors,
+            });
           }
         }
 
@@ -153,13 +154,6 @@ export async function POST(request: NextRequest) {
       processedCount,
     });
   } catch (error) {
-    if (error instanceof PublishStatusError) {
-      return NextResponse.json({ error: error.message, ...error.details }, { status: error.status });
-    }
-    if (error instanceof LearningPathServiceError) {
-      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
-    }
-    console.error('Error updating lesson publish status:', error);
-    return NextResponse.json({ error: 'Failed to update lessons' }, { status: 500 });
+    return routeErrorResponse(error, 'update lesson publish status');
   }
 }
