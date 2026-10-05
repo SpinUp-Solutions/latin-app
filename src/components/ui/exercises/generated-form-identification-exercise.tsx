@@ -35,6 +35,7 @@ import type {
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { narrowFormIdentificationItem, type ResolvedFormIdentificationItem } from '@/src/lib/tests/generated-exercises';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
+import { MISSED_ANSWER_PROGRESSION_DELAY } from '@/src/utils/feedbackDefaults';
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
@@ -216,26 +217,30 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
       );
     }
     if (finalScore !== null) onCompletionAccepted?.(finalScore);
-    autoAdvanceIfEnabled(() => {
-      if (finalScore !== null) {
-        onComplete?.(finalScore);
-        return;
-      }
-      if (queueEnabled && !correct) {
-        const wordId = currentItem.wordId;
-        setWordAnswers(previous => ({ ...previous, [wordId]: {} }));
-        setMultiAnswerSlots(previous => ({ ...previous, [wordId]: [] }));
-        setSubmittedAnswers(previous => {
-          const next = { ...previous };
-          for (const item of items) if (item.wordId === wordId) delete next[item.id];
-          return next;
-        });
-        goToItem(requeueWord(currentIndex));
-      }
-      setUserAnswer('');
-      reset();
-      setIsProcessing(false);
-    }, false);
+    autoAdvanceIfEnabled(
+      () => {
+        if (finalScore !== null) {
+          onComplete?.(finalScore);
+          return;
+        }
+        if (queueEnabled && !correct) {
+          const wordId = currentItem.wordId;
+          setWordAnswers(previous => ({ ...previous, [wordId]: {} }));
+          setMultiAnswerSlots(previous => ({ ...previous, [wordId]: [] }));
+          setSubmittedAnswers(previous => {
+            const next = { ...previous };
+            for (const item of items) if (item.wordId === wordId) delete next[item.id];
+            return next;
+          });
+          goToItem(requeueWord(currentIndex));
+        }
+        setUserAnswer('');
+        reset();
+        setIsProcessing(false);
+      },
+      false,
+      correct ? 0 : MISSED_ANSWER_PROGRESSION_DELAY
+    );
   };
 
   const continueTest = () => {

@@ -99,7 +99,7 @@ export function useExerciseProgression({
   );
 
   const autoAdvanceIfEnabled = useCallback(
-    (afterAdvance: () => void, hasVisibleExplanation: boolean) => {
+    (afterAdvance: () => void, hasVisibleExplanation: boolean, minimumDelay = 0) => {
       clearAutoAdvanceTimer();
 
       const autoAdvance = progressionRules?.autoAdvanceOnCorrect ?? false;
@@ -115,7 +115,7 @@ export function useExerciseProgression({
         pendingAdvanceRef.current = advance;
         setIsAwaitingConfirmation(true);
       } else {
-        const delay = itemProgressionDelay ?? DEFAULT_ITEM_PROGRESSION_DELAY;
+        const delay = Math.max(itemProgressionDelay ?? DEFAULT_ITEM_PROGRESSION_DELAY, minimumDelay);
         pendingTimerCallbackRef.current = advance;
         remainingDelayRef.current = delay;
         timerDeadlineRef.current = Date.now() + delay;
