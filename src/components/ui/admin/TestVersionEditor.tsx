@@ -1,5 +1,6 @@
 'use client';
 
+import { toast } from 'sonner';
 import React, { useEffect, useMemo, useState } from 'react';
 import { shallowEqual } from 'react-redux';
 import { BookOpen, Eye, FileCheck2, Loader2, Save, ScrollText, SlidersHorizontal, Undo2 } from 'lucide-react';
@@ -242,10 +243,15 @@ export function TestVersionEditor({
     'Your test changes have not been saved. Leave this page anyway?'
   );
 
+  const reportSaveErrors = (messages: string[]) => {
+    setSaveErrors(messages);
+    toast.error(`The test could not be saved. ${messages[0]}`);
+  };
+
   const save = () => {
     if (!document || saving || savePendingRef.current) return;
     if (hasFormIdentificationIssues) {
-      setSaveErrors(formIdentificationIssues.map(formatFormIdentificationConfigurationIssue));
+      reportSaveErrors(formIdentificationIssues.map(formatFormIdentificationConfigurationIssue));
       return;
     }
     const version = {
@@ -276,7 +282,7 @@ export function TestVersionEditor({
     };
     const validation = (draftMode ? testVersionDraftInputSchema : testVersionInputSchema).safeParse(value.version);
     if (!validation.success) {
-      setSaveErrors(formatApiValidationIssues(validation.error.issues));
+      reportSaveErrors(formatApiValidationIssues(validation.error.issues));
       return;
     }
 
@@ -310,7 +316,7 @@ export function TestVersionEditor({
         }
       })
       .catch(error => {
-        setSaveErrors([getApiErrorMessage(error, 'The test could not be saved. Please try again.')]);
+        reportSaveErrors([getApiErrorMessage(error, 'Please try again.')]);
       })
       .finally(() => {
         savePendingRef.current = false;

@@ -12,6 +12,7 @@ jest.mock('@/src/components/ui/test/sectioned-test-player', () => ({
     buffer: {
       recordAnswer: (event: { exerciseId: string; answer: { type: 'fill'; answers: string[] } }) => void;
       flushPendingAnswers: () => Promise<void>;
+      answers: Record<string, { answers?: string[] }>;
     };
     uid: string;
     onSubmitted: (attempt: unknown) => void;
@@ -19,6 +20,7 @@ jest.mock('@/src/components/ui/test/sectioned-test-player', () => ({
   }) => (
     <div>
       <p>Test in progress</p>
+      <span data-testid="buffered-answers">{JSON.stringify(buffer.answers)}</span>
       <button
         onClick={() => {
           buffer.recordAnswer({ exerciseId: 'fill-one', answer: { type: 'fill', answers: ['one'] } });
@@ -822,7 +824,7 @@ describe('student normal test flow', () => {
     params.status = 'fulfilled';
     params.value = { testId: 'mock-1' };
 
-    render(
+    const rendered = render(
       <Suspense fallback={<div>Loading route</div>}>
         <StudentTestPage params={params} />
       </Suspense>
@@ -838,6 +840,32 @@ describe('student normal test flow', () => {
     expect(screen.queryByRole('button', { name: 'Start Mock Test' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Begin Mock Test' })).not.toBeInTheDocument();
     expect(mockStartAttempt).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Record two answers' }));
+    mockUseGetStudentMockDetailQuery.mockReturnValue({
+      data: { ...liveDetail, attempt: { id: startedAttempt.id } },
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetchMockDetail,
+    });
+    await act(async () => {
+      rendered.rerender(
+        <Suspense>
+          <StudentTestPage params={params} />
+        </Suspense>
+      );
+      await Promise.resolve();
+    });
+    expect(mockStartAttempt).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('buffered-answers')).toHaveTextContent('one');
+    expect(screen.getByTestId('buffered-answers')).toHaveTextContent('two');
+    fireEvent.click(screen.getByRole('button', { name: 'Exit test' }));
+    await waitFor(() =>
+      expect(mockSaveAnswers).toHaveBeenCalledWith(
+        expect.objectContaining({
+          answers: { 'fill-one': { type: 'fill', answers: ['one'] }, 'fill-two': { type: 'fill', answers: ['two'] } },
+        })
+      )
+    );
   });
 
   it('retries the failing mock-detail source', async () => {

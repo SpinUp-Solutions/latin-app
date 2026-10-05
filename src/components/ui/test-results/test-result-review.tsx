@@ -13,7 +13,7 @@ import ConjugationTable from '@/src/components/ui/lesson/conjugation-table';
 import TextComponent from '@/src/components/ui/lesson/text-component';
 import { VocabularyViewer } from '@/src/components/ui/lesson/VocabularyViewer';
 import { VocabularyPoolViewer } from '@/src/components/ui/lesson/VocabularyPoolViewer';
-import { formatScorePoints } from '@/src/lib/tests/formatting';
+import { formatScorePercentage, formatScorePoints } from '@/src/lib/tests/formatting';
 import { cn } from '@/src/lib/utils';
 import { downloadSubmittedTestResultPdf, saveBlobAsFile } from '@/src/services/testResultPdfService';
 import type {
@@ -198,7 +198,7 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
           <div className="h-1.5 bg-roman-red" />
           <div className="space-y-4 p-6 text-center sm:p-8">
             <h1 className="font-serif text-2xl text-slate-900 sm:text-3xl">Test result review</h1>
-            <div className="text-4xl font-semibold text-roman-red">{formatScorePoints(attempt.percentage)}%</div>
+            <div className="text-4xl font-semibold text-roman-red">{formatScorePercentage(attempt.percentage)}%</div>
             <p className="text-slate-700">
               {formatScorePoints(attempt.score)} / {formatScorePoints(attempt.maxScore)} points
             </p>
@@ -240,7 +240,11 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
                     <span
                       className={cn(
                         'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
-                        entry.correct ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        entry.correct
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : entry.awardedPoints > 0
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-red-100 text-red-800'
                       )}>
                       {entry.number}
                     </span>
