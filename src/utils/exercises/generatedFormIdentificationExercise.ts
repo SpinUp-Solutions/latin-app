@@ -23,45 +23,8 @@ export const validateSingleFieldFormIdentificationExercise = (
   userAnswer: string,
   currentItem: SingleFieldFormIdentificationItem
 ) => {
-  const validatedItem = SingleFieldFormIdentificationItemSchema.parse(currentItem);
-  const userPaths = userAnswer.split(';').map(pathStr => pathStr.split(',').map(normalizeAnswer));
-
-  if (
-    !normalizeAnswer(userAnswer) ||
-    userPaths.length !== validatedItem.primaryFormPaths.length ||
-    userPaths.some(userPath => userPath.length !== validatedItem.steps.length)
-  ) {
-    return { isCorrect: false };
-  }
-
-  const primaryPaths = validatedItem.primaryFormPaths;
-  const matchedPathIndices = new Set<number>();
-
-  for (const userPath of userPaths) {
-    let foundMatch = false;
-
-    for (let pathIdx = 0; pathIdx < primaryPaths.length; pathIdx++) {
-      if (matchedPathIndices.has(pathIdx)) continue;
-
-      const path = primaryPaths[pathIdx];
-      const pathStepValues = validatedItem.steps.map(step => path[step]);
-
-      if (pathStepValues.some(v => !v)) continue;
-
-      const variantsPerStep = pathStepValues.map(value => getAcceptedAnswersForStep(value || '').map(normalizeAnswer));
-      const matchesPath = userPath.every((userPart, index) => variantsPerStep[index].includes(userPart));
-
-      if (matchesPath) {
-        matchedPathIndices.add(pathIdx);
-        foundMatch = true;
-        break;
-      }
-    }
-
-    if (!foundMatch) return { isCorrect: false };
-  }
-
-  return { isCorrect: true };
+  const score = scoreSingleFieldFormIdentificationAnswer(userAnswer, currentItem);
+  return { isCorrect: score.availableUnits > 0 && score.earnedUnits === score.availableUnits };
 };
 
 export interface SingleFieldPartialCredit {
@@ -70,10 +33,9 @@ export interface SingleFieldPartialCredit {
 }
 
 /**
- * Scores each requested grammatical field independently. Submitted paths are
- * paired with distinct expected paths to produce the highest legitimate score.
- * The submitted answer must retain the authored path and field shape so extra
- * guesses cannot be hidden among otherwise valid partial answers.
+ * Preserves field-level credit for a single interpretation. Multiple expected
+ * or submitted interpretations earn credit only for complete, distinct parses;
+ * extra guesses reduce the fraction earned without changing the item's weight.
  */
 export const scoreSingleFieldFormIdentificationAnswer = (
   userAnswer: string,
@@ -83,36 +45,58 @@ export const scoreSingleFieldFormIdentificationAnswer = (
   const expectedPaths = validatedItem.primaryFormPaths;
   const steps = validatedItem.steps;
   const availableUnits = expectedPaths.length * steps.length;
-  const userPaths = userAnswer.split(';').map(path => path.split(',').map(normalizeAnswer));
-
-  if (userPaths.length !== expectedPaths.length || userPaths.some(path => path.length > steps.length)) {
-    return { earnedUnits: 0, availableUnits };
-  }
-
-  const pathScores = userPaths.map(userPath =>
-    expectedPaths.map(expectedPath =>
-      steps.reduce((score, step, stepIndex) => {
-        const expected = expectedPath[step];
-        if (!expected || !userPath[stepIndex]) return score;
-        const accepted = getAcceptedAnswersForStep(expected).map(normalizeAnswer);
-        return score + (accepted.includes(userPath[stepIndex]) ? 1 : 0);
-      }, 0)
-    )
+  // A trailing comma is harmless; internal empty fields still retain their positions.
+  const userPaths = userAnswer.split(';').map(path =>
+    path
+      .trim()
+      .replace(/(?:,\s*)+$/u, '')
+      .split(',')
+      .map(normalizeAnswer)
+  );
+  const acceptedPaths = expectedPaths.map(path =>
+    steps.map(step => (path[step] ? getAcceptedAnswersForStep(path[step]).map(normalizeAnswer) : []))
   );
 
-  const search = (userIndex: number, usedExpected: Set<number>): number => {
-    if (userIndex >= pathScores.length) return 0;
-    let best = search(userIndex + 1, usedExpected);
-    for (let expectedIndex = 0; expectedIndex < expectedPaths.length; expectedIndex++) {
-      if (usedExpected.has(expectedIndex)) continue;
-      usedExpected.add(expectedIndex);
-      best = Math.max(best, pathScores[userIndex][expectedIndex] + search(userIndex + 1, usedExpected));
-      usedExpected.delete(expectedIndex);
-    }
-    return best;
-  };
+  if (availableUnits === 0) return { earnedUnits: 0, availableUnits };
 
-  return { earnedUnits: search(0, new Set()), availableUnits };
+  if (expectedPaths.length === 1 && userPaths.length === 1) {
+    const userPath = userPaths[0];
+    if (userPath.length > steps.length) return { earnedUnits: 0, availableUnits };
+    const earnedUnits = acceptedPaths[0].reduce(
+      (score, accepted, index) => score + (userPath[index] && accepted.includes(userPath[index]) ? 1 : 0),
+      0
+    );
+    return { earnedUnits, availableUnits };
+  }
+
+  const matchingPaths = userPaths.map(userPath =>
+    acceptedPaths.flatMap((path, index) =>
+      userPath.length === steps.length &&
+      userPath.every((value, stepIndex) => value !== '' && path[stepIndex].includes(value))
+        ? [index]
+        : []
+    )
+  );
+  const assignedUsers = expectedPaths.map(() => -1);
+  // Reassign earlier matches when aliases overlap so submitted order cannot affect credit.
+  const assignPath = (userIndex: number, visited: Set<number>): boolean => {
+    for (const expectedIndex of matchingPaths[userIndex]) {
+      if (visited.has(expectedIndex)) continue;
+      visited.add(expectedIndex);
+      const previousUser = assignedUsers[expectedIndex];
+      if (previousUser === -1 || assignPath(previousUser, visited)) {
+        assignedUsers[expectedIndex] = userIndex;
+        return true;
+      }
+    }
+    return false;
+  };
+  const matchedCount = userPaths.reduce((count, _, userIndex) => count + (assignPath(userIndex, new Set()) ? 1 : 0), 0);
+
+  return {
+    earnedUnits: (availableUnits * matchedCount) / Math.max(expectedPaths.length, userPaths.length),
+    availableUnits,
+  };
 };
 
 export const validateMultiAnswerStep = (userAnswer: string, currentItem: MultiAnswerFormIdentificationItem) => {

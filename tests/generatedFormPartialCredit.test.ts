@@ -1,4 +1,7 @@
-import { scoreSingleFieldFormIdentificationAnswer } from '@/src/utils/exercises/generatedFormIdentificationExercise';
+import {
+  scoreSingleFieldFormIdentificationAnswer,
+  validateSingleFieldFormIdentificationExercise,
+} from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import type { SingleFieldFormIdentificationItem } from '@/src/types/exercises/schemas/form-identification';
 
 const item: SingleFieldFormIdentificationItem = {
@@ -30,9 +33,9 @@ describe('single-field generated form partial credit', () => {
     });
   });
 
-  it('rejects extra paths instead of selecting the best submitted guess', () => {
+  it('reduces credit for extra guesses without changing the available units', () => {
     expect(scoreSingleFieldFormIdentificationAnswer('wrong,wrong,wrong;1st,pl,pres', item)).toEqual({
-      earnedUnits: 0,
+      earnedUnits: 1.5,
       availableUnits: 3,
     });
   });
@@ -64,6 +67,117 @@ describe('single-field generated form partial credit', () => {
     expect(scoreSingleFieldFormIdentificationAnswer('first,,present', item)).toEqual({
       earnedUnits: 2,
       availableUnits: 3,
+    });
+  });
+
+  it('awards half credit for one complete parse of a syncretic noun', () => {
+    const mare: SingleFieldFormIdentificationItem = {
+      ...item,
+      steps: ['case', 'number', 'gender'],
+      primaryFormPaths: [
+        { case: 'accusative', number: 'singular', gender: 'neuter' },
+        { case: 'nominative', number: 'singular', gender: 'neuter' },
+      ],
+    };
+    expect(scoreSingleFieldFormIdentificationAnswer('nom, s, n', mare)).toEqual({
+      earnedUnits: 3,
+      availableUnits: 6,
+    });
+    expect(validateSingleFieldFormIdentificationExercise('nom, s, n', mare).isCorrect).toBe(false);
+  });
+
+  it('gives zero for wrong cases even when number and gender match syncretic parses', () => {
+    const animus: SingleFieldFormIdentificationItem = {
+      ...item,
+      steps: ['case', 'number', 'gender'],
+      primaryFormPaths: [
+        { case: 'nominative', number: 'plural', gender: 'masculine' },
+        { case: 'genitive', number: 'singular', gender: 'masculine' },
+      ],
+    };
+    expect(scoreSingleFieldFormIdentificationAnswer('dat, s, m; abl, s, m', animus)).toEqual({
+      earnedUnits: 0,
+      availableUnits: 6,
+    });
+  });
+
+  it('accepts a trailing comma in an otherwise correct reordered answer', () => {
+    const poena: SingleFieldFormIdentificationItem = {
+      ...item,
+      steps: ['case', 'number', 'gender'],
+      primaryFormPaths: [
+        { case: 'nominative', number: 'plural', gender: 'feminine' },
+        { case: 'genitive', number: 'singular', gender: 'feminine' },
+        { case: 'dative', number: 'singular', gender: 'feminine' },
+      ],
+    };
+    const answer = 'gen, s, f; dat, s, f,; nom, pl, f';
+    expect(scoreSingleFieldFormIdentificationAnswer(answer, poena)).toEqual({
+      earnedUnits: 9,
+      availableUnits: 9,
+    });
+    expect(validateSingleFieldFormIdentificationExercise(answer, poena).isCorrect).toBe(true);
+  });
+
+  it('does not count the same correct parse twice or discard a valid parse beside a malformed one', () => {
+    const noun: SingleFieldFormIdentificationItem = {
+      ...item,
+      steps: ['case', 'number'],
+      primaryFormPaths: [
+        { case: 'nominative', number: 'singular' },
+        { case: 'accusative', number: 'plural' },
+      ],
+    };
+    for (const answer of ['nom,s;nom,s', 'nom,s;acc,,p', 'nom,s;acc,p,extra']) {
+      expect(scoreSingleFieldFormIdentificationAnswer(answer, noun)).toEqual({
+        earnedUnits: 2,
+        availableUnits: 4,
+      });
+    }
+  });
+
+  it('does not assemble a correct parse from fields in different interpretations', () => {
+    const noun: SingleFieldFormIdentificationItem = {
+      ...item,
+      steps: ['case', 'number'],
+      primaryFormPaths: [
+        { case: 'nominative', number: 'singular' },
+        { case: 'accusative', number: 'plural' },
+      ],
+    };
+    expect(scoreSingleFieldFormIdentificationAnswer('nom,p;acc,s', noun)).toEqual({
+      earnedUnits: 0,
+      availableUnits: 4,
+    });
+  });
+
+  it('reassigns overlapping aliases so complete-match credit is independent of order', () => {
+    const noun: SingleFieldFormIdentificationItem = {
+      ...item,
+      steps: ['gender'],
+      primaryFormPaths: [{ gender: 'masculine-feminine' }, { gender: 'masculine' }],
+    };
+    for (const answer of ['m;f', 'f;m']) {
+      expect(scoreSingleFieldFormIdentificationAnswer(answer, noun)).toEqual({
+        earnedUnits: 2,
+        availableUnits: 2,
+      });
+      expect(validateSingleFieldFormIdentificationExercise(answer, noun).isCorrect).toBe(true);
+    }
+  });
+
+  it.each(['', '   ', ',,;,,', 'nom,s;'])('gives zero for an answer with no complete correct parse: %j', answer => {
+    const noun: SingleFieldFormIdentificationItem = {
+      ...item,
+      steps: ['case', 'number', 'gender'],
+      primaryFormPaths: [
+        { case: 'nominative', number: 'singular', gender: 'neuter' },
+        { case: 'accusative', number: 'singular', gender: 'neuter' },
+      ],
+    };
+    expect(scoreSingleFieldFormIdentificationAnswer(answer, noun)).toEqual({
+      earnedUnits: 0,
+      availableUnits: 6,
     });
   });
 });
