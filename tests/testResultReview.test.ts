@@ -573,13 +573,14 @@ describe('submitted test review snapshot', () => {
   });
 
   it('keeps frozen grading, submitted review, and PDF marks consistent for the reported noun answers', () => {
+    // Every word is worth the same six points, however many answers it expects.
+    const maxPoints = 6;
     const cases = [
       {
         id: 'mare',
         form: 'mare',
         answer: 'nom, s, n',
         awardedPoints: 3,
-        maxPoints: 6,
         paths: [
           { case: 'accusative', number: 'singular', gender: 'neuter' },
           { case: 'nominative', number: 'singular', gender: 'neuter' },
@@ -590,7 +591,6 @@ describe('submitted test review snapshot', () => {
         form: 'modō',
         answer: 'dat, s, m',
         awardedPoints: 3,
-        maxPoints: 6,
         paths: [
           { case: 'dative', number: 'singular', gender: 'masculine' },
           { case: 'ablative', number: 'singular', gender: 'masculine' },
@@ -600,24 +600,21 @@ describe('submitted test review snapshot', () => {
         id: 'nauta',
         form: 'nautās',
         answer: 'abl, pl, m; dat, pl, m',
-        awardedPoints: 0,
-        maxPoints: 3,
+        awardedPoints: 2,
         paths: [{ case: 'accusative', number: 'plural', gender: 'masculine' }],
       },
       {
         id: 'miles',
         form: 'mīlite',
         answer: 'dat, s, m; abl, s, m',
-        awardedPoints: 1.5,
-        maxPoints: 3,
+        awardedPoints: 3,
         paths: [{ case: 'ablative', number: 'singular', gender: 'masculine' }],
       },
       {
         id: 'animus',
         form: 'animī',
         answer: 'dat, s, m; abl, s, m',
-        awardedPoints: 0,
-        maxPoints: 6,
+        awardedPoints: 3,
         paths: [
           { case: 'nominative', number: 'plural', gender: 'masculine' },
           { case: 'genitive', number: 'singular', gender: 'masculine' },
@@ -627,8 +624,7 @@ describe('submitted test review snapshot', () => {
         id: 'poena',
         form: 'poenae',
         answer: 'gen, s, f; dat, s, f,; nom, pl, f',
-        awardedPoints: 9,
-        maxPoints: 9,
+        awardedPoints: 6,
         paths: [
           { case: 'nominative', number: 'plural', gender: 'feminine' },
           { case: 'genitive', number: 'singular', gender: 'feminine' },
@@ -647,7 +643,7 @@ describe('submitted test review snapshot', () => {
       correctAnswerDisplay: entry.paths.map(path => [path.case, path.number, path.gender].join(',')).join(';'),
     }));
     const exercise = generatedFormIdentificationExercise('single-field');
-    exercise.maxPoints = 33;
+    exercise.maxPoints = maxPoints * cases.length;
     const pages = [{ id: 'page-0', items: [exercise] }];
     const resolvedExercises = { [exercise.id]: { items } };
     const answers = {
@@ -657,7 +653,8 @@ describe('submitted test review snapshot', () => {
       },
     };
     const score = gradeFrozenTestDelivery({ versionId: 'version-1', pages, resolvedExercises }, answers);
-    expect(score).toMatchObject({ awardedPoints: 16.5, maxPoints: 33 });
+    expect(score.awardedPoints).toBeCloseTo(20);
+    expect(score.maxPoints).toBe(36);
     const exerciseResults = Object.fromEntries(score.exerciseResults.map(result => [result.exerciseId, result]));
     const review = buildReview(pages, { resolvedExercises, answers, exerciseResults });
     const item = exerciseItem(review, 'generated-form-identification') as Extract<
@@ -668,8 +665,8 @@ describe('submitted test review snapshot', () => {
       cases.map(entry => ({
         id: entry.id,
         value: entry.answer,
-        correct: entry.awardedPoints === entry.maxPoints,
-        points: { awardedPoints: entry.awardedPoints, maxPoints: entry.maxPoints },
+        correct: entry.awardedPoints === maxPoints,
+        points: { awardedPoints: entry.awardedPoints, maxPoints },
       }))
     );
 
@@ -687,7 +684,7 @@ describe('submitted test review snapshot', () => {
           status: 'submitted',
           score: score.awardedPoints,
           maxScore: score.maxPoints,
-          percentage: 50,
+          percentage: (100 * score.awardedPoints) / score.maxPoints,
           outcome: 'score-only',
           exerciseResults,
         },
@@ -699,8 +696,8 @@ describe('submitted test review snapshot', () => {
     for (const entry of cases) {
       const mark = pdf.exercises[0].groups.find(group => group.heading === `${entry.id} — case · number · gender`);
       const status =
-        entry.awardedPoints === entry.maxPoints ? 'Correct' : entry.awardedPoints > 0 ? 'Partly correct' : 'Incorrect';
-      expect(mark?.lines).toContain(`${status} · ${entry.awardedPoints} / ${entry.maxPoints} points`);
+        entry.awardedPoints === maxPoints ? 'Correct' : entry.awardedPoints > 0 ? 'Partly correct' : 'Incorrect';
+      expect(mark?.lines).toContain(`${status} · ${entry.awardedPoints} / ${maxPoints} points`);
     }
   });
 
