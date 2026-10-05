@@ -108,7 +108,7 @@ export const scoreSingleFieldFormIdentificationAnswer = (
 
   const acceptedValues = (paths: typeof expectedPaths) =>
     paths.map(path =>
-      steps.map(step => (path[step] ? getAcceptedAnswersForStep(path[step]).map(normalizeAnswer) : []))
+      steps.map(step => (path[step] ? getAcceptedAnswersForStep(step, path[step]).map(normalizeAnswer) : []))
     );
   const acceptedPaths = acceptedValues(expectedPaths);
   const unaskedPaths = acceptedValues(validatedItem.optionalFormPaths);
@@ -175,7 +175,7 @@ export const validateMultiAnswerStep = (userAnswer: string, currentItem: MultiAn
   const normalizedUserParts = userParts.map(normalizeAnswer);
   const acceptedByPath = primaryPaths.map(path => {
     const value = path[step];
-    return value ? getAcceptedAnswersForStep(value).map(normalizeAnswer) : [];
+    return value ? getAcceptedAnswersForStep(step, value).map(normalizeAnswer) : [];
   });
   const userAssignedToPath = Array<number>(acceptedByPath.length).fill(-1);
   const assignUserToPath = (userIndex: number, visitedPaths: Set<number>): boolean => {
@@ -226,7 +226,7 @@ export const validatePartialMultiAnswerPaths = (
         const userValue = normalizeAnswer(partialPath[step] || '');
         const primaryValue = primaryPath[step];
         if (!primaryValue) return false;
-        return getAcceptedAnswersForStep(primaryValue).map(normalizeAnswer).includes(userValue);
+        return getAcceptedAnswersForStep(step, primaryValue).map(normalizeAnswer).includes(userValue);
       });
 
       if (!matches) continue;

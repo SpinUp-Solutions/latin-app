@@ -265,7 +265,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
             if (isSingleField && prepared) {
               const formatPath = (path: Record<string, string | undefined>) =>
                 wordSteps
-                  .map(step => (path[step] ? getDisplayForm(path[step]) : null))
+                  .map(step => (path[step] ? getDisplayForm(step, path[step]) : null))
                   .filter(Boolean)
                   .join(',');
 
@@ -309,6 +309,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                         if (!displayValue) return null;
 
                         const answers = getAcceptedAnswersForStep(
+                          step,
                           uniquePrimaryValues.length > 0 ? uniquePrimaryValues[0] : displayValue
                         );
 
