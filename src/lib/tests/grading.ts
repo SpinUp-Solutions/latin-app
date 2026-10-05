@@ -204,6 +204,12 @@ export const isStepItem = (item: ResolvedGeneratedItem): item is FormIdentificat
 
 type FormItemUnits = [itemId: string, units: { earnedUnits: number; availableUnits: number }];
 
+/** A word carries one unit, however many answers it expects, split evenly across its questions. */
+const shareOfWord = (earnedFraction: number, questionCount: number) => ({
+  earnedUnits: earnedFraction / questionCount,
+  availableUnits: 1 / questionCount,
+});
+
 /** Per-item scoring units, shared by grading and the submitted review so they cannot disagree. */
 export function scoreGeneratedFormIdentificationItems(
   exercise: ExerciseOfType<'generated-form-identification'>,
@@ -215,7 +221,11 @@ export function scoreGeneratedFormIdentificationItems(
   if (exercise.data.mode === 'single-field') {
     for (const item of resolvedItems) {
       if (!isSingleFieldItem(item)) continue;
-      scores.push([item.id, scoreSingleFieldFormIdentificationAnswer(answers[item.id] ?? '', item)]);
+      const score = scoreSingleFieldFormIdentificationAnswer(answers[item.id] ?? '', item);
+      scores.push([
+        item.id,
+        score.availableUnits > 0 ? shareOfWord(score.earnedUnits / score.availableUnits, 1) : score,
+      ]);
     }
     return scores;
   }
@@ -231,7 +241,7 @@ export function scoreGeneratedFormIdentificationItems(
       const ordered = [...items].sort((a, b) => a.stepIndex - b.stepIndex);
       const slots: string[][] = [];
       for (const item of ordered) {
-        let earnedUnits = 0;
+        let earnedFraction = 0;
         const step = validateMultiAnswerStep(answers[item.id] ?? '', item);
         if (step.isCorrect) {
           slots[item.stepIndex] = step.answerSlots;
@@ -240,11 +250,11 @@ export function scoreGeneratedFormIdentificationItems(
             const completedSlots = completedItems.map(entry => slots[entry.stepIndex]!);
             const completedSteps = completedItems.map(entry => entry.step);
             if (validatePartialMultiAnswerPaths(completedSlots, completedSteps, item.primaryFormPaths).isCorrect) {
-              earnedUnits = 1;
+              earnedFraction = 1;
             }
           }
         }
-        scores.push([item.id, { earnedUnits, availableUnits: 1 }]);
+        scores.push([item.id, shareOfWord(earnedFraction, ordered.length)]);
       }
     }
     return scores;
@@ -265,7 +275,7 @@ export function scoreGeneratedFormIdentificationItems(
         narrowFormIdentificationItem(item, previousAnswers)
       ).isCorrect;
       if (isCorrect) previousAnswers[item.step] = answer;
-      scores.push([item.id, { earnedUnits: isCorrect ? 1 : 0, availableUnits: 1 }]);
+      scores.push([item.id, shareOfWord(isCorrect ? 1 : 0, items.length)]);
     }
   }
   return scores;

@@ -121,13 +121,7 @@ describe('non-finite verb form identification', () => {
     const paths = enrichPathsWithSteps(word.primary_form_paths || [], word, steps);
 
     const display = paths
-      .map(path =>
-        steps
-          .map(step => path[step])
-          .filter((value): value is string => !!value)
-          .map(getDisplayForm)
-          .join(',')
-      )
+      .map(path => steps.flatMap(step => (path[step] ? [getDisplayForm(step, path[step])] : [])).join(','))
       .join(';');
 
     expect(display).toBe('4,ger,gen');
@@ -189,13 +183,7 @@ describe('non-finite verb form identification', () => {
     );
     const primaryFormPaths = enrichPathsWithSteps(word.primary_form_paths || [], word, steps);
     const correctAnswerDisplay = primaryFormPaths
-      .map(path =>
-        steps
-          .map(step => path[step])
-          .filter((value): value is string => !!value)
-          .map(getDisplayForm)
-          .join(',')
-      )
+      .map(path => steps.flatMap(step => (path[step] ? [getDisplayForm(step, path[step])] : [])).join(','))
       .join(';');
 
     expect(steps).toEqual(['voice', 'tense']);
@@ -218,9 +206,9 @@ describe('non-finite verb form identification', () => {
   });
 
   it('accepts gerund and supine answer variants', () => {
-    expect(getAcceptedAnswersForStep('finite')).toEqual(expect.arrayContaining(['finite', 'fin.', 'fin']));
-    expect(getAcceptedAnswersForStep('gerund')).toEqual(expect.arrayContaining(['gerund', 'ger.', 'ger']));
-    expect(getAcceptedAnswersForStep('supine')).toEqual(expect.arrayContaining(['supine', 'sup.', 'sup']));
+    expect(getAcceptedAnswersForStep('verb_form', 'finite')).toEqual(expect.arrayContaining(['finite', 'fin.', 'fin']));
+    expect(getAcceptedAnswersForStep('verb_form', 'gerund')).toEqual(expect.arrayContaining(['gerund', 'ger.', 'ger']));
+    expect(getAcceptedAnswersForStep('verb_form', 'supine')).toEqual(expect.arrayContaining(['supine', 'sup.', 'sup']));
   });
 
   it('continues grading frozen legacy mood items for existing test attempts', () => {
