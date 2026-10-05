@@ -3,10 +3,12 @@ import {
   testResultReviewDocumentSchema,
   toStudentTestResultReview,
 } from '@/src/lib/tests/review';
-import { sanitizeTestDeliveryState } from '@/src/lib/tests/delivery';
+import { gradeFrozenTestDelivery, sanitizeTestDeliveryState } from '@/src/lib/tests/delivery';
+import { buildTestResultPdfModel } from '@/src/lib/tests/result-pdf-model';
 import type { Exercise } from '@/src/types/exercises';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import type { TestResultReviewExerciseItem } from '@/src/types/test-results';
+import type { SingleFieldFormIdentificationItem } from '@/src/types/exercises/schemas/form-identification';
 
 const baseExercise = (type: string, data: unknown, overrides: Record<string, unknown> = {}): Exercise =>
   ({
@@ -568,6 +570,138 @@ describe('submitted test review snapshot', () => {
         points: { awardedPoints: 5, maxPoints: 10 },
       },
     ]);
+  });
+
+  it('keeps frozen grading, submitted review, and PDF marks consistent for the reported noun answers', () => {
+    const cases = [
+      {
+        id: 'mare',
+        form: 'mare',
+        answer: 'nom, s, n',
+        awardedPoints: 3,
+        maxPoints: 6,
+        paths: [
+          { case: 'accusative', number: 'singular', gender: 'neuter' },
+          { case: 'nominative', number: 'singular', gender: 'neuter' },
+        ],
+      },
+      {
+        id: 'modus',
+        form: 'modō',
+        answer: 'dat, s, m',
+        awardedPoints: 3,
+        maxPoints: 6,
+        paths: [
+          { case: 'dative', number: 'singular', gender: 'masculine' },
+          { case: 'ablative', number: 'singular', gender: 'masculine' },
+        ],
+      },
+      {
+        id: 'nauta',
+        form: 'nautās',
+        answer: 'abl, pl, m; dat, pl, m',
+        awardedPoints: 0,
+        maxPoints: 3,
+        paths: [{ case: 'accusative', number: 'plural', gender: 'masculine' }],
+      },
+      {
+        id: 'miles',
+        form: 'mīlite',
+        answer: 'dat, s, m; abl, s, m',
+        awardedPoints: 1.5,
+        maxPoints: 3,
+        paths: [{ case: 'ablative', number: 'singular', gender: 'masculine' }],
+      },
+      {
+        id: 'animus',
+        form: 'animī',
+        answer: 'dat, s, m; abl, s, m',
+        awardedPoints: 0,
+        maxPoints: 6,
+        paths: [
+          { case: 'nominative', number: 'plural', gender: 'masculine' },
+          { case: 'genitive', number: 'singular', gender: 'masculine' },
+        ],
+      },
+      {
+        id: 'poena',
+        form: 'poenae',
+        answer: 'gen, s, f; dat, s, f,; nom, pl, f',
+        awardedPoints: 9,
+        maxPoints: 9,
+        paths: [
+          { case: 'nominative', number: 'plural', gender: 'feminine' },
+          { case: 'genitive', number: 'singular', gender: 'feminine' },
+          { case: 'dative', number: 'singular', gender: 'feminine' },
+        ],
+      },
+    ];
+    const items: SingleFieldFormIdentificationItem[] = cases.map(entry => ({
+      ...singleFieldFormItem,
+      id: entry.id,
+      wordId: entry.id,
+      word: entry.id,
+      selected_form: entry.form,
+      steps: ['case', 'number', 'gender'],
+      primaryFormPaths: entry.paths,
+      correctAnswerDisplay: entry.paths.map(path => [path.case, path.number, path.gender].join(',')).join(';'),
+    }));
+    const exercise = generatedFormIdentificationExercise('single-field');
+    exercise.maxPoints = 33;
+    const pages = [{ id: 'page-0', items: [exercise] }];
+    const resolvedExercises = { [exercise.id]: { items } };
+    const answers = {
+      [exercise.id]: {
+        type: 'generated-form-identification' as const,
+        answers: Object.fromEntries(cases.map(entry => [entry.id, entry.answer])),
+      },
+    };
+    const score = gradeFrozenTestDelivery({ versionId: 'version-1', pages, resolvedExercises }, answers);
+    expect(score).toMatchObject({ awardedPoints: 16.5, maxPoints: 33 });
+    const exerciseResults = Object.fromEntries(score.exerciseResults.map(result => [result.exerciseId, result]));
+    const review = buildReview(pages, { resolvedExercises, answers, exerciseResults });
+    const item = exerciseItem(review, 'generated-form-identification') as Extract<
+      TestResultReviewExerciseItem,
+      { type: 'generated-form-identification' }
+    >;
+    expect(item.itemResults.answers).toEqual(
+      cases.map(entry => ({
+        id: entry.id,
+        value: entry.answer,
+        correct: entry.awardedPoints === entry.maxPoints,
+        points: { awardedPoints: entry.awardedPoints, maxPoints: entry.maxPoints },
+      }))
+    );
+
+    const submittedAt = '2026-08-19T12:00:00.000Z';
+    const pdf = buildTestResultPdfModel({
+      result: {
+        attempt: {
+          id: 'attempt-1',
+          versionId: 'version-1',
+          origin,
+          passingPercentage: null,
+          startedAt: submittedAt,
+          updatedAt: submittedAt,
+          submittedAt,
+          status: 'submitted',
+          score: score.awardedPoints,
+          maxScore: score.maxPoints,
+          percentage: 50,
+          outcome: 'score-only',
+          exerciseResults,
+        },
+        review: toStudentTestResultReview(review),
+      },
+      identity: { name: 'Student', username: null, email: null },
+      source: { kindLabel: 'Test', title: 'Morphology' },
+    });
+    for (const entry of cases) {
+      const mark = pdf.exercises[0].groups.find(group => group.heading === `${entry.id} — case · number · gender`);
+      const status =
+        entry.awardedPoints === entry.maxPoints ? 'Correct' : entry.awardedPoints > 0 ? 'Partly correct' : 'Incorrect';
+      expect(mark?.lines).toContain(`${status} · ${entry.awardedPoints} / ${entry.maxPoints} points`);
+    }
   });
 
   it('marks multi-answer steps using the same compatible-path sequence as grading', () => {
