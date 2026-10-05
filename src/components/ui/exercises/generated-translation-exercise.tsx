@@ -26,6 +26,7 @@ import type {
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
+import { MISSED_ANSWER_PROGRESSION_DELAY } from '@/src/utils/feedbackDefaults';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
@@ -147,12 +148,16 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
     if (queueEnabled && !validation.isCorrect) {
       handleIncorrect();
       setFailures(previous => ({ ...previous, [itemIndex]: (previous[itemIndex] ?? 0) + 1 }));
-      autoAdvanceIfEnabled(() => {
-        goToItem(requeueWord(currentIndex));
-        setUserAnswer('');
-        reset();
-        setIsProcessing(false);
-      }, false);
+      autoAdvanceIfEnabled(
+        () => {
+          goToItem(requeueWord(currentIndex));
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+        },
+        false,
+        MISSED_ANSWER_PROGRESSION_DELAY
+      );
       return;
     }
 

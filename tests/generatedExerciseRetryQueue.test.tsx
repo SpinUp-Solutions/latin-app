@@ -218,7 +218,11 @@ it('retains legacy retry-in-place and forced-reset behavior when explicitly disa
   expect(screen.getByRole('textbox')).toBeEnabled();
 });
 
-it.each([undefined, 750])('uses the existing automatic delay after mistakes (%s)', delay => {
+it.each([
+  [undefined, 5000],
+  [750, 5000],
+  [8000, 8000],
+])('keeps a mistake on screen for at least five seconds (delay %s)', (delay, wait) => {
   jest.useFakeTimers();
   const exercise = translation();
   exercise.data.retryIncorrectAnswers = true;
@@ -227,6 +231,19 @@ it.each([undefined, 750])('uses the existing automatic delay after mistakes (%s)
   render(<Translation exercise={exercise} resolvedItems={prompts} />);
   answer('wrong');
   expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(wait - 1));
+  expect(screen.getByText('unus')).toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(1));
+  expect(screen.getByText('duo')).toBeInTheDocument();
+});
+
+it.each([undefined, 750])('still moves on from a correct answer after the exercise delay (%s)', delay => {
+  jest.useFakeTimers();
+  const exercise = translation();
+  exercise.itemProgressionDelay = delay;
+  exercise.feedbackConfig = { ...feedbackConfig, progressionRules: { autoAdvanceOnCorrect: true } };
+  render(<Translation exercise={exercise} resolvedItems={prompts} />);
+  answer('one');
   act(() => jest.advanceTimersByTime((delay ?? 2000) - 1));
   expect(screen.getByText('unus')).toBeInTheDocument();
   act(() => jest.advanceTimersByTime(1));
@@ -250,7 +267,9 @@ it('pauses a pending retry while the lesson page is hidden and resumes it on ret
   act(() => jest.advanceTimersByTime(10000));
   view.rerender(viewAt('visible'));
   expect(screen.getByText('unus')).toBeInTheDocument();
-  act(() => jest.advanceTimersByTime(600));
+  act(() => jest.advanceTimersByTime(4599));
+  expect(screen.getByText('unus')).toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(1));
   expect(screen.getByText('duo')).toBeInTheDocument();
   answer('two');
   act(() => jest.advanceTimersByTime(1000));
@@ -355,7 +374,9 @@ it('uses the automatic delay for a whole-word morphology retry and final complet
   answer('first');
   act(() => jest.advanceTimersByTime(250));
   answer('wrong');
-  act(() => jest.advanceTimersByTime(250));
+  act(() => jest.advanceTimersByTime(4999));
+  expect(screen.getByText('amo')).toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(1));
   expect(screen.getByText('amant')).toBeInTheDocument();
   answer('third');
   act(() => jest.advanceTimersByTime(250));
