@@ -35,6 +35,15 @@ const fixtures = [
         steps: ['case', 'number'],
         expectedAnswerCount: 2,
       },
+      {
+        id: 'word-2',
+        root_word: 'vīlla',
+        selected_form: 'vīlla',
+        hasSelectedForm: false,
+        dictionary_entry: null,
+        steps: ['declension'],
+        expectedAnswerCount: 1,
+      },
     ],
   },
   {
@@ -240,6 +249,11 @@ describe('student-answer-only section review', () => {
       exerciseId: 'exercise',
       answer: { type: 'text-selection', selectedWordIndices: [1, 1] },
     });
+  });
+  it('renders a generated form item whose word has no dictionary entry', () => {
+    render(<Review type="generated-form-identification" />);
+    expect(screen.getByText('vīlla')).toBeVisible();
+    expect(screen.getByLabelText('Identify Declension')).toBeVisible();
   });
   it('disables editing during confirmation', () => {
     render(<Review type="fill" disabled />);
