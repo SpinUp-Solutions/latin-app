@@ -1,30 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import { auth } from 'firebase-admin';
+import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_LIMIT = 20;
 
-const verifyAuth = async (request: NextRequest) => {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-
-  try {
-    const token = authHeader.substring(7);
-    return await auth().verifyIdToken(token);
-  } catch {
-    return null;
-  }
-};
-
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const user = await verifyAuth(request);
+    const user = await verifyRequestAuth(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -78,10 +65,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ success: true, data: { words } });
   } catch (error) {
-    console.error('Error searching vocabulary:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return routeErrorResponse(error, 'search vocabulary');
   }
 }

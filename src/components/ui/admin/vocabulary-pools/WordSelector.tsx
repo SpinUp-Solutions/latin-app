@@ -6,7 +6,7 @@ import { Badge } from '@/src/components/ui/badge';
 import { Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { RomanSpinner } from '@/src/components/ui/page-loading';
-import { AdvancedFiltersPanel } from '@/src/components/ui/admin/vocabulary/AdvancedFiltersPanel';
+import { WordFiltersPanel } from '@/src/components/ui/admin/vocabulary/WordFiltersPanel';
 import { useWordSelection } from '@/src/hooks/useWordSelection';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 import type { Word } from '@/src/types/admin-vocabulary';
@@ -100,7 +100,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
             </div>
 
             {filtersExpanded && (
-              <AdvancedFiltersPanel
+              <WordFiltersPanel
                 filters={filters}
                 onFiltersChange={updateFilters}
                 onReset={resetFilters}

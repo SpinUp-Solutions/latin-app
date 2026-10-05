@@ -7,6 +7,7 @@ import {
   VOCABULARY_WORDS_COLLECTION,
 } from '@/shared/constants/firestore';
 import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { DomainError } from '@/src/lib/domain-error';
 
 export { DELETED_VOCABULARY_POOL_COLLECTION, VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 
@@ -19,7 +20,10 @@ export type ReadableVocabularyPool = {
   words: CollectionReference<DocumentData>;
 };
 
-export class VocabularyPoolArchiveIntegrityError extends Error {
+export class VocabularyPoolArchiveIntegrityError extends DomainError {
+  readonly status = 409;
+  readonly code = 'VOCABULARY_POOL_ARCHIVE_INCOMPLETE';
+
   constructor(message: string) {
     super(message);
     this.name = 'VocabularyPoolArchiveIntegrityError';

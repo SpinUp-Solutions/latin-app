@@ -1,8 +1,9 @@
 import type { DocumentData, Firestore, Transaction } from 'firebase-admin/firestore';
 import { DELETED_VOCABULARY_POOL_COLLECTION, VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { DomainError } from '@/src/lib/domain-error';
 
-export class VocabularyPoolAssignmentError extends Error {
+export class VocabularyPoolAssignmentError extends DomainError {
   constructor(
     public readonly code:
       | 'VOCABULARY_POOL_ARCHIVED'

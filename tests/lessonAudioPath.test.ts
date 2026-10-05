@@ -10,7 +10,7 @@ jest.mock('@/src/services/firebase-admin', () => ({
   adminDb: {},
   adminStorage: { bucket: () => ({ file: mockFile, name: 'demo-latin-app.appspot.com' }) },
 }));
-jest.mock('firebase-admin/auth', () => ({ getAuth: () => ({ verifyIdToken: async () => ({ uid: 'student-1' }) }) }));
+jest.mock('firebase-admin', () => ({ auth: () => ({ verifyIdToken: async () => ({ uid: 'student-1' }) }) }));
 jest.mock('@/src/lib/verifyAdminAccess', () => ({ verifyAdminAccess: async () => ({ uid: 'admin-1' }) }));
 jest.mock('@/src/lib/vocabulary-pools/sync-lock.server', () => ({
   runVocabularyContentStorageMutation: (_db: unknown, work: () => Promise<unknown>) => work(),
@@ -30,12 +30,14 @@ describe('lesson audio path isolation', () => {
   });
 
   it('accepts canonical lesson audio while rejecting private media and encoded traversal', () => {
-    expect(parseLessonAudioPath(url('lessons/lesson-1/content_audio/page-1.mp3'), bucket))
-      .toBe('lessons/lesson-1/content_audio/page-1.mp3');
+    expect(parseLessonAudioPath(url('lessons/lesson-1/content_audio/page-1.mp3'), bucket)).toBe(
+      'lessons/lesson-1/content_audio/page-1.mp3'
+    );
     // Uploads accept any audio/* file, so the extension must not decide whether it can be played or deleted.
     for (const extension of ['m4a', 'weba', 'mpeg', 'mpga', 'MP3']) {
-      expect(parseLessonAudioPath(url(`lessons/lesson-1/content_audio/page-1.${extension}`), bucket))
-        .toBe(`lessons/lesson-1/content_audio/page-1.${extension}`);
+      expect(parseLessonAudioPath(url(`lessons/lesson-1/content_audio/page-1.${extension}`), bucket)).toBe(
+        `lessons/lesson-1/content_audio/page-1.${extension}`
+      );
     }
     for (const path of [
       'student-feedback/private/session/file.mp4',

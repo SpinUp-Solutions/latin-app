@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
+import { RequestError } from '@/src/lib/domain-error';
 import {
   buildValidatedWordForApproval,
   requestCollection,
-  routeError,
   serializeRequestSnapshot,
   wordCollection,
 } from '../../utils';
@@ -41,7 +42,7 @@ export async function POST(
     await runVocabularyContentMutation(adminDb, async transaction => {
       const currentRequest = await transaction.get(docRef);
       if (!currentRequest.exists || currentRequest.data()?.status !== 'pending') {
-        throw new Error('Only a currently pending request can be approved');
+        throw new RequestError(409, 'VOCABULARY_REQUEST_NOT_PENDING', 'Only pending requests can be approved');
       }
       transaction.create(wordRef, validated.data.firestorePayload);
       transaction.update(docRef, {
@@ -61,6 +62,6 @@ export async function POST(
       },
     });
   } catch (error) {
-    return routeError(error);
+    return routeErrorResponse(error, 'approve vocabulary word request');
   }
 }

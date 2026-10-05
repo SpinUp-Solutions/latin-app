@@ -12,7 +12,7 @@ jest.mock('@/src/services/wordLookupService', () => ({}));
 jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
 jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({}) }));
 const mockGeneratedItemsQuery = jest.fn();
-jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
+jest.mock('@/src/store/api/generatedExerciseApi', () => ({
   useGetGeneratedExerciseItemsQuery: (...args: unknown[]) => mockGeneratedItemsQuery(...args),
 }));
 

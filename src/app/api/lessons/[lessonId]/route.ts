@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  StudentDashboardServiceError,
-  studentDashboardService,
-} from '@/src/lib/learning-units/student-dashboard-service';
+import { studentDashboardService } from '@/src/lib/learning-units/student-dashboard-service';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
-import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,13 +17,6 @@ export async function GET(
   try {
     return NextResponse.json({ lesson: await studentDashboardService.getLesson(student.uid, lessonId) });
   } catch (error) {
-    if (error instanceof StudentDashboardServiceError) {
-      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
-    }
-    console.error('Unable to load student lesson:', error);
-    reportServerUnexpectedError(error, {
-      tags: { surface: 'student_lesson', lessonId, userId: student.uid },
-    });
-    return NextResponse.json({ error: 'Failed to fetch lesson' }, { status: 500 });
+    return routeErrorResponse(error, 'fetch lesson', { surface: 'student_lesson', lessonId, userId: student.uid });
   }
 }

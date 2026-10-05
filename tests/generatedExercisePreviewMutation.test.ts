@@ -8,12 +8,12 @@ jest.mock('@/src/store/api/baseQuery', () => ({
 }));
 
 import { configureStore } from '@reduxjs/toolkit';
-import { advancedVocabularyApi } from '@/src/store/api/advancedVocabularyApi';
+import { generatedExerciseApi } from '@/src/store/api/generatedExerciseApi';
 
 const createStore = () =>
   configureStore({
-    reducer: { [advancedVocabularyApi.reducerPath]: advancedVocabularyApi.reducer },
-    middleware: getDefaultMiddleware => getDefaultMiddleware().concat(advancedVocabularyApi.middleware),
+    reducer: { [generatedExerciseApi.reducerPath]: generatedExerciseApi.reducer },
+    middleware: getDefaultMiddleware => getDefaultMiddleware().concat(generatedExerciseApi.middleware),
   });
 
 describe('generated exercise preview mutation', () => {
@@ -40,7 +40,7 @@ describe('generated exercise preview mutation', () => {
       },
     };
 
-    const result = await store.dispatch(advancedVocabularyApi.endpoints.previewGeneratedExercise.initiate(body));
+    const result = await store.dispatch(generatedExerciseApi.endpoints.previewGeneratedExercise.initiate(body));
 
     expect('data' in result && result.data?.collected).toBe(1);
     expect(mockBaseQuery).toHaveBeenCalledWith(
@@ -82,7 +82,7 @@ describe('generated exercise preview mutation', () => {
     const store = createStore();
 
     const result = await store.dispatch(
-      advancedVocabularyApi.endpoints.getGeneratedExerciseItems.initiate({ exercise, source })
+      generatedExerciseApi.endpoints.getGeneratedExerciseItems.initiate({ exercise, source })
     );
 
     expect(result.data).toEqual({ items });

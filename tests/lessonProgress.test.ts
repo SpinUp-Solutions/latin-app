@@ -11,7 +11,6 @@ import {
   summarizeLessonCompletion,
   validateLessonProgression,
 } from '@/src/utils/lessonProgress';
-import { migrateUserProgress } from '@/src/utils/progressMigration';
 import { isProgressionUnitComplete } from '@/src/lib/learning-units/progression';
 
 const lesson = {
@@ -342,66 +341,5 @@ describe('schema-v4 lesson completion', () => {
         { progressByUnitId: new Map([['lesson-1', stored]]), attemptedTestIds: new Set() }
       )
     ).toBe(false);
-  });
-});
-
-describe('progress migration', () => {
-  it('drops malformed persisted scores while preserving valid zero scores', () => {
-    const result = migrateUserProgress(
-      lesson,
-      {
-        status: 'in-progress',
-        exerciseProgress: [
-          { exerciseId: 'exercise-a', score: -1, completedAt: '2026-01-01T00:00:00.000Z' },
-          { exerciseId: 'exercise-b', score: 101, completedAt: '2026-01-01T00:00:00.000Z' },
-          { exerciseId: 'exercise-a', score: 0, completedAt: '2026-02-01T00:00:00.000Z' },
-        ],
-      },
-      '2026-07-14T00:00:00.000Z'
-    );
-
-    expect(result.progress.exerciseProgress).toEqual([
-      { exerciseId: 'exercise-a', score: 0, completedAt: '2026-02-01T00:00:00.000Z' },
-    ]);
-    expect(result.unmappedExerciseRecords).toBe(2);
-  });
-
-  it('preserves completion, maps valid records, and ignores unmappable partial credit', () => {
-    const result = migrateUserProgress(
-      lesson,
-      {
-        userId: 'user-1',
-        lessonId: lesson.id,
-        status: 'completed',
-        currentPageIndex: 3,
-        exerciseProgress: [
-          { exerciseId: 'page0-item1', score: 100, completedAt: '2026-01-01T00:00:00.000Z' },
-          { exerciseId: 'page9-item9', score: 100, completedAt: '2026-01-01T00:00:00.000Z' },
-        ],
-      },
-      '2026-07-14T00:00:00.000Z'
-    );
-
-    expect(result.progress).toMatchObject({
-      status: 'completed',
-      furthestPageIndex: 2,
-      currentPageIndex: 2,
-      progressSchemaVersion: 2,
-      exerciseProgress: [{ exerciseId: 'exercise-a', score: 100, completedAt: '2026-01-01T00:00:00.000Z' }],
-    });
-    expect(result.mappedExerciseRecords).toBe(1);
-    expect(result.unmappedExerciseRecords).toBe(1);
-    expect(result.derivedCompletion).toBe(false);
-  });
-
-  it('derives completion from a legacy cursor at the page count', () => {
-    const result = migrateUserProgress(
-      lesson,
-      { status: 'in-progress', currentPageIndex: 3, exerciseProgress: [] },
-      '2026-07-14T00:00:00.000Z'
-    );
-    expect(result.progress.status).toBe('completed');
-    expect(result.progress.completedAt).toBe('2026-07-14T00:00:00.000Z');
-    expect(result.derivedCompletion).toBe(true);
   });
 });

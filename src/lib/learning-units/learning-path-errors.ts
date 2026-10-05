@@ -1,3 +1,5 @@
+import { DomainError } from '@/src/lib/domain-error';
+
 export type LearningPathServiceErrorCode =
   | 'LEARNING_PATH_NOT_FOUND'
   | 'STALE_LEARNING_PATH_DATA'
@@ -9,7 +11,7 @@ export type LearningPathServiceErrorCode =
   | 'PLACED_UNIT_INVALID'
   | 'LEGACY_NORMAL_PLACEMENT_RETIRED';
 
-export class LearningPathServiceError extends Error {
+export class LearningPathServiceError extends DomainError {
   constructor(
     public readonly code: LearningPathServiceErrorCode,
     message: string,

@@ -16,11 +16,11 @@ describe('vocabulary backup service', () => {
       blob: async () => blob,
     } as Response);
 
-    await expect(fetchVocabularyBackup('vocabulary_words_v5')).resolves.toEqual({
+    await expect(fetchVocabularyBackup()).resolves.toEqual({
       blob,
       filename: 'vocabulary-backup.json',
     });
-    expect(fetchSpy).toHaveBeenCalledWith('/api/admin/words/backup?collection=vocabulary_words_v5', {
+    expect(fetchSpy).toHaveBeenCalledWith('/api/admin/words/backup', {
       headers: { authorization: 'Bearer firebase-token' },
     });
     fetchSpy.mockRestore();

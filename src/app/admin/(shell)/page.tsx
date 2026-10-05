@@ -1,30 +1,21 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import {
   BookOpen,
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
-  Database,
   FileCheck2,
   LibraryBig,
-  Loader2,
   Plus,
   type LucideIcon,
 } from 'lucide-react';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { AdminIconChip, AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
 import { Button } from '@/src/components/ui/button';
-import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { useAdminApi } from '@/src/hooks/useAdminApi';
-import { toast } from 'sonner';
-
-type MigrationKey = 'poolTokens' | 'lessonSummaries';
-type MigrationMode = 'dryRun' | 'run';
-type MigrationResult = Record<string, unknown>;
 
 interface DashboardCardProps {
   icon: LucideIcon;
@@ -81,51 +72,6 @@ function DashboardSection({ title, children }: { title: string; children: ReactN
 }
 
 function AdministrationPage() {
-  const { makeAdminRequest } = useAdminApi();
-  const [runningMigration, setRunningMigration] = useState<string | null>(null);
-  const [migrationResults, setMigrationResults] = useState<Partial<Record<MigrationKey, MigrationResult>>>({});
-  const [pendingMigration, setPendingMigration] = useState<MigrationKey | null>(null);
-  const runMigration = async (key: MigrationKey, mode: MigrationMode) => {
-    const endpoints: Record<MigrationKey, string> = {
-      poolTokens: 'vocabulary-pools/backfill-search-tokens',
-      lessonSummaries: 'lessons/backfill-summaries',
-    };
-    const labels: Record<MigrationKey, string> = {
-      poolTokens: 'vocabulary search tokens',
-      lessonSummaries: 'lesson summaries',
-    };
-    const isDryRun = mode === 'dryRun';
-    const runId = `${key}-${mode}`;
-    setRunningMigration(runId);
-
-    try {
-      const response = await makeAdminRequest(`${endpoints[key]}${isDryRun ? '?dryRun=true' : ''}`, { method: 'POST' });
-      setMigrationResults(previous => ({ ...previous, [key]: response.data }));
-      toast.success(`${isDryRun ? 'Dry run completed' : 'Migration completed'}: ${labels[key]}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Migration failed');
-    } finally {
-      setRunningMigration(null);
-    }
-  };
-
-  const renderMigrationResult = (key: MigrationKey) => {
-    const result = migrationResults[key];
-    if (!result) return null;
-
-    return (
-      <pre className="mt-3 max-h-32 animate-in overflow-auto rounded-md border bg-white p-3 text-xs text-foreground fade-in slide-in-from-top-1 duration-200">
-        {JSON.stringify(result, null, 2)}
-      </pre>
-    );
-  };
-
-  const migrationLabels: Record<MigrationKey, string> = {
-    poolTokens: 'vocabulary search tokens',
-    lessonSummaries: 'lesson summaries',
-  };
-  const migrationLabel = pendingMigration ? migrationLabels[pendingMigration] : 'data';
-
   return (
     <AdminPage>
       <AdminPageHeader title="Administration" description="Manage lessons, vocabulary, tests and content." />
@@ -192,73 +138,9 @@ function AdministrationPage() {
               description="Inspect student submissions and expected answers.">
               <DashboardLink href="/admin/diagramming-attempts">View Diagramming Attempts</DashboardLink>
             </DashboardCard>
-            <DashboardCard icon={Database} title="Data Migrations" description="Temporary backfill tools.">
-              <div className="space-y-4 pt-1">
-                <div className="rounded-lg border border-border/70 bg-roman-marble/60 p-3">
-                  <p className="mb-2 text-sm font-medium">Vocabulary Search Tokens</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={runningMigration !== null}
-                      onClick={() => runMigration('poolTokens', 'dryRun')}>
-                      {runningMigration === 'poolTokens-dryRun' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Dry Run
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="border border-destructive/30 bg-transparent text-destructive hover:bg-destructive/10"
-                      disabled={runningMigration !== null}
-                      onClick={() => setPendingMigration('poolTokens')}>
-                      {runningMigration === 'poolTokens-run' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Run
-                    </Button>
-                  </div>
-                  {renderMigrationResult('poolTokens')}
-                </div>
-                <div className="rounded-lg border border-border/70 bg-roman-marble/60 p-3">
-                  <p className="mb-2 text-sm font-medium">Lesson Summaries</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={runningMigration !== null}
-                      onClick={() => runMigration('lessonSummaries', 'dryRun')}>
-                      {runningMigration === 'lessonSummaries-dryRun' && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Dry Run
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="border border-destructive/30 bg-transparent text-destructive hover:bg-destructive/10"
-                      disabled={runningMigration !== null}
-                      onClick={() => setPendingMigration('lessonSummaries')}>
-                      {runningMigration === 'lessonSummaries-run' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Run
-                    </Button>
-                  </div>
-                  {renderMigrationResult('lessonSummaries')}
-                </div>
-              </div>
-            </DashboardCard>
           </div>
         </DashboardSection>
       </div>
-
-      <ConfirmationDialog
-        isOpen={pendingMigration !== null}
-        onClose={() => setPendingMigration(null)}
-        onConfirm={() => {
-          if (pendingMigration) void runMigration(pendingMigration, 'run');
-        }}
-        title={`Run ${migrationLabel} migration?`}
-        description="This will mutate production data. Run a dry run first if you have not already."
-        confirmText="Run migration"
-        confirmVariant="destructive"
-      />
     </AdminPage>
   );
 }

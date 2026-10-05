@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { duplicateTestVersionInputSchema } from '@/src/lib/tests/schemas';
 import { testAuthoringService } from '@/src/lib/tests/authoring-service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -18,6 +18,6 @@ export async function POST(request: NextRequest, { params }: Context) {
       status: 201,
     });
   } catch (error) {
-    return testRouteErrorResponse(error, 'duplicate test version');
+    return routeErrorResponse(error, 'duplicate test version');
   }
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AdvancedFiltersPanel } from '../vocabulary/AdvancedFiltersPanel';
+import { WordFiltersPanel } from '../vocabulary/WordFiltersPanel';
 import type { GeneratorFilters } from '@/src/types/exercises/base';
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
@@ -43,7 +43,7 @@ export const GeneratedVocabularyFilters: React.FC<GeneratedVocabularyFiltersProp
   return (
     <div>
       <label className="block text-sm font-medium mb-3">Vocabulary Filters</label>
-      <AdvancedFiltersPanel
+      <WordFiltersPanel
         filters={{
           partOfSpeech: (derivedFilters.partOfSpeech || 'all') as PartOfSpeech | 'all',
           search: derivedFilters.search || '',

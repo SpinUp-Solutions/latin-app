@@ -10,6 +10,7 @@ jest.mock('@/src/store/api/baseQuery', () => ({
       mockBaseQuery(...args),
 }));
 
+import { appApi } from '@/src/store/api/appApi';
 import { vocabularyApi } from '@/src/store/api/vocabularyApi';
 import { vocabularyPoolApi } from '@/src/store/api/vocabularyPoolApi';
 
@@ -32,12 +33,8 @@ const updatedWord = {
 
 const createStore = () =>
   configureStore({
-    reducer: {
-      [vocabularyApi.reducerPath]: vocabularyApi.reducer,
-      [vocabularyPoolApi.reducerPath]: vocabularyPoolApi.reducer,
-    },
-    middleware: getDefaultMiddleware =>
-      getDefaultMiddleware().concat(vocabularyApi.middleware, vocabularyPoolApi.middleware),
+    reducer: { [appApi.reducerPath]: appApi.reducer },
+    middleware: getDefaultMiddleware => getDefaultMiddleware().concat(appApi.middleware),
   });
 
 const mutations = {

@@ -2,7 +2,7 @@ import { assertPoolHasNoDependents, resolveVocabularyPool } from '@/src/lib/voca
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { scanVocabularyPoolUsages } from '@/src/lib/vocabulary-pools/usage.server';
 import {
   createVocabularyPoolDeletionChallenge,
@@ -31,6 +31,7 @@ import {
   VOCABULARY_CONTENT_STATE_ID,
   vocabularyContentRevision,
 } from '@/src/lib/vocabulary-pools/content-revision.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -151,19 +152,6 @@ export async function POST(
       },
     });
   } catch (error) {
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    if (error instanceof VocabularyPoolDeletionError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    }
-    if (error instanceof VocabularyPoolStateError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    }
-    if (error instanceof VocabularyContentSyncLockError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    }
-    console.error('Error preparing vocabulary pool deletion:', error);
-    return NextResponse.json({ success: false, error: 'Failed to prepare vocabulary pool deletion' }, { status: 500 });
+    return routeErrorResponse(error, 'prepare vocabulary pool deletion');
   }
 }

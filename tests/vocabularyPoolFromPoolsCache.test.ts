@@ -253,8 +253,7 @@ it('refreshes dependent pool detail, summaries and student playback after a sour
       words: [],
       metadata: { ...copiedPool.metadata, wordCount: count },
     };
-    if (request.includes('/pos-summary') || request.includes('/paradigm-summary'))
-      return { data: { success: true, data: { totalWords: count } } };
+    if (request.includes('/paradigm-summary')) return { data: { success: true, data: { totalWords: count } } };
     if (request.startsWith('/vocabulary-pools/'))
       return {
         data: {
@@ -272,11 +271,10 @@ it('refreshes dependent pool detail, summaries and student playback after a sour
   });
   const detail = store.dispatch(vocabularyPoolApi.endpoints.getPool.initiate('combined'));
   const summary = store.dispatch(vocabularyPoolApi.endpoints.getPoolSummary.initiate('combined'));
-  const pos = store.dispatch(vocabularyPoolApi.endpoints.getPoolPOSSummary.initiate('combined'));
   const paradigm = store.dispatch(vocabularyPoolApi.endpoints.getPoolParadigmSummary.initiate('combined'));
   const student = store.dispatch(vocabularyPoolApi.endpoints.getStudentPool.initiate('combined'));
   try {
-    await Promise.all([detail, summary, pos, paradigm, student]);
+    await Promise.all([detail, summary, paradigm, student]);
     await store
       .dispatch(vocabularyPoolApi.endpoints.updatePool.initiate({ id: 'source', data: { wordDocIds: ['a', 'b'] } }))
       .unwrap();
@@ -284,12 +282,11 @@ it('refreshes dependent pool detail, summaries and student playback after a sour
       const state = store.getState();
       expect(vocabularyPoolApi.endpoints.getPool.select('combined')(state).data?.wordDocIds).toEqual(['a', 'b']);
       expect(vocabularyPoolApi.endpoints.getPoolSummary.select('combined')(state).data?.metadata.wordCount).toBe(2);
-      expect(vocabularyPoolApi.endpoints.getPoolPOSSummary.select('combined')(state).data?.totalWords).toBe(2);
       expect(vocabularyPoolApi.endpoints.getPoolParadigmSummary.select('combined')(state).data?.totalWords).toBe(2);
       expect(vocabularyPoolApi.endpoints.getStudentPool.select('combined')(state).data?.items).toHaveLength(2);
     });
   } finally {
-    [detail, summary, pos, paradigm, student].forEach(query => query.unsubscribe());
+    [detail, summary, paradigm, student].forEach(query => query.unsubscribe());
     store.dispatch(vocabularyPoolApi.util.resetApiState());
   }
 });

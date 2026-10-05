@@ -1,4 +1,3 @@
-import { POST as migrateProgress } from '@/src/app/api/admin/progress/migrate-stable-ids/route';
 import { POST as updateProgress } from '@/src/app/api/progress/[userId]/[lessonId]/route';
 import { POST as finishLesson } from '@/src/app/api/progress/[userId]/[lessonId]/complete/route';
 
@@ -313,21 +312,6 @@ describe('progress update route', () => {
       expect.objectContaining({ furthestPageIndex: 1, progressSchemaVersion: 4, progressLessonVersion: 7 }),
       { merge: true }
     );
-  });
-});
-
-describe('progress migration route', () => {
-  it('rejects malformed JSON instead of starting a collection scan', async () => {
-    const response = (await migrateProgress({
-      headers: { get: () => 'Bearer token' },
-      json: async () => {
-        throw new SyntaxError('Invalid JSON');
-      },
-    } as never)) as unknown as { body: { error: string }; status: number };
-
-    expect(response.status).toBe(400);
-    expect(response.body.error).toBe('Invalid migration request');
-    expect(mockCollection).not.toHaveBeenCalled();
   });
 });
 

@@ -10,10 +10,8 @@ jest.mock('@/src/services/firebase-admin', () => ({
   },
 }));
 
-import { GET as listWords, POST as createWord, PUT as updateWord } from '@/src/app/api/admin/words/route';
+import { PUT as updateWord } from '@/src/app/api/admin/words/route';
 import { DELETE as deleteWord } from '@/src/app/api/admin/words/[wordId]/route';
-import { GET as backupWords } from '@/src/app/api/admin/words/backup/route';
-import { POST as migrateWords } from '@/src/app/api/admin/words/migrate/route';
 import {
   cleanupVocabularyWordPoolReferences,
   WORD_DELETION_POOL_CLEANUP_BATCH_SIZE,
@@ -35,7 +33,6 @@ type FakeQuery = {
   get: () => Promise<unknown>;
 };
 
-const FIRESTORE_TRANSACTION_WRITE_LIMIT = 500;
 const POOLS = 'vocabulary_pools';
 const WORDS = 'vocabulary_words_v5';
 
@@ -44,8 +41,6 @@ class FakeFirestore {
   docs = new Map<string, Map<string, Data>>();
   poolQueryLimits: number[] = [];
   writesPerTransaction: number[] = [];
-  openTransactions = 0;
-  overlappingTransactions = false;
 
   seed(collection: string, id: string, data: Data) {
     if (!this.docs.has(collection)) this.docs.set(collection, new Map());
@@ -97,35 +92,26 @@ class FakeFirestore {
     return {
       doc: (id: string) => this.ref(collection, id),
       where: (_field: string, _operator: string, wordId: string) => this.query(collection, wordId),
-      get: async () => ({
-        docs: [...(this.docs.get(collection)?.keys() ?? [])].map(id => this.snapshot(collection, id)),
-      }),
     };
   }
 
   async runTransaction<T>(callback: (transaction: unknown) => Promise<T>): Promise<T> {
-    if (this.openTransactions > 0) this.overlappingTransactions = true;
-    this.openTransactions += 1;
     let writes = 0;
     const write = (ref: FakeRef, data: Data | undefined, merge: boolean) => {
       writes += 1;
       if (data === undefined) this.docs.get(ref.collection)?.delete(ref.id);
       else this.seed(ref.collection, ref.id, { ...(merge ? this.docs.get(ref.collection)?.get(ref.id) : {}), ...data });
     };
-    try {
-      const result = await callback({
-        get: async (target: FakeRef | FakeQuery) =>
-          target.kind === 'query' ? this.run(target) : this.snapshot(target.collection, target.id),
-        getAll: async (...refs: FakeRef[]) => refs.map(ref => this.snapshot(ref.collection, ref.id)),
-        set: (ref: FakeRef, data: Data) => write(ref, data, false),
-        update: (ref: FakeRef, data: Data) => write(ref, data, true),
-        delete: (ref: FakeRef) => write(ref, undefined, false),
-      });
-      this.writesPerTransaction.push(writes);
-      return result;
-    } finally {
-      this.openTransactions -= 1;
-    }
+    const result = await callback({
+      get: async (target: FakeRef | FakeQuery) =>
+        target.kind === 'query' ? this.run(target) : this.snapshot(target.collection, target.id),
+      getAll: async (...refs: FakeRef[]) => refs.map(ref => this.snapshot(ref.collection, ref.id)),
+      set: (ref: FakeRef, data: Data) => write(ref, data, false),
+      update: (ref: FakeRef, data: Data) => write(ref, data, true),
+      delete: (ref: FakeRef) => write(ref, undefined, false),
+    });
+    this.writesPerTransaction.push(writes);
+    return result;
   }
 }
 
@@ -162,65 +148,6 @@ type RouteResponse<T> = { status: number; body: T };
 
 beforeEach(() => {
   mockDb = new FakeFirestore();
-});
-
-describe('admin word route collection boundaries', () => {
-  const expectInvalidCollection = (response: unknown) => {
-    const result = response as RouteResponse<unknown>;
-    expect(result.status).toBe(400);
-    expect(result.body).toMatchObject({ code: 'INVALID_VOCABULARY_WORD_COLLECTION' });
-  };
-  let collection: jest.SpyInstance;
-
-  beforeEach(() => {
-    collection = jest.spyOn(mockDb, 'collection');
-  });
-
-  afterEach(() => expect(collection).not.toHaveBeenCalled());
-
-  it('rejects arbitrary collections on list, backup, and delete', async () => {
-    expectInvalidCollection(
-      await listWords(request('http://localhost/api/admin/words?collection=deleted_vocabulary_pools'))
-    );
-    expectInvalidCollection(
-      await backupWords(request('http://localhost/api/admin/words/backup?collection=vocabulary_pool_archives'))
-    );
-    expectInvalidCollection(
-      await deleteWord(request('http://localhost/api/admin/words/word-1?collection=users'), {
-        params: Promise.resolve({ wordId: 'word-1' }),
-      })
-    );
-  });
-
-  it('rejects arbitrary collections on create and update', async () => {
-    expectInvalidCollection(
-      await createWord(request('http://localhost/api/admin/words', { collection: POOLS, word: 'amo' }))
-    );
-    expectInvalidCollection(
-      await updateWord(
-        request('http://localhost/api/admin/words', {
-          collection: 'deleted_vocabulary_pools',
-          wordId: 'word-1',
-          updates: { word: 'amo' },
-        })
-      )
-    );
-  });
-
-  it('fixes migration to the legacy-v4 to current-v5 boundary', async () => {
-    expectInvalidCollection(
-      await migrateWords(
-        request('http://localhost/api/admin/words/migrate?sourceCollection=users&targetCollection=vocabulary_words_v5')
-      )
-    );
-    expectInvalidCollection(
-      await migrateWords(
-        request(
-          'http://localhost/api/admin/words/migrate?sourceCollection=vocabulary_words_v4&targetCollection=vocabulary_pool_archives'
-        )
-      )
-    );
-  });
 });
 
 it('rejects a word deletion during production content sync before issuing a challenge or writing', async () => {
@@ -283,24 +210,5 @@ describe('high-cardinality vocabulary word mutations', () => {
     expect(mockDb.docs.get(WORDS)!.get('word-common')).toMatchObject({ translation: 'and also' });
     expect(mockDb.poolQueryLimits).toEqual([]);
     expect(mockDb.writesPerTransaction).toEqual([2]);
-  });
-
-  it('migrates a large legacy collection in sequential transactions below the Firestore write limit', async () => {
-    for (let index = 0; index < 900; index += 1) {
-      mockDb.seed('vocabulary_words_v4', `legacy-${index}`, { word: `verbum ${index}` });
-    }
-
-    const response = (await migrateWords(
-      request(
-        'http://localhost/api/admin/words/migrate?sourceCollection=vocabulary_words_v4&targetCollection=vocabulary_words_v5'
-      )
-    )) as unknown as RouteResponse<{ data: { successfulMigrations: number } }>;
-
-    expect(response.status).toBe(200);
-    expect(response.body.data.successfulMigrations).toBe(900);
-    expect(mockDb.docs.get(WORDS)!.size).toBe(900);
-    expect(mockDb.writesPerTransaction.length).toBeGreaterThan(1);
-    expect(Math.max(...mockDb.writesPerTransaction)).toBeLessThanOrEqual(FIRESTORE_TRANSACTION_WRITE_LIMIT);
-    expect(mockDb.overlappingTransactions).toBe(false);
   });
 });

@@ -25,6 +25,7 @@ import {
   getFurthestPageIndex,
   hasTrustedExerciseProgressSummary,
   isStoredLessonComplete,
+  PROGRESS_SCHEMA_VERSION,
   summarizeLessonCompletion,
 } from '@/src/utils/lessonProgress';
 import { LESSON_SUMMARY_FIELDS, toLessonSummary } from '@/src/utils/lessonSummary';
@@ -47,13 +48,15 @@ import {
   type ProgressionActivity,
   type ProgressionUnit,
 } from './progression';
+import { DomainError } from '@/src/lib/domain-error';
 
 const LEARNING_UNIT_SUMMARY_FIELDS = [...LESSON_SUMMARY_FIELDS, 'rotationVersions', 'passingPercentage'] as const;
 
 /**
  * The normal dashboard path consumes only bounded progress summaries. Legacy
  * or lesson-version-stale records are canonically recomputed from full history
- * by `hydrateCanonicalProgressSummaries` below.
+ * by `hydrateCanonicalProgressSummaries` below, which also stores the result so
+ * that each record is recomputed once per lesson edit rather than on every load.
  */
 const PROGRESS_SUMMARY_FIELDS = [
   'userId',
@@ -82,7 +85,7 @@ const toProgressionUnit = (unit: LearningPathUnitSummary): ProgressionUnit =>
 
 export type StudentDashboardServiceErrorCode = 'LESSON_NOT_FOUND' | 'LESSON_LOCKED' | 'STALE_LESSON_DATA';
 
-export class StudentDashboardServiceError extends Error {
+export class StudentDashboardServiceError extends DomainError {
   constructor(
     public readonly code: StudentDashboardServiceErrorCode,
     message: string,
@@ -403,30 +406,13 @@ export class StudentDashboardService {
     });
     if (staleLessons.length === 0) return projectedProgress;
 
-    const [lessonSnapshots, fullProgressSnapshots] = await Promise.all([
-      this.db.getAll(...staleLessons.map(lesson => this.units.doc(lesson.id))),
-      this.db.getAll(...staleLessons.map(lesson => this.progress.doc(`${userId}_${lesson.id}`))),
-    ]);
-    const fullProgressByLessonId = new Map<string, UserProgress>();
-    for (const document of fullProgressSnapshots) {
-      const lessonId = progressLessonId(document);
-      if (lessonId) fullProgressByLessonId.set(lessonId, document.data() as UserProgress);
-    }
-
     const hydrated = new Map(projectedProgress);
-    for (const snapshot of lessonSnapshots) {
-      const fullProgress = fullProgressByLessonId.get(snapshot.id);
-      const data = snapshot.data();
-      if (!fullProgress || !snapshot.exists || !isLessonDocumentData(data) || data._deletionPending === true) {
-        continue;
-      }
-      try {
-        const lesson = fullLessonFromSnapshot(snapshot);
-        hydrated.set(snapshot.id, canonicalizeLessonProgressForRead(lesson, fullProgress) as UserProgress);
-      } catch (error) {
-        console.error(`Unable to canonicalize progress for invalid lesson ${snapshot.id}; skipping it`, error);
-      }
-    }
+    await Promise.all(
+      staleLessons.map(async lesson => {
+        const progress = await this.refreshProgressSummary(userId, lesson.id);
+        if (progress) hydrated.set(lesson.id, progress);
+      })
+    );
 
     for (const lesson of staleLessons) {
       const progress = hydrated.get(lesson.id);
@@ -451,6 +437,63 @@ export class StudentDashboardService {
       );
     }
     return hydrated;
+  }
+
+  /**
+   * Recomputes one progress summary against the current lesson and stores it,
+   * so later dashboard loads read it from the projection.
+   *
+   * The lesson and the progress record are read in the transaction that writes.
+   * A stored completion is never recomputed, so it must not be derived from a
+   * lesson that changed before the write; Firestore retries the transaction if
+   * either document changes first.
+   *
+   * Only derived fields are written. The exercise history stays as the student
+   * recorded it, so results for an exercise that is removed and later restored
+   * are kept. Records on an older schema are not written: the student's next
+   * progress write upgrades them and rewrites their exercise IDs.
+   */
+  private async refreshProgressSummary(userId: string, lessonId: string): Promise<UserProgress | undefined> {
+    const lessonRef = this.units.doc(lessonId);
+    const progressRef = this.progress.doc(`${userId}_${lessonId}`);
+    let canonical: UserProgress | undefined;
+    try {
+      await this.db.runTransaction(async transaction => {
+        canonical = undefined;
+        const [lessonSnapshot, progressSnapshot] = await transaction.getAll(lessonRef, progressRef);
+        const stored = progressSnapshot.data() as UserProgress | undefined;
+        const lessonData = lessonSnapshot.data();
+        if (!stored || !isLessonDocumentData(lessonData) || lessonData._deletionPending === true) return;
+
+        let summary: UserProgress;
+        try {
+          summary = canonicalizeLessonProgressForRead(fullLessonFromSnapshot(lessonSnapshot), stored) as UserProgress;
+        } catch (error) {
+          console.error(`Unable to canonicalize progress for invalid lesson ${lessonId}; skipping it`, error);
+          return;
+        }
+        canonical = summary;
+        if (stored.progressSchemaVersion !== PROGRESS_SCHEMA_VERSION) return;
+
+        const refreshed: Partial<UserProgress> = {
+          status: summary.status,
+          progress: summary.progress,
+          completedExerciseCount: summary.completedExerciseCount,
+          requiredExerciseCount: summary.requiredExerciseCount,
+          progressLessonVersion: summary.progressLessonVersion,
+          ...(summary.status === 'completed' ? { completedAt: stored.completedAt || new Date().toISOString() } : {}),
+        };
+        // A progress write or another dashboard load may have stored the current summary already.
+        const fields = Object.keys(refreshed) as Array<keyof UserProgress>;
+        if (fields.some(field => stored[field] !== refreshed[field])) transaction.update(progressRef, refreshed);
+      });
+    } catch (error) {
+      // Without a recomputed summary there is nothing to show, so the load fails as it did before summaries were stored.
+      if (!canonical) throw error;
+      // The summary could not be stored. It is used for this response only; the next load recomputes it.
+      console.error(`Unable to store the refreshed progress summary ${progressRef.id}`, error);
+    }
+    return canonical;
   }
 
   private unlockedStatus(

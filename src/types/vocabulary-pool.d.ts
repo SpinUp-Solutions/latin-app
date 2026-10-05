@@ -94,18 +94,3 @@ export interface CreatePoolRequest {
   sourcePoolIds?: string[];
   requestId?: string;
 }
-
-export interface AddWordsRequest {
-  wordDocIds: string[];
-  skipDuplicates?: boolean;
-}
-
-export interface AddWordsResponse {
-  success: boolean;
-  data: {
-    addedCount: number;
-    duplicateCount: number;
-    invalidIds: string[];
-    pool: VocabularyPool;
-  };
-}

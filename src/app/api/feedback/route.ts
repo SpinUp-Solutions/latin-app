@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { submitFeedbackRequestSchema } from '@/shared/student-feedback';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
-import { FeedbackError, feedbackRouteErrorResponse } from '@/src/lib/student-feedback/http.server';
+import { FeedbackError } from '@/src/lib/student-feedback/http.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { submitFeedback } from '@/src/lib/student-feedback/service.server';
 
 export async function POST(request: NextRequest) {
@@ -15,6 +16,6 @@ export async function POST(request: NextRequest) {
     const receipt = await submitFeedback(actor, input);
     return NextResponse.json({ receipt }, { status: 201 });
   } catch (error) {
-    return feedbackRouteErrorResponse(error, 'submit feedback');
+    return routeErrorResponse(error, 'submit feedback');
   }
 }

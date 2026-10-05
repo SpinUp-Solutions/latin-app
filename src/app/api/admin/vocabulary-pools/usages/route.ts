@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { scanVocabularyPoolUsages } from '@/src/lib/vocabulary-pools/usage.server';
 import type { VocabularyPoolUsage } from '@/src/types/vocabulary-pool';
 
@@ -23,11 +24,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }, {});
     return NextResponse.json({ success: true, data: { status: 'available', usagesByPoolId } });
   } catch (error) {
-    console.error('Error fetching vocabulary pool usages:', error);
-    const status = error instanceof AdminAccessError ? error.status : 500;
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to fetch vocabulary pool usages' },
-      { status }
-    );
+    return routeErrorResponse(error, 'fetch vocabulary pool usages');
   }
 }

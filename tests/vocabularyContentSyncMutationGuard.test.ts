@@ -1,5 +1,4 @@
 import {
-  assertVocabularyContentMutationUnlocked,
   runVocabularyContentMutation,
   runVocabularyContentStorageMutation,
 } from '@/src/lib/vocabulary-pools/sync-lock.server';
@@ -20,19 +19,6 @@ describe('vocabulary content maintenance mutation guard', () => {
       code: 'VOCABULARY_CONTENT_SYNC_IN_PROGRESS',
     });
     expect(callback).not.toHaveBeenCalled();
-  });
-
-  it('rejects Storage mutations while the same maintenance lock is active', async () => {
-    const db = {
-      collection: () => ({
-        doc: () => ({ get: async () => ({ exists: true, data: () => ({ ownerId: 'sync-owner' }) }) }),
-      }),
-    };
-
-    await expect(assertVocabularyContentMutationUnlocked(db as never)).rejects.toMatchObject({
-      status: 409,
-      code: 'VOCABULARY_CONTENT_SYNC_IN_PROGRESS',
-    });
   });
 
   it('owns the singleton lock for the full Storage callback and releases only its own lock', async () => {

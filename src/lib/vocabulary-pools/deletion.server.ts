@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { VocabularyPoolUsage } from '@/src/types/vocabulary-pool';
 import type { VocabularyPoolUsageScan } from '@/src/lib/vocabulary-pools/usage.server';
+import { DomainError } from '@/src/lib/domain-error';
 
 export const DELETION_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
@@ -15,7 +16,7 @@ export type StoredVocabularyPoolDeletionChallenge = {
   expiresAt: Date;
 };
 
-export class VocabularyPoolDeletionError extends Error {
+export class VocabularyPoolDeletionError extends DomainError {
   constructor(
     message: string,
     readonly status: 400 | 404 | 409,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { feedbackUuidSchema } from '@/shared/student-feedback';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { feedbackRouteErrorResponse } from '@/src/lib/student-feedback/http.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { getFeedbackDetail } from '@/src/lib/student-feedback/admin.server';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ feedbackId: string }> }) {
@@ -10,6 +10,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const feedbackId = feedbackUuidSchema.parse((await params).feedbackId);
     return NextResponse.json(await getFeedbackDetail(feedbackId));
   } catch (error) {
-    return feedbackRouteErrorResponse(error, 'get feedback');
+    return routeErrorResponse(error, 'get feedback');
   }
 }

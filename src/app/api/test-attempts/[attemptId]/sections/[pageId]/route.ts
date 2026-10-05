@@ -2,7 +2,7 @@ import { sectionPhaseInputSchema } from '@/shared/tests/sections';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { testAttemptService } from '@/src/lib/tests/attempt-service';
 
 export async function PATCH(
@@ -21,6 +21,6 @@ export async function PATCH(
     );
     return NextResponse.json({ attempt });
   } catch (error) {
-    return testRouteErrorResponse(error, 'change test section phase');
+    return routeErrorResponse(error, 'change test section phase');
   }
 }
