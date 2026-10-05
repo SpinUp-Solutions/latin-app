@@ -59,6 +59,9 @@ export async function getReadableVocabularyPool(db: Firestore, poolId: string): 
   };
 }
 
+// Firestore accepts at most 30 values in one `in` filter.
+const WORD_ID_QUERY_BATCH_SIZE = 30;
+
 export async function loadVocabularyPoolWords(
   pool: ReadableVocabularyPool,
   selectedWordIds?: readonly string[],
@@ -73,8 +76,8 @@ export async function loadVocabularyPoolWords(
     options.maxWords === undefined ? selectedIds : selectedIds.slice(0, Math.max(0, Math.floor(options.maxWords)));
   if (wordIds.length === 0) return [];
 
-  const chunks = Array.from({ length: Math.ceil(wordIds.length / 10) }, (_, index) =>
-    wordIds.slice(index * 10, index * 10 + 10)
+  const chunks = Array.from({ length: Math.ceil(wordIds.length / WORD_ID_QUERY_BATCH_SIZE) }, (_, index) =>
+    wordIds.slice(index * WORD_ID_QUERY_BATCH_SIZE, (index + 1) * WORD_ID_QUERY_BATCH_SIZE)
   );
   const snapshots = [];
   const concurrency = Math.max(1, Math.min(10, Math.floor(options.queryConcurrency ?? 4)));
