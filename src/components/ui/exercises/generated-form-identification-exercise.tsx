@@ -136,7 +136,7 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
   const resetRequired = mode === 'practice' && !queueEnabled && shouldResetExercise;
   const escalationLevels = exercise.feedbackConfig.escalationLevels ?? [];
   const queueLevel = escalationLevels[Math.min((failures[itemIndex] ?? 0) - 1, escalationLevels.length - 1)];
-  const feedbackLevel = queueEnabled && isCorrect === false ? queueLevel : level;
+  const feedbackLevel = queueEnabled && isCorrect === false ? (queueLevel ?? { showAnswer: true }) : level;
   const feedbackMessage =
     queueEnabled && isCorrect === false ? queueLevel?.message || 'Incorrect. You’ll try this word again.' : message;
 

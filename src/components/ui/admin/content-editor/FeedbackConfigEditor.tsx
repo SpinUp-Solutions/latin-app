@@ -31,7 +31,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
     timing: false,
   });
 
-  const [timingInputValue, setTimingInputValue] = useState<string>((itemProgressionDelay || 2000).toString());
+  const [timingInputValue, setTimingInputValue] = useState<string>((itemProgressionDelay ?? 2000).toString());
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -49,7 +49,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
   };
 
   React.useEffect(() => {
-    setTimingInputValue((itemProgressionDelay || 2000).toString());
+    setTimingInputValue((itemProgressionDelay ?? 2000).toString());
   }, [itemProgressionDelay]);
 
   const updateEscalationLevels = (levels: FeedbackLevel[]) => {

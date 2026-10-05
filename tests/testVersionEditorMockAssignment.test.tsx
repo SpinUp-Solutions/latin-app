@@ -1,4 +1,6 @@
 import React from 'react';
+import { toast } from 'sonner';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
@@ -299,6 +301,37 @@ describe('normal version editor mock-assignment contract', () => {
 
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('A test version must contain at least one scored exercise');
+  });
+
+  it('explains an empty morphology exercise with immediate save feedback', async () => {
+    const onSave = jest.fn();
+    const emptyMorphologyVersion = {
+      ...version,
+      pages: [
+        {
+          id: 'page-1',
+          items: [
+            {
+              id: 'morphology',
+              type: 'generated-form-identification' as const,
+              maxPoints: 1,
+              feedbackConfig: { escalationLevels: [] },
+              data: {
+                mode: 'step-by-step' as const,
+                generatorConfig: { collection: VOCABULARY_WORDS_COLLECTION, wordSource: 'filters' as const, count: 5 },
+                paradigmConfigs: {},
+              },
+            },
+          ],
+        },
+      ],
+    };
+    renderEditor(<TestVersionEditor initialTest={test} initialVersion={emptyMorphologyVersion} onSave={onSave} />);
+    await screen.findByRole('heading', { name: 'Test Version Editor' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Test' }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/morphology/i);
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/morphology/i));
   });
 
   it('explicitly saves incomplete inactive work as a draft', async () => {

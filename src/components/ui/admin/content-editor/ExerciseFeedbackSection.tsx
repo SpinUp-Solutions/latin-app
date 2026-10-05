@@ -15,7 +15,7 @@ export const ExerciseFeedbackSection: React.FC<ExerciseFeedbackSectionProps> = (
   itemProgressionDelay,
   onItemProgressionDelayChange,
 }) => {
-  const showTimingConfig = itemProgressionDelay !== undefined && onItemProgressionDelayChange !== undefined;
+  const showTimingConfig = onItemProgressionDelayChange !== undefined;
 
   return (
     <div>

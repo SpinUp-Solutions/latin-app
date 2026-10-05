@@ -154,14 +154,24 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   // live dashboard list. It proves that this origin has a frozen delivery;
   // starting that existing session then restores the withheld answer payload.
   // A fresh inactive mock never gets this projection and remains start-denied.
+  // Starting or retaking invalidates mock detail. Its late response must not
+  // reopen an active attempt and replace the student's local answers.
   const resumeMockAttempt = useEffectEvent(() => void openAttempt('Unable to resume this mock test'));
   useEffect(() => {
-    if (!isMockTest || !mockDetail?.attempt || !user || activeOriginKeyRef.current !== originKey) return;
+    if (
+      !isMockTest ||
+      attempt ||
+      screen !== 'expectations' ||
+      !mockDetail?.attempt ||
+      !user ||
+      activeOriginKeyRef.current !== originKey
+    )
+      return;
     const resumeScope = `${originKey}:${mockDetail.attempt.id}`;
     if (mockResumeScopeRef.current === resumeScope) return;
     mockResumeScopeRef.current = resumeScope;
     resumeMockAttempt();
-  }, [isMockTest, mockDetail?.attempt, originKey, user]);
+  }, [attempt, isMockTest, mockDetail?.attempt, originKey, screen, user]);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
