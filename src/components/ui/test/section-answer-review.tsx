@@ -25,7 +25,8 @@ const generatedPromptSchema = z.object({
   id: z.string().optional(),
   text: z.string().optional(),
   selected_form: z.string().optional(),
-  dictionary_entry: z.string().optional(),
+  // Generated items store null when the vocabulary word has no dictionary entry.
+  dictionary_entry: z.string().nullish(),
   root_word: z.string().optional(),
   hasSelectedForm: z.boolean().optional(),
   step: z.string().optional(),
