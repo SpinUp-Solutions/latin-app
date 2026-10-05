@@ -412,31 +412,47 @@ it('keeps a pending manual retry when leaving and returning to a lesson page', (
   expect(screen.getByText('unus')).toBeInTheDocument();
 });
 
-it.each(['translation', 'morphology'])('shows the correction for the full hold with no feedback levels (%s)', kind => {
-  jest.useFakeTimers();
-  const exercise = kind === 'translation' ? translation() : morphology('single');
-  exercise.feedbackConfig = { escalationLevels: [], progressionRules: { autoAdvanceOnCorrect: true } };
-  exercise.itemProgressionDelay = 750;
-  if (exercise.type === 'generated-translation') {
-    render(<Translation exercise={exercise} resolvedItems={prompts} />);
-  } else {
-    render(
-      <Morphology
-        exercise={exercise}
-        resolvedItems={createGeneratedFormIdentificationItems(exercise, [
-          word('amo', 'first', 'singular'),
-          word('amas', 'second', 'singular'),
-        ])}
-      />
-    );
+it.each([
+  ['translation', true],
+  ['translation', false],
+  ['morphology', true],
+  ['morphology', false],
+] as const)(
+  'shows the correction during the hold only when a feedback level enables it (%s, configured %s)',
+  (kind, configured) => {
+    jest.useFakeTimers();
+    const exercise = kind === 'translation' ? translation() : morphology('single');
+    exercise.feedbackConfig = {
+      escalationLevels: configured ? [{ message: 'Look at the answer', showAnswer: true }] : [],
+      progressionRules: { autoAdvanceOnCorrect: true },
+    };
+    exercise.itemProgressionDelay = 750;
+    if (exercise.type === 'generated-translation') {
+      render(<Translation exercise={exercise} resolvedItems={prompts} />);
+    } else {
+      render(
+        <Morphology
+          exercise={exercise}
+          resolvedItems={createGeneratedFormIdentificationItems(exercise, [
+            word('amo', 'first', 'singular'),
+            word('amas', 'second', 'singular'),
+          ])}
+        />
+      );
+    }
+    answer('wrong');
+    if (!configured) {
+      expect(screen.getByText(/try this word again/)).toBeInTheDocument();
+      expect(screen.queryByText(/Correct answer/)).not.toBeInTheDocument();
+      return;
+    }
+    expect(screen.getByText(/Correct answer/)).toBeInTheDocument();
+    act(() => jest.advanceTimersByTime(4999));
+    expect(screen.getByText(/Correct answer/)).toBeInTheDocument();
+    act(() => jest.advanceTimersByTime(1));
+    expect(screen.queryByText(/Correct answer/)).not.toBeInTheDocument();
   }
-  answer('wrong');
-  expect(screen.getByText(/Correct answer/)).toBeInTheDocument();
-  act(() => jest.advanceTimersByTime(4999));
-  expect(screen.getByText(/Correct answer/)).toBeInTheDocument();
-  act(() => jest.advanceTimersByTime(1));
-  expect(screen.queryByText(/Correct answer/)).not.toBeInTheDocument();
-});
+);
 
 it.each(['single', 'step'])('accepts 1st in morphology practice (%s)', variant => {
   const exercise = morphology(variant);
