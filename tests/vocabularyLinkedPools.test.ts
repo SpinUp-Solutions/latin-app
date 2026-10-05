@@ -297,6 +297,21 @@ test.each([false, true])(
   }
 );
 
+test('GET reports dangling word IDs without repairing membership from a stale read', async () => {
+  seed('dangling', ['a', 'gone', 'b']);
+  mockDb.docs.delete(`${VOCABULARY_WORDS_COLLECTION}/gone`);
+
+  const response = await getPool(request('GET', undefined), params('dangling'));
+
+  expect(response.status).toBe(200);
+  const { data } = await response.json();
+  expect(data.missingWordIds).toEqual(['gone']);
+  expect(data.pool.words.map((word: { id: string }) => word.id)).toEqual(['a', 'b']);
+  expect(data.actualWordCount).toBe(2);
+  expect(mockDb.docs.get(poolPath('dangling'))?.wordDocIds).toEqual(['a', 'gone', 'b']);
+  expect(mockDb.writes).toEqual([]);
+});
+
 test('source changes cannot introduce indirect cycles', async () => {
   const pool = await create();
   const response = await updateRoute(request('PUT', { sourcePoolIds: [pool.id] }), params('lesson-3'));

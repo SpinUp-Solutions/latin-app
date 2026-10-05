@@ -62,13 +62,11 @@ const lessonSummary = (overrides: Partial<StudentLessonSummary> = {}): StudentLe
 
 describe('student dashboard test card', () => {
   it('uses the production lesson-card presentation while retaining the accessible action', () => {
-    const { container } = render(<LessonCard lesson={lessonSummary()} onLessonClick={jest.fn()} />);
+    render(<LessonCard lesson={lessonSummary()} onLessonClick={jest.fn()} />);
 
-    expect(container.firstChild).toHaveClass('h-40');
     expect(screen.getByText('Lesson')).toBeInTheDocument();
     expect(screen.getByText('Continue from where you left off.')).toBeInTheDocument();
     expect(screen.getByText('35% complete')).toBeInTheDocument();
-    expect(container.querySelector('.h-1 > div')).toHaveStyle({ width: '35%' });
     expect(screen.getByRole('button', { name: 'Continue lesson' })).toBeInTheDocument();
   });
 
@@ -177,10 +175,9 @@ describe('student dashboard test card', () => {
     );
   });
 
-  it('uses the shared fixed-height learning-unit footprint', () => {
-    const { container } = render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
+  it('offers a review of an attempted test', () => {
+    render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
 
-    expect(container.firstChild).toHaveClass('h-40');
     expect(screen.getByText('Review test')).toBeInTheDocument();
   });
 

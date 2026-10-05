@@ -1,88 +1,42 @@
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 
+const blank = { tense: '', voice: '', mood: '', person: '', number: '' };
+
 describe('parseFormPathFromString', () => {
-  it('parses finite conjugation paths', () => {
-    expect(parseFormPathFromString('indicative.active.perfect.singular.first', 'conjugation')).toEqual({
-      verb_form: 'finite',
-      tense: 'perfect',
-      voice: 'active',
-      mood: 'indicative',
-      person: 'first',
-      number: 'singular',
-    });
+  it.each([
+    [
+      'indicative.active.perfect.singular.first',
+      {
+        verb_form: 'finite',
+        tense: 'perfect',
+        voice: 'active',
+        mood: 'indicative',
+        person: 'first',
+        number: 'singular',
+      },
+    ],
+    ['nonFinite.infinitive.present.active', { ...blank, verb_form: 'infinitive', tense: 'present', voice: 'active' }],
+    ['nonFinite.infinitive.perfect.active', { ...blank, verb_form: 'infinitive', tense: 'perfect', voice: 'active' }],
+    ['nonFinite.infinitive.future.passive', { ...blank, verb_form: 'infinitive', tense: 'future', voice: 'passive' }],
+    [
+      'nonFinite.participle.present.active.nominative.masculine.singular',
+      {
+        ...blank,
+        verb_form: 'participle',
+        tense: 'present',
+        voice: 'active',
+        number: 'singular',
+        case: 'nominative',
+        gender: 'masculine',
+      },
+    ],
+    ['gerund.genitive', { ...blank, verb_form: 'gerund', case: 'genitive' }],
+    ['supine.accusative', { ...blank, verb_form: 'supine', case: 'accusative' }],
+  ])('parses the conjugation path %s', (path, expected) => {
+    expect(parseFormPathFromString(path, 'conjugation')).toEqual(expected);
   });
 
   it('does not parse arbitrary five-part conjugation paths as finite forms', () => {
     expect(parseFormPathFromString('nonFinite.foo.bar.baz.qux', 'conjugation')).toBeNull();
-  });
-
-  it('parses present active infinitive paths', () => {
-    expect(parseFormPathFromString('nonFinite.infinitive.present.active', 'conjugation')).toEqual({
-      verb_form: 'infinitive',
-      tense: 'present',
-      voice: 'active',
-      mood: '',
-      person: '',
-      number: '',
-    });
-  });
-
-  it('parses perfect active infinitive paths', () => {
-    expect(parseFormPathFromString('nonFinite.infinitive.perfect.active', 'conjugation')).toEqual({
-      verb_form: 'infinitive',
-      tense: 'perfect',
-      voice: 'active',
-      mood: '',
-      person: '',
-      number: '',
-    });
-  });
-
-  it('parses future passive infinitive paths', () => {
-    expect(parseFormPathFromString('nonFinite.infinitive.future.passive', 'conjugation')).toEqual({
-      verb_form: 'infinitive',
-      tense: 'future',
-      voice: 'passive',
-      mood: '',
-      person: '',
-      number: '',
-    });
-  });
-
-  it('parses participle paths', () => {
-    expect(parseFormPathFromString('nonFinite.participle.present.active.nominative.masculine.singular', 'conjugation')).toEqual({
-      verb_form: 'participle',
-      tense: 'present',
-      voice: 'active',
-      mood: '',
-      person: '',
-      number: 'singular',
-      case: 'nominative',
-      gender: 'masculine',
-    });
-  });
-
-  it('parses gerund paths', () => {
-    expect(parseFormPathFromString('gerund.genitive', 'conjugation')).toEqual({
-      verb_form: 'gerund',
-      tense: '',
-      voice: '',
-      mood: '',
-      person: '',
-      number: '',
-      case: 'genitive',
-    });
-  });
-
-  it('parses supine paths', () => {
-    expect(parseFormPathFromString('supine.accusative', 'conjugation')).toEqual({
-      verb_form: 'supine',
-      tense: '',
-      voice: '',
-      mood: '',
-      person: '',
-      number: '',
-      case: 'accusative',
-    });
   });
 });

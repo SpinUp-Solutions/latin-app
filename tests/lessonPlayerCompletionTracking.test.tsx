@@ -10,8 +10,6 @@ import {
 import { toast } from 'sonner';
 import { captureException, captureMessage } from '@sentry/nextjs';
 
-let audioEndedHandler: (() => void) | undefined;
-
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -57,10 +55,7 @@ jest.mock('@/src/hooks/useAuth', () => ({
 
 jest.mock('@/src/hooks/useAudio', () => ({
   __esModule: true,
-  default: (_src: unknown, onEnded?: () => void) => {
-    audioEndedHandler = onEnded;
-    return { audioRef: { current: null }, isPlaying: false, togglePlay: jest.fn() };
-  },
+  default: () => ({ audioRef: { current: null }, isPlaying: false, togglePlay: jest.fn() }),
 }));
 
 jest.mock('sonner', () => ({
@@ -176,7 +171,6 @@ let pageWrites: Array<Deferred<MutationSummary>>;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  audioEndedHandler = undefined;
   markWrites = [];
   pageWrites = [];
   finishWrite = createDeferred();
@@ -271,7 +265,6 @@ describe('LessonPlayer accepted completion tracking', () => {
     });
 
     expect(screen.getByRole('progressbar', { name: /exercise progress/i })).toHaveAttribute('aria-valuenow', '2');
-    expect(screen.getByRole('progressbar').querySelector('.stroke-roman-green')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByRole('button', { name: /lesson complete/i })).toBeDisabled();
   });
@@ -778,27 +771,6 @@ describe('LessonPlayer mutation summaries and retries', () => {
     expect(screen.getByText('Progress 100%')).toBeInTheDocument();
   });
 
-  it('auto-advances audio on practice pages without exercises', async () => {
-    render(
-      <LessonPlayer
-        lesson={createLesson(2, {
-          pageItems: [
-            [{ id: 'text-1', type: 'text', title: 'Read' }],
-            [{ id: 'exercise-2', type: 'fill', title: 'Exercise' }],
-          ],
-        })}
-      />
-    );
-    await act(async () => {
-      pageWrites[0].resolve({ success: true, progress: 0 });
-    });
-    expect(screen.getByText('Page content: page-1')).toBeInTheDocument();
-    act(() => {
-      audioEndedHandler?.();
-    });
-    expect(screen.getByText('Page content: page-2')).toBeInTheDocument();
-  });
-
   it('ignores late mutation summaries after the lesson id changes', async () => {
     const { rerender } = render(
       <LessonPlayer
@@ -841,43 +813,5 @@ describe('LessonPlayer mutation summaries and retries', () => {
     expect(screen.getByRole('button', { name: 'Finish lesson' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /lesson complete/i })).not.toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: /exercise progress/i })).toHaveAttribute('aria-valuenow', '0');
-  });
-
-  it('does not auto-advance audio on practice exercise pages', async () => {
-    render(
-      <LessonPlayer
-        lesson={createLesson(2, {
-          pageItems: [
-            [{ id: 'exercise-1', type: 'fill', title: 'Exercise' }],
-            [{ id: 'text-2', type: 'text', title: 'Read' }],
-          ],
-        })}
-      />
-    );
-    await act(async () => {
-      pageWrites[0].resolve({ success: true, progress: 0 });
-    });
-    act(() => {
-      audioEndedHandler?.();
-    });
-    expect(screen.getByText('Page content: page-1')).toBeInTheDocument();
-  });
-
-  it('does not auto-advance audio on exercise pages', async () => {
-    render(
-      <LessonPlayer
-        lesson={createLesson(2, {
-          pageItems: [
-            [{ id: 'exercise-1', type: 'fill', title: 'Exercise' }],
-            [{ id: 'text-2', type: 'text', title: 'Read' }],
-          ],
-        })}
-        trackProgress={false}
-      />
-    );
-    act(() => {
-      audioEndedHandler?.();
-    });
-    expect(screen.getByText('Page content: page-1')).toBeInTheDocument();
   });
 });

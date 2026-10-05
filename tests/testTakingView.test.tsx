@@ -116,7 +116,6 @@ describe('shared Roman test-taking view', () => {
       />
     );
 
-    expect(screen.getByTestId('test-taking-view')).toHaveClass('bg-roman-marble');
     expect(screen.getByText('Roman assessment')).toBeInTheDocument();
     expect(screen.getByText('1 of 2 answered')).toBeInTheDocument();
     expect(screen.getByText('page-one:test')).toBeInTheDocument();

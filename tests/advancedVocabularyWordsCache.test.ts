@@ -66,6 +66,23 @@ it('sends only the filters that apply to the selected part of speech', async () 
   });
 });
 
+it('reads a legacy inventory collection from the active words collection on the admin route', async () => {
+  mockQuery.mockResolvedValue(page(['a'], null));
+  const store = createStore();
+
+  await store.dispatch(
+    advancedVocabularyApi.endpoints.getAdvancedWords.initiate({
+      collection: 'vocabulary_words_v4',
+      filters: baseFilters,
+      limit: 20,
+      fetchAll: false,
+    })
+  );
+
+  expect((mockQuery.mock.calls[0][0] as { url: string }).url).toMatch(/^\/admin\/words\?/);
+  expect(requestedParams(0).get('collection')).toBe(VOCABULARY_WORDS_COLLECTION);
+});
+
 it('appends a cursor page into the first page cache and ignores filters that do not apply', async () => {
   const store = createStore();
   const args = { collection: VOCABULARY_WORDS_COLLECTION, filters: baseFilters, limit: 2, fetchAll: false };

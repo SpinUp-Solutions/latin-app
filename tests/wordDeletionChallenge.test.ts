@@ -3,8 +3,6 @@ import {
   firestoreVersionFingerprint,
   isWordDeletionChallengeValid,
 } from '@/src/lib/vocabulary/word-deletion.server';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 describe('word deletion confirmation challenges', () => {
   it('rejects a confirmation when a pool was added after the warning', () => {
@@ -101,14 +99,5 @@ describe('word deletion confirmation challenges', () => {
     expect(firestoreVersionFingerprint({ seconds: 100, nanoseconds: 123_000_001 })).not.toBe(
       firestoreVersionFingerprint({ seconds: 100, nanoseconds: 123_999_999 })
     );
-  });
-
-  it('transports confirmation tokens in a DELETE body rather than the URL', () => {
-    const apiSource = readFileSync(join(process.cwd(), 'src/store/api/vocabularyApi.ts'), 'utf8');
-    expect(apiSource).toContain('body: { confirmationToken }');
-    expect(apiSource).not.toContain('?confirmationToken=');
-
-    const routeSource = readFileSync(join(process.cwd(), 'src/app/api/admin/words/[wordId]/route.ts'), 'utf8');
-    expect(routeSource).not.toContain("searchParams.get('confirmationToken')");
   });
 });

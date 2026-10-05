@@ -44,24 +44,13 @@ describe('lesson route navigation', () => {
     sessionStorage.clear();
   });
 
-  it('does not render the previous lesson while the requested lesson is loading', () => {
+  it.each([
+    ['is still loading', undefined],
+    ['still reports the previous lesson as current', lesson('lesson-1')],
+  ])('does not render the previous lesson while the requested one %s', (_state, currentData) => {
     mockUseGetStudentLessonQuery.mockReturnValue({
       data: lesson('lesson-1'),
-      currentData: undefined,
-      isLoading: false,
-      error: undefined,
-    });
-
-    render(<DynamicLessonPage />);
-
-    expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
-    expect(screen.queryByText('Player lesson-2')).not.toBeInTheDocument();
-  });
-
-  it('does not flash stale currentData while the route argument changes', () => {
-    mockUseGetStudentLessonQuery.mockReturnValue({
-      data: lesson('lesson-1'),
-      currentData: lesson('lesson-1'),
+      currentData,
       isLoading: false,
       error: undefined,
     });
