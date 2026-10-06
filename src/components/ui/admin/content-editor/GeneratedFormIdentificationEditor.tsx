@@ -193,7 +193,8 @@ const GeneratedFormIdentificationEditorView: React.FC<{
           <Label htmlFor="retryIncorrectAnswers">Repeat incorrect words until correct</Label>
         </div>
         <p className="text-sm text-gray-500">
-          Practice only. Incorrect words return at the end of the queue, using the existing auto-advance setting and the
+          Practice only. Incorrect words return at the end of the queue. If any feedback level has Show Answer, a missed
+          word shows the answer straight away and waits for the student to press Got it. Otherwise it moves on after the
           Incorrect Answer Delay under Timing Configuration. The reset-after-mistakes setting is ignored while this is
           enabled. Tests are unchanged.
         </p>
@@ -354,6 +355,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
             ? incorrectItemProgressionDelay => editor.updateContent({ incorrectItemProgressionDelay })
             : undefined
         }
+        hintAvailable={false}
       />
     </div>
   );

@@ -20,6 +20,8 @@ interface FeedbackConfigEditorProps {
   incorrectItemProgressionDelay?: number;
   /** Only exercises that requeue a missed word advance after an incorrect answer. */
   onIncorrectItemProgressionDelayChange?: (delay: number) => void;
+  /** False for an exercise with no hint to show, which leaves Show Hint out of its levels. */
+  hintAvailable?: boolean;
 }
 
 interface DelayInputProps {
@@ -74,6 +76,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
   onItemProgressionDelayChange,
   incorrectItemProgressionDelay,
   onIncorrectItemProgressionDelayChange,
+  hintAvailable = true,
 }) => {
   const [expandedSections, setExpandedSections] = useState({
     escalation: true,
@@ -186,14 +189,16 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
                         </div>
 
                         <div className="flex gap-4">
-                          <label className="flex items-center gap-2 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={!!level.showHint}
-                              onChange={e => updateEscalationLevel(index, { ...level, showHint: e.target.checked })}
-                            />
-                            Show Hint
-                          </label>
+                          {hintAvailable && (
+                            <label className="flex items-center gap-2 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={!!level.showHint}
+                                onChange={e => updateEscalationLevel(index, { ...level, showHint: e.target.checked })}
+                              />
+                              Show Hint
+                            </label>
+                          )}
 
                           <label className="flex items-center gap-2 text-xs">
                             <input
@@ -432,7 +437,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
               {onIncorrectItemProgressionDelayChange && (
                 <DelayInput
                   label="Incorrect Answer Delay (ms)"
-                  description="Time a missed word and its feedback stay on screen before the word goes back in line"
+                  description="Time a missed word and its feedback stay on screen before the word goes back in line. Feedback that shows a hint or the answer waits for the student to press Got it instead."
                   value={incorrectItemProgressionDelay}
                   defaultValue={MISSED_ANSWER_PROGRESSION_DELAY}
                   onCommit={onIncorrectItemProgressionDelayChange}
