@@ -2,7 +2,13 @@ import type { FeedbackLevel } from '@/src/types/exercises/base';
 
 export function hasVisibleFeedbackContent(content: unknown): boolean {
   if (typeof content === 'string') {
-    return content.replace(/<[^>]*>/g, '').trim() !== '';
+    // An editor's empty paragraph is `<p>&nbsp;</p>`, which renders as nothing.
+    return (
+      content
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;|&#(?:160|x0*a0);/gi, ' ')
+        .trim() !== ''
+    );
   }
 
   return Boolean(content);
