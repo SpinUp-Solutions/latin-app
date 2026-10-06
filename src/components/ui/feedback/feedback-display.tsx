@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Check, X, HelpCircle, ChevronRight, RotateCcw } from 'lucide-react';
 import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
@@ -46,6 +46,28 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
   const hasFeedbackContent =
     hasPrimaryMessage || shouldShowHint || shouldShowAnswer || shouldShowExplanationPanel || Boolean(onContinue);
   const shouldRender = Boolean(onStartOver) || (isCorrect !== null && hasFeedbackContent);
+
+  // Feedback opens below the answer, where the floating lesson navigation can sit on top of it.
+  // Bring new or changed feedback into view; feedback already on screen at mount stays put.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const feedbackKey = shouldRender
+    ? [
+        isCorrect,
+        message,
+        shouldShowHint,
+        shouldShowAnswer,
+        shouldShowExplanationPanel,
+        Boolean(onContinue),
+        Boolean(onStartOver),
+      ].join('|')
+    : '';
+  const shownFeedbackKey = useRef(feedbackKey);
+  useEffect(() => {
+    if (shownFeedbackKey.current === feedbackKey) return;
+    shownFeedbackKey.current = feedbackKey;
+    if (feedbackKey) containerRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [feedbackKey]);
+
   if (!shouldRender) return null;
 
   const showStatusPanel = isCorrect !== null && hasFeedbackContent;
@@ -56,7 +78,8 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
     : 'bg-red-50 border-red-200 text-red-700';
 
   return (
-    <div>
+    // The bottom scroll margin matches the space the lesson player reserves for its navigation bar.
+    <div ref={containerRef} className="scroll-mb-28">
       {showStatusPanel ? (
         <div className={`${baseClasses} ${statusClasses}`}>
           <div className="flex items-start gap-2">
