@@ -108,7 +108,10 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
 
   const resetRequired = mode === 'practice' && !queueEnabled && shouldResetExercise;
   const escalationLevels = exercise.feedbackConfig.escalationLevels ?? [];
-  const levelAfterMisses = (misses: number) => escalationLevels[Math.min(misses - 1, escalationLevels.length - 1)];
+  // A missed word leaves for the back of the queue, so it shows the answer at once when any level reveals it.
+  const answerLevel = escalationLevels.find(candidate => candidate.showAnswer);
+  const levelAfterMisses = (misses: number) =>
+    answerLevel ?? escalationLevels[Math.min(misses - 1, escalationLevels.length - 1)];
   const queueLevel = levelAfterMisses(failures[itemIndex] ?? 0);
   const feedbackLevel = queueEnabled && isCorrect === false ? queueLevel : level;
   const correctAnswerOf = (item: GeneratedTranslationItem) => item.acceptedAnswers.join(' OR ');

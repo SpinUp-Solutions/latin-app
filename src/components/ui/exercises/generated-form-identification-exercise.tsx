@@ -137,7 +137,10 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
 
   const resetRequired = mode === 'practice' && !queueEnabled && shouldResetExercise;
   const escalationLevels = exercise.feedbackConfig.escalationLevels ?? [];
-  const levelAfterMisses = (misses: number) => escalationLevels[Math.min(misses - 1, escalationLevels.length - 1)];
+  // A missed word leaves for the back of the queue, so it shows the answer at once when any level reveals it.
+  const answerLevel = escalationLevels.find(candidate => candidate.showAnswer);
+  const levelAfterMisses = (misses: number) =>
+    answerLevel ?? escalationLevels[Math.min(misses - 1, escalationLevels.length - 1)];
   const queueLevel = levelAfterMisses(failures[itemIndex] ?? 0);
   const feedbackLevel = queueEnabled && isCorrect === false ? queueLevel : level;
   const correctAnswerOf = (item: ResolvedFormIdentificationItem) =>
@@ -246,9 +249,9 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
       reset();
       setIsProcessing(false);
     };
-    // A shown hint or answer stays until the student acknowledges it.
+    // A shown answer stays until the student acknowledges it.
     const missLevel = levelAfterMisses((failures[itemIndex] ?? 0) + 1);
-    if (!correct && revealsHintOrAnswer(missLevel, currentItem.hint, correctAnswerOf(currentItem))) {
+    if (!correct && revealsHintOrAnswer(missLevel, undefined, correctAnswerOf(currentItem))) {
       awaitConfirmation(afterAdvance);
       return;
     }
@@ -283,9 +286,7 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
 
   const currentItem = itemAt(itemIndex);
   const acknowledgesReveal =
-    queueEnabled &&
-    isCorrect === false &&
-    revealsHintOrAnswer(feedbackLevel, currentItem.hint, correctAnswerOf(currentItem));
+    queueEnabled && isCorrect === false && revealsHintOrAnswer(feedbackLevel, undefined, correctAnswerOf(currentItem));
   const nextWordId = items[order[currentIndex + 1]]?.wordId;
   const completedWords =
     new Set(
@@ -405,12 +406,12 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
             disabled={isProcessing || resetRequired}
           />
 
+          {/* No hint is passed: a word's definition does not help identify its form. */}
           {!testAnswerMode && (
             <FeedbackDisplay
               isCorrect={isCorrect}
               message={feedbackMessage}
               level={feedbackLevel}
-              hint={currentItem.hint}
               correctAnswer={correctAnswerOf(currentItem)}
               showExplanation={showExplanation}
               onContinue={(isCorrect || queueEnabled) && isAwaitingConfirmation ? confirmAdvance : undefined}

@@ -123,3 +123,18 @@ it('offers a separate incorrect answer delay only to exercises that requeue a mi
   rerender(view(8000, false));
   expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
 });
+
+it('leaves Show Hint out of the feedback levels of an exercise that has no hint to show', () => {
+  const view = (hintAvailable?: boolean) => (
+    <ExerciseFeedbackSection
+      feedbackConfig={{ escalationLevels: [{ message: '', showHint: true, showAnswer: false }] }}
+      onChange={jest.fn()}
+      hintAvailable={hintAvailable}
+    />
+  );
+  const { rerender } = render(view());
+  expect(screen.getByRole('checkbox', { name: 'Show Hint' })).toBeChecked();
+  rerender(view(false));
+  expect(screen.queryByRole('checkbox', { name: 'Show Hint' })).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: 'Show Answer' })).toBeInTheDocument();
+});
