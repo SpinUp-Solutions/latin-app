@@ -104,7 +104,7 @@ describe('vocabulary pool archive resolution', () => {
         return { docs: ids.map(id => document(id, { word: id })) };
       },
     }));
-    const ids = Array.from({ length: 100 }, (_, index) => `word-${index}`);
+    const ids = Array.from({ length: 300 }, (_, index) => `word-${index}`);
 
     const words = await loadVocabularyPoolWords(
       { data: { wordDocIds: ids }, source: 'active', words: { where } } as never,
@@ -112,8 +112,27 @@ describe('vocabulary pool archive resolution', () => {
       { queryConcurrency: 4 }
     );
 
-    expect(words).toHaveLength(100);
-    expect(maxActive).toBeLessThanOrEqual(4);
+    expect(words).toHaveLength(300);
+    expect(maxActive).toBe(4);
+  });
+
+  it('loads a large pool in word-ID batches of 30 and keeps the pool order', async () => {
+    const where = jest.fn((_field, _operator, ids: string[]) => ({
+      // Firestore returns documents in ID order, not in the order requested.
+      get: async () => ({ docs: [...ids].reverse().map(id => document(id, { word: id })) }),
+    }));
+    const ids = Array.from({ length: 199 }, (_, index) => `word-${index}`);
+
+    const words = await loadVocabularyPoolWords({
+      data: { wordDocIds: ids },
+      source: 'active',
+      words: { where },
+    } as never);
+
+    const batches = where.mock.calls.map(([, , batch]) => batch);
+    expect(batches.map(batch => batch.length)).toEqual([30, 30, 30, 30, 30, 30, 19]);
+    expect(batches.flat()).toEqual(ids);
+    expect(words.map(word => word.id)).toEqual(ids);
   });
 
   it('splits oversized archive commits and preserves all large word snapshots', async () => {
