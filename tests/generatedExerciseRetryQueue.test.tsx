@@ -510,11 +510,7 @@ it('waits for Got it on a shown hint, and keeps the timer when the word has no h
   render(
     <Translation
       exercise={exercise}
-      resolvedItems={[
-        { ...prompts[0], hint: 'a number below two' },
-        { ...prompts[1], hint: '<p>&nbsp;</p>' },
-        prompts[2],
-      ]}
+      resolvedItems={[{ ...prompts[0], hint: 'a number below two' }, { ...prompts[1], hint: '<p> </p>' }, prompts[2]]}
     />
   );
   answer('wrong');
