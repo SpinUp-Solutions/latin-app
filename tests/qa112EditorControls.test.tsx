@@ -93,3 +93,33 @@ it('shows the effective default timing when omitted, preserves zero and commits 
   fireEvent.blur(screen.getByRole('spinbutton'));
   expect(onDelayChange).toHaveBeenLastCalledWith(750);
 });
+
+it('offers a separate incorrect answer delay only to exercises that requeue a miss', () => {
+  const onDelayChange = jest.fn();
+  const onIncorrectDelayChange = jest.fn();
+  const view = (incorrectDelay?: number, requeues = true) => (
+    <ExerciseFeedbackSection
+      feedbackConfig={{ escalationLevels: [] }}
+      onChange={jest.fn()}
+      itemProgressionDelay={750}
+      onItemProgressionDelayChange={onDelayChange}
+      incorrectItemProgressionDelay={incorrectDelay}
+      onIncorrectItemProgressionDelayChange={requeues ? onIncorrectDelayChange : undefined}
+    />
+  );
+  const { rerender } = render(view());
+  fireEvent.click(screen.getByText('Timing Configuration'));
+  const incorrect = () => screen.getByRole('spinbutton', { name: 'Incorrect Answer Delay (ms)' });
+  expect(screen.getByRole('spinbutton', { name: 'Item Progression Delay (ms)' })).toHaveValue(750);
+  expect(incorrect()).toHaveValue(5000);
+  fireEvent.blur(incorrect());
+  expect(onIncorrectDelayChange).not.toHaveBeenCalled();
+  rerender(view(0));
+  expect(incorrect()).toHaveValue(0);
+  fireEvent.change(incorrect(), { target: { value: '8000' } });
+  fireEvent.blur(incorrect());
+  expect(onIncorrectDelayChange).toHaveBeenLastCalledWith(8000);
+  expect(onDelayChange).not.toHaveBeenCalled();
+  rerender(view(8000, false));
+  expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+});

@@ -239,7 +239,7 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
         setIsProcessing(false);
       },
       false,
-      correct ? 0 : MISSED_ANSWER_PROGRESSION_DELAY
+      correct ? undefined : (exercise.incorrectItemProgressionDelay ?? MISSED_ANSWER_PROGRESSION_DELAY)
     );
   };
 

@@ -119,8 +119,9 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
           <Label htmlFor="retryIncorrectAnswers">Repeat incorrect words until correct</Label>
         </div>
         <p className="text-sm text-gray-500">
-          Practice only. Incorrect words return at the end of the queue, using the existing auto-advance setting and
-          delay. The reset-after-mistakes setting is ignored while this is enabled. Tests are unchanged.
+          Practice only. Incorrect words return at the end of the queue, using the existing auto-advance setting and the
+          Incorrect Answer Delay under Timing Configuration. The reset-after-mistakes setting is ignored while this is
+          enabled. Tests are unchanged.
         </p>
       </div>
 
@@ -200,6 +201,12 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
         onChange={feedbackConfig => editor.updateContent({ feedbackConfig })}
         itemProgressionDelay={editingContent.itemProgressionDelay}
         onItemProgressionDelayChange={itemProgressionDelay => editor.updateContent({ itemProgressionDelay })}
+        incorrectItemProgressionDelay={editingContent.incorrectItemProgressionDelay}
+        onIncorrectItemProgressionDelayChange={
+          (editingContent.data.retryIncorrectAnswers ?? true)
+            ? incorrectItemProgressionDelay => editor.updateContent({ incorrectItemProgressionDelay })
+            : undefined
+        }
       />
     </div>
   );

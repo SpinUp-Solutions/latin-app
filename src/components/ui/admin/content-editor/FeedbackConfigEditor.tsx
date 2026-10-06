@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/ca
 import { Plus, Trash2, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
 import { FeedbackConfig, FeedbackLevel, SuccessMessageConfig, ProgressionRules } from '@/src/types/exercises/base';
 import {
+  DEFAULT_ITEM_PROGRESSION_DELAY,
+  MISSED_ANSWER_PROGRESSION_DELAY,
   getSuccessMessageWithDefaults,
   getProgressionRulesWithDefaults,
   normalizeEscalationLevel,
@@ -15,13 +17,63 @@ interface FeedbackConfigEditorProps {
   onChange: (config: FeedbackConfig) => void;
   itemProgressionDelay?: number;
   onItemProgressionDelayChange?: (delay: number) => void;
+  incorrectItemProgressionDelay?: number;
+  /** Only exercises that requeue a missed word advance after an incorrect answer. */
+  onIncorrectItemProgressionDelayChange?: (delay: number) => void;
 }
+
+interface DelayInputProps {
+  label: string;
+  description: string;
+  value: number | undefined;
+  defaultValue: number;
+  onCommit: (delay: number) => void;
+}
+
+const DelayInput: React.FC<DelayInputProps> = ({ label, description, value, defaultValue, onCommit }) => {
+  const id = React.useId();
+  const [inputValue, setInputValue] = useState<string>((value ?? defaultValue).toString());
+
+  React.useEffect(() => {
+    setInputValue((value ?? defaultValue).toString());
+  }, [value, defaultValue]);
+
+  const handleBlur = () => {
+    const numValue = parseInt(inputValue);
+    const finalValue = isNaN(numValue) || numValue < 0 ? defaultValue : numValue;
+    setInputValue(finalValue.toString());
+    // Leaving the field untouched must not pin an unset delay to today's default.
+    if (finalValue !== (value ?? defaultValue)) onCommit(finalValue);
+  };
+
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium mb-1">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="number"
+        value={inputValue}
+        onChange={e => setInputValue(e.target.value)}
+        onBlur={handleBlur}
+        className="w-full p-2 border rounded-md text-sm"
+        placeholder={defaultValue.toString()}
+        min="0"
+        step="100"
+      />
+      <div className="text-xs text-gray-500 mt-1">{description}</div>
+    </div>
+  );
+};
 
 export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
   feedbackConfig,
   onChange,
   itemProgressionDelay,
   onItemProgressionDelayChange,
+  incorrectItemProgressionDelay,
+  onIncorrectItemProgressionDelayChange,
 }) => {
   const [expandedSections, setExpandedSections] = useState({
     escalation: true,
@@ -31,26 +83,9 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
     timing: false,
   });
 
-  const [timingInputValue, setTimingInputValue] = useState<string>((itemProgressionDelay ?? 2000).toString());
-
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
-
-  const handleTimingChange = (value: string) => {
-    setTimingInputValue(value);
-  };
-
-  const handleTimingBlur = () => {
-    const numValue = parseInt(timingInputValue);
-    const finalValue = isNaN(numValue) || numValue < 0 ? 2000 : numValue;
-    setTimingInputValue(finalValue.toString());
-    onItemProgressionDelayChange?.(finalValue);
-  };
-
-  React.useEffect(() => {
-    setTimingInputValue((itemProgressionDelay ?? 2000).toString());
-  }, [itemProgressionDelay]);
 
   const updateEscalationLevels = (levels: FeedbackLevel[]) => {
     onChange({ ...feedbackConfig, escalationLevels: levels });
@@ -386,22 +421,23 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
                 Control the timing of exercise progression and auto-advance behavior.
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Item Progression Delay (ms)</label>
-                <input
-                  type="number"
-                  value={timingInputValue}
-                  onChange={e => handleTimingChange(e.target.value)}
-                  onBlur={handleTimingBlur}
-                  className="w-full p-2 border rounded-md text-sm"
-                  placeholder="2000"
-                  min="0"
-                  step="100"
+              <DelayInput
+                label="Item Progression Delay (ms)"
+                description="Time to wait before automatically advancing to the next exercise item after a correct answer"
+                value={itemProgressionDelay}
+                defaultValue={DEFAULT_ITEM_PROGRESSION_DELAY}
+                onCommit={onItemProgressionDelayChange}
+              />
+
+              {onIncorrectItemProgressionDelayChange && (
+                <DelayInput
+                  label="Incorrect Answer Delay (ms)"
+                  description="Time a missed word and its feedback stay on screen before the word goes back in line"
+                  value={incorrectItemProgressionDelay}
+                  defaultValue={MISSED_ANSWER_PROGRESSION_DELAY}
+                  onCommit={onIncorrectItemProgressionDelayChange}
                 />
-                <div className="text-xs text-gray-500 mt-1">
-                  Time to wait before automatically advancing to the next exercise item after a correct answer
-                </div>
-              </div>
+              )}
             </CardContent>
           )}
         </Card>

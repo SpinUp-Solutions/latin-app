@@ -219,14 +219,17 @@ it('retains legacy retry-in-place and forced-reset behavior when explicitly disa
 });
 
 it.each([
-  [undefined, 5000],
-  [750, 5000],
-  [8000, 8000],
-])('keeps a mistake on screen for at least five seconds (delay %s)', (delay, wait) => {
+  [undefined, undefined, 5000],
+  [750, undefined, 5000],
+  [8000, undefined, 5000],
+  [5000, 1500, 1500],
+  [750, 9000, 9000],
+])('holds a mistake for its own delay, five seconds by default (item %s, incorrect %s)', (delay, incorrect, wait) => {
   jest.useFakeTimers();
   const exercise = translation();
   exercise.data.retryIncorrectAnswers = true;
   exercise.itemProgressionDelay = delay;
+  exercise.incorrectItemProgressionDelay = incorrect;
   exercise.feedbackConfig = { ...feedbackConfig, progressionRules: { autoAdvanceOnCorrect: true } };
   render(<Translation exercise={exercise} resolvedItems={prompts} />);
   answer('wrong');
@@ -234,6 +237,17 @@ it.each([
   act(() => jest.advanceTimersByTime(wait - 1));
   expect(screen.getByText('unus')).toBeInTheDocument();
   act(() => jest.advanceTimersByTime(1));
+  expect(screen.getByText('duo')).toBeInTheDocument();
+});
+
+it('requeues a mistake at once when the incorrect answer delay is zero', () => {
+  jest.useFakeTimers();
+  const exercise = translation();
+  exercise.incorrectItemProgressionDelay = 0;
+  exercise.feedbackConfig = { ...feedbackConfig, progressionRules: { autoAdvanceOnCorrect: true } };
+  render(<Translation exercise={exercise} resolvedItems={prompts} />);
+  answer('wrong');
+  act(() => jest.advanceTimersByTime(0));
   expect(screen.getByText('duo')).toBeInTheDocument();
 });
 
@@ -390,6 +404,21 @@ it('uses the automatic delay for a whole-word morphology retry and final complet
   act(() => jest.advanceTimersByTime(5000));
   expect(done.onComplete).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('textbox')).toBeDisabled();
+});
+
+it('holds a missed morphology word for the configured incorrect answer delay', () => {
+  jest.useFakeTimers();
+  const exercise = morphology('single');
+  exercise.itemProgressionDelay = 250;
+  exercise.incorrectItemProgressionDelay = 1200;
+  exercise.feedbackConfig = { ...feedbackConfig, progressionRules: { autoAdvanceOnCorrect: true } };
+  const words = [word('amo', 'first', 'singular'), word('amas', 'second', 'singular')];
+  render(<Morphology exercise={exercise} resolvedItems={createGeneratedFormIdentificationItems(exercise, words)} />);
+  answer('wrong');
+  act(() => jest.advanceTimersByTime(1199));
+  expect(screen.getByText('amo')).toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(1));
+  expect(screen.getByText('amas')).toBeInTheDocument();
 });
 
 it('keeps a pending manual retry when leaving and returning to a lesson page', () => {

@@ -71,6 +71,8 @@ export interface BaseExercise extends ContentItem {
   /** Required only when the exercise is persisted inside a test version. */
   maxPoints?: number;
   itemProgressionDelay?: number;
+  /** Practice retry queue only: how long a missed word stays on screen before it is requeued. */
+  incorrectItemProgressionDelay?: number;
   feedbackConfig: FeedbackConfig;
 }
 

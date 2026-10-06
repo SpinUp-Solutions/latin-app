@@ -156,7 +156,7 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
           setIsProcessing(false);
         },
         false,
-        MISSED_ANSWER_PROGRESSION_DELAY
+        exercise.incorrectItemProgressionDelay ?? MISSED_ANSWER_PROGRESSION_DELAY
       );
       return;
     }
