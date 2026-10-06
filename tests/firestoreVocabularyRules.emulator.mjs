@@ -16,6 +16,7 @@ const environment = await initializeTestEnvironment({
 try {
   const db = environment.authenticatedContext('student-1').firestore();
   const collections = [
+    'learningPathMigrations',
     'vocabulary_pools',
     'vocabulary_words_v5',
     'vocabulary_words_v4',
@@ -36,7 +37,7 @@ try {
     await assertFails(deleteDoc(reference));
   }
 
-  console.log(`Verified direct client denial for ${collections.length} vocabulary collections.`);
+  console.log(`Verified direct client denial for ${collections.length} server-only collections.`);
 } finally {
   await environment.cleanup();
 }

@@ -121,27 +121,29 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
 
   const handleGlobalFiltersChange = useCallback(
     (updates: Partial<GeneratorFilters>) => {
-      updateConfig({ filters: { ...config.filters, ...updates } });
-
-      if (activeParadigm) {
+      // Global and paradigm filters must be committed together. Separate
+      // dispatches would each spread the same old editingContent.
+      const nextContent = produce(editingContent, draft => {
+        draft.data.generatorConfig = ensureGeneratorConfig({
+          ...rawConfig,
+          filters: { ...config.filters, ...updates },
+        });
+        if (!activeParadigm) return;
+        if (!draft.data.paradigmConfigs || Object.keys(draft.data.paradigmConfigs).length === 0) {
+          draft.data.paradigmConfigs = { ...paradigmConfigs };
+        }
+        const activeConfig = draft.data.paradigmConfigs[activeParadigm];
+        if (!activeConfig) return;
         const relevantFilters = PARADIGM_RELEVANT_FILTERS[activeParadigm];
-        const paradigmFilterUpdates: Partial<GeneratorFilters> = {};
-
         for (const key of Object.keys(updates) as (keyof GeneratorFilters)[]) {
-          if (relevantFilters.includes(key as keyof Omit<GeneratorFilters, 'partOfSpeech'>)) {
-            paradigmFilterUpdates[key] = updates[key];
+          if (key !== 'partOfSpeech' && relevantFilters.includes(key)) {
+            activeConfig.filters[key] = updates[key];
           }
         }
-
-        if (Object.keys(paradigmFilterUpdates).length > 0) {
-          const currentFilters = paradigmConfigs[activeParadigm]?.filters || {};
-          handleUpdateParadigmConfig(activeParadigm, {
-            filters: { ...currentFilters, ...paradigmFilterUpdates },
-          });
-        }
-      }
+      });
+      updateContent(nextContent);
     },
-    [config.filters, updateConfig, activeParadigm, paradigmConfigs, handleUpdateParadigmConfig]
+    [editingContent, rawConfig, config.filters, activeParadigm, paradigmConfigs, updateContent]
   );
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { createPracticeCategorySchema, listPracticeCategoriesQuerySchema } from '@/src/lib/practice-categories/schemas';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json({ categories });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'fetch practice categories');
+    return routeErrorResponse(error, 'fetch practice categories');
   }
 }
 
@@ -28,6 +28,6 @@ export async function POST(request: NextRequest) {
     const category = await practiceCategoryService.createCategory(input, actor.uid);
     return NextResponse.json({ success: true, category }, { status: 201 });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'create practice category');
+    return routeErrorResponse(error, 'create practice category');
   }
 }

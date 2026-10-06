@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { testAttemptService } from '@/src/lib/tests/attempt-service';
 import { createSubmittedResultPdf } from '@/src/lib/tests/result-pdf.server';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
@@ -28,6 +28,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
     });
   } catch (error) {
-    return testRouteErrorResponse(error, 'export test result PDF');
+    return routeErrorResponse(error, 'export test result PDF');
   }
 }

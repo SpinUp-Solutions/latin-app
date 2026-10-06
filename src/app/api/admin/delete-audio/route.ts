@@ -1,33 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { runVocabularyContentStorageMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { parseLessonAudioPath } from '@/src/lib/lesson-audio-path.server';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    await verifyAdminAccess(req);
-  } catch (error) {
-    if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') {
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Request blocked' },
-        { status: error.status }
-      );
-    }
-    if (error instanceof Error) {
-      if (error.message === 'Unauthorized') {
-        return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-      } else if (error.message === 'Forbidden') {
-        return new NextResponse(JSON.stringify({ error: 'Forbidden: User is not an admin' }), { status: 403 });
-      }
-    }
-    return new NextResponse(JSON.stringify({ error: 'An unexpected error occurred during authorization' }), {
-      status: 500,
-    });
-  }
-
-  try {
-    const { audioPath } = await req.json();
+    await verifyAdminAccess(request);
+    const { audioPath } = await request.json();
 
     if (!audioPath) {
       return new NextResponse(JSON.stringify({ error: 'Audio path is required' }), { status: 400 });
@@ -46,17 +27,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'File deleted successfully' });
   } catch (error) {
-    console.error('Error deleting file from Firebase Storage:', error);
-    if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') {
-      return NextResponse.json(
-        {
-          error: error instanceof Error ? error.message : 'Request blocked',
-          ...('code' in error && typeof error.code === 'string' ? { code: error.code } : {}),
-        },
-        { status: error.status }
-      );
-    }
-    const message = error instanceof Error ? error.message : 'Failed to delete file';
-    return new NextResponse(JSON.stringify({ error: message }), { status: 500 });
+    return routeErrorResponse(error, 'delete audio file');
   }
 }

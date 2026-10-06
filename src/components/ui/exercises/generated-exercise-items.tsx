@@ -3,7 +3,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { usePracticeGeneratedExerciseItems } from '@/src/hooks/usePracticeGeneratedExerciseItems';
 import { generatedExerciseWordsRequest, type GeneratedExercise } from '@/src/lib/tests/generated-exercises';
-import type { GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
+import type { GeneratedExerciseQuerySource } from '@/src/store/api/generatedExerciseApi';
 import type { RuntimeMode } from '@/src/types/runtime-mode';
 import { ExerciseLoadingCard, ExerciseMessageCard } from './exercise-status-card';
 

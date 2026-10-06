@@ -1,10 +1,8 @@
 import { GET, POST } from '@/src/app/api/admin/practice-categories/route';
-import { GET as GET_AVAILABLE_LESSONS } from '@/src/app/api/admin/practice-categories/[categoryId]/lessons/available/route';
 
 const mockVerifyAdminAccess = jest.fn();
 const mockListCategories = jest.fn();
 const mockCreateCategory = jest.fn();
-const mockGetAvailableCategoryLessons = jest.fn();
 
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
@@ -18,7 +16,6 @@ jest.mock('@/src/lib/practice-categories/service', () => ({
   practiceCategoryService: {
     listCategories: (...args: unknown[]) => mockListCategories(...args),
     createCategory: (...args: unknown[]) => mockCreateCategory(...args),
-    getAvailableCategoryLessons: (...args: unknown[]) => mockGetAvailableCategoryLessons(...args),
   },
 }));
 
@@ -33,7 +30,6 @@ describe('practice category admin routes', () => {
     jest.clearAllMocks();
     mockVerifyAdminAccess.mockResolvedValue({ uid: 'admin-1' });
     mockListCategories.mockResolvedValue([]);
-    mockGetAvailableCategoryLessons.mockResolvedValue([]);
   });
 
   it.each([
@@ -64,29 +60,12 @@ describe('practice category admin routes', () => {
     expect(mockCreateCategory).not.toHaveBeenCalled();
   });
 
-  it('uses lightweight category lists unless counts are requested', async () => {
-    await GET(request(undefined, 'lessonType=vocab&status=active'));
+  it.each([
+    ['', false],
+    ['&includeCounts=true', true],
+  ])('lists categories with counts only when requested (%s)', async (query, includeCounts) => {
+    await GET(request(undefined, `lessonType=vocab&status=active${query}`));
 
-    expect(mockListCategories).toHaveBeenCalledWith({
-      lessonType: 'vocab',
-      status: 'active',
-      includeCounts: false,
-    });
-  });
-
-  it('includes category counts when explicitly requested', async () => {
-    await GET(request(undefined, 'lessonType=vocab&status=active&includeCounts=true'));
-
-    expect(mockListCategories).toHaveBeenCalledWith({
-      lessonType: 'vocab',
-      status: 'active',
-      includeCounts: true,
-    });
-  });
-
-  it('loads available lessons through the dedicated endpoint', async () => {
-    await GET_AVAILABLE_LESSONS(request(), { params: Promise.resolve({ categoryId: 'category-1' }) });
-
-    expect(mockGetAvailableCategoryLessons).toHaveBeenCalledWith('category-1');
+    expect(mockListCategories).toHaveBeenCalledWith({ lessonType: 'vocab', status: 'active', includeCounts });
   });
 });

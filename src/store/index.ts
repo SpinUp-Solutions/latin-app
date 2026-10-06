@@ -5,12 +5,8 @@ import lessonEditorReducer from './slices/lessonEditorSlice';
 import clipboardReducer from './slices/clipboardSlice';
 import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
 import vocabularyReducer from './slices/vocabularySlice';
-import advancedFiltersReducer from './slices/advancedFiltersSlice';
 import { appApi } from './api/appApi';
-import { vocabularyPoolApi } from './api/vocabularyPoolApi';
-import { vocabularyApi } from './api/vocabularyApi';
-import { advancedVocabularyApi } from './api/advancedVocabularyApi';
-import { vocabularyWordRequestsApi } from './api/vocabularyWordRequestsApi';
+import { generatedExerciseApi } from './api/generatedExerciseApi';
 
 export const store = configureStore({
   reducer: {
@@ -19,23 +15,13 @@ export const store = configureStore({
     clipboard: clipboardReducer,
     vocabularyPools: vocabularyPoolsReducer,
     vocabulary: vocabularyReducer,
-    advancedFilters: advancedFiltersReducer,
     [appApi.reducerPath]: appApi.reducer,
-    [vocabularyPoolApi.reducerPath]: vocabularyPoolApi.reducer,
-    [vocabularyApi.reducerPath]: vocabularyApi.reducer,
-    [advancedVocabularyApi.reducerPath]: advancedVocabularyApi.reducer,
-    [vocabularyWordRequestsApi.reducerPath]: vocabularyWordRequestsApi.reducer,
+    [generatedExerciseApi.reducerPath]: generatedExerciseApi.reducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
       serializableCheck: false,
-    }).concat(
-      appApi.middleware,
-      vocabularyPoolApi.middleware,
-      vocabularyApi.middleware,
-      advancedVocabularyApi.middleware,
-      vocabularyWordRequestsApi.middleware
-    ),
+    }).concat(appApi.middleware, generatedExerciseApi.middleware),
 });
 
 setupListeners(store.dispatch);

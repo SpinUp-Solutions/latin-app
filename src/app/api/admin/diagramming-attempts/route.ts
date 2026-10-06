@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Query } from 'firebase-admin/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,11 +34,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ attempts });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '';
-    if (message === 'Unauthorized' || message === 'Forbidden') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('diagramming_attempt_read_failed', error);
-    return NextResponse.json({ error: 'Unable to load diagramming attempts' }, { status: 500 });
+    return routeErrorResponse(error, 'load diagramming attempts');
   }
 }

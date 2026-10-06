@@ -1,12 +1,11 @@
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { auth } from '@/src/services/firebase';
 
-export async function fetchVocabularyBackup(collection = VOCABULARY_WORDS_COLLECTION) {
+export async function fetchVocabularyBackup() {
   const user = auth.currentUser;
   if (!user) throw new Error('You must be signed in to download a vocabulary backup');
 
   const token = await user.getIdToken();
-  const response = await fetch(`/api/admin/words/backup?collection=${encodeURIComponent(collection)}`, {
+  const response = await fetch('/api/admin/words/backup', {
     headers: { authorization: `Bearer ${token}` },
   });
   if (!response.ok) {

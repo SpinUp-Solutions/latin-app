@@ -97,7 +97,7 @@ export function createGeneratedFormIdentificationItems(
       if (!paths) return [];
 
       const correctAnswerDisplay = paths.primary
-        .map(path => paths.steps.map(step => (path[step] ? getDisplayForm(path[step]!) : '')).join(','))
+        .map(path => paths.steps.map(step => (path[step] ? getDisplayForm(step, path[step]!) : '')).join(','))
         .filter(Boolean)
         .join(';');
 
@@ -167,7 +167,7 @@ export function createGeneratedFormIdentificationItems(
         step,
         ...(answers.acceptedAnswers.length
           ? answers
-          : { correctAnswer: fallback, acceptedAnswers: getAcceptedAnswersForStep(fallback) }),
+          : { correctAnswer: fallback, acceptedAnswers: getAcceptedAnswersForStep(step, fallback) }),
         hint: getHintForStep(word, step),
         primaryFormPaths: paths.primary,
         optionalFormPaths: paths.optional,
@@ -184,7 +184,7 @@ function stepAnswers(
 ) {
   return {
     correctAnswer: formatPrimaryAnswersDisplay(primary, step) || formatPrimaryAnswersDisplay(optional, step),
-    acceptedAnswers: getAcceptedAnswersForMultipleValues([
+    acceptedAnswers: getAcceptedAnswersForMultipleValues(step, [
       ...extractStepValuesFromPaths(primary, step),
       ...extractStepValuesFromPaths(optional, step),
     ]),

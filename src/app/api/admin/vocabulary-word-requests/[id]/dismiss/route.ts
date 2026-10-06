@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { requestCollection, routeError, serializeRequestSnapshot } from '../../utils';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
+import { requestCollection, serializeRequestSnapshot } from '../../utils';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,6 +34,6 @@ export async function POST(
       data: { request: serializeRequestSnapshot(updated) },
     });
   } catch (error) {
-    return routeError(error);
+    return routeErrorResponse(error, 'dismiss vocabulary word request');
   }
 }

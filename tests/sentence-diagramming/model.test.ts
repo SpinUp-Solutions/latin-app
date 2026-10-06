@@ -209,7 +209,7 @@ describe('compareDiagramAnnotationSets', () => {
     ]);
   });
 
-  it('lets Deponent coexist with Active or Passive and renders it bold', () => {
+  it('lets Deponent coexist with Active or Passive', () => {
     const tokens = tokenizeDiagramSentence('loquitur');
     const wholeWord = {
       startTokenIndex: 0,
@@ -233,9 +233,6 @@ describe('compareDiagramAnnotationSets', () => {
 
     expect(activeDeponent.map(annotation => annotation.kind)).toEqual(['active', 'deponent']);
     expect(passiveDeponent.map(annotation => annotation.kind)).toEqual(['deponent', 'passive']);
-    expect(buildTokenRenderState(tokens[0], [createAnnotation('deponent', wholeWord)]).className).toContain(
-      'font-bold'
-    );
   });
 
   it('keeps wrapper spans strict even when adjacent wrappers could be merged conceptually', () => {

@@ -9,7 +9,7 @@ import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import { ExerciseIntro } from './exercise-intro';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { type GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
+import { type GeneratedExerciseQuerySource } from '@/src/store/api/generatedExerciseApi';
 import { Card, CardContent } from '../card';
 import { ExerciseMessageCard } from './exercise-status-card';
 import { GeneratedExerciseItems } from './generated-exercise-items';
@@ -35,6 +35,8 @@ import type {
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { narrowFormIdentificationItem, type ResolvedFormIdentificationItem } from '@/src/lib/tests/generated-exercises';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
+import { MISSED_ANSWER_PROGRESSION_DELAY } from '@/src/utils/feedbackDefaults';
+import { revealsHintOrAnswer } from '@/src/utils/feedbackVisibility';
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
@@ -106,6 +108,7 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
     isLastItem,
     isAwaitingConfirmation,
     autoAdvanceIfEnabled,
+    awaitConfirmation,
     confirmAdvance,
     resetIndex,
     goToItem,
@@ -134,8 +137,18 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
 
   const resetRequired = mode === 'practice' && !queueEnabled && shouldResetExercise;
   const escalationLevels = exercise.feedbackConfig.escalationLevels ?? [];
-  const queueLevel = escalationLevels[Math.min((failures[itemIndex] ?? 0) - 1, escalationLevels.length - 1)];
+  // A missed word leaves for the back of the queue, so it shows the answer at once when any level reveals it.
+  const answerLevel = escalationLevels.find(candidate => candidate.showAnswer);
+  const levelAfterMisses = (misses: number) =>
+    answerLevel ?? escalationLevels[Math.min(misses - 1, escalationLevels.length - 1)];
+  const queueLevel = levelAfterMisses(failures[itemIndex] ?? 0);
   const feedbackLevel = queueEnabled && isCorrect === false ? queueLevel : level;
+  const correctAnswerOf = (item: ResolvedFormIdentificationItem) =>
+    isSingleField
+      ? (item as SingleFieldFormIdentificationItem).correctAnswerDisplay
+      : isMultiAnswerMode
+        ? (item as MultiAnswerFormIdentificationItem).correctAnswerDisplay
+        : (item as FormIdentificationItem).correctAnswer;
   const feedbackMessage =
     queueEnabled && isCorrect === false ? queueLevel?.message || 'Incorrect. You’ll try this word again.' : message;
 
@@ -216,7 +229,7 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
       );
     }
     if (finalScore !== null) onCompletionAccepted?.(finalScore);
-    autoAdvanceIfEnabled(() => {
+    const afterAdvance = () => {
       if (finalScore !== null) {
         onComplete?.(finalScore);
         return;
@@ -235,7 +248,18 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
       setUserAnswer('');
       reset();
       setIsProcessing(false);
-    }, false);
+    };
+    // A shown answer stays until the student acknowledges it.
+    const missLevel = levelAfterMisses((failures[itemIndex] ?? 0) + 1);
+    if (!correct && revealsHintOrAnswer(missLevel, undefined, correctAnswerOf(currentItem))) {
+      awaitConfirmation(afterAdvance);
+      return;
+    }
+    autoAdvanceIfEnabled(
+      afterAdvance,
+      false,
+      correct ? undefined : (exercise.incorrectItemProgressionDelay ?? MISSED_ANSWER_PROGRESSION_DELAY)
+    );
   };
 
   const continueTest = () => {
@@ -261,6 +285,8 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
   }
 
   const currentItem = itemAt(itemIndex);
+  const acknowledgesReveal =
+    queueEnabled && isCorrect === false && revealsHintOrAnswer(feedbackLevel, undefined, correctAnswerOf(currentItem));
   const nextWordId = items[order[currentIndex + 1]]?.wordId;
   const completedWords =
     new Set(
@@ -380,21 +406,16 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
             disabled={isProcessing || resetRequired}
           />
 
+          {/* No hint is passed: a word's definition does not help identify its form. */}
           {!testAnswerMode && (
             <FeedbackDisplay
               isCorrect={isCorrect}
               message={feedbackMessage}
               level={feedbackLevel}
-              hint={currentItem.hint}
-              correctAnswer={
-                isSingleField
-                  ? (currentItem as SingleFieldFormIdentificationItem).correctAnswerDisplay
-                  : isMultiAnswerMode
-                    ? (currentItem as MultiAnswerFormIdentificationItem).correctAnswerDisplay
-                    : (currentItem as FormIdentificationItem).correctAnswer
-              }
+              correctAnswer={correctAnswerOf(currentItem)}
               showExplanation={showExplanation}
               onContinue={(isCorrect || queueEnabled) && isAwaitingConfirmation ? confirmAdvance : undefined}
+              continueLabel={acknowledgesReveal ? 'Got it' : undefined}
               allowContinueOnIncorrect={queueEnabled}
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />

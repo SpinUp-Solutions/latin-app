@@ -3,7 +3,7 @@ import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ lesson });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'fetch lesson');
+    return routeErrorResponse(error, 'fetch lesson');
   }
 }
 
@@ -59,6 +59,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       message: 'Lesson deleted successfully',
     });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'delete lesson');
+    return routeErrorResponse(error, 'delete lesson');
   }
 }

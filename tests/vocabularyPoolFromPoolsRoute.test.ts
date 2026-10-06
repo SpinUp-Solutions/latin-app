@@ -6,22 +6,13 @@ jest.mock('@/src/services/firebase-admin', () => ({ adminDb: {} }));
 jest.mock('@/src/lib/verifyAdminAccess', () => ({
   verifyAdminAccess: (...args: unknown[]) => mockVerifyAdminAccess(...args),
 }));
-jest.mock('@/src/lib/vocabulary-pools/from-pools.server', () => ({
-  createVocabularyPoolFromPools: (...args: unknown[]) => mockCreateVocabularyPoolFromPools(...args),
-  VocabularyPoolFromPoolsError: class VocabularyPoolFromPoolsError extends Error {
-    readonly status: number;
-    readonly code: string;
-
-    constructor(message: string, status: number, code: string) {
-      super(message);
-      this.status = status;
-      this.code = code;
-    }
-  },
+jest.mock('@/src/lib/vocabulary-pools/linked-pools.server', () => ({
+  createLinkedVocabularyPool: (...args: unknown[]) => mockCreateVocabularyPoolFromPools(...args),
 }));
 
 import { POST } from '@/src/app/api/admin/vocabulary-pools/from-pools/route';
 import { AdminAccessError } from '@/src/lib/admin-access-error';
+import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 
 const makeRequest = (body: unknown, jsonImplementation?: () => Promise<unknown>) =>
   ({
@@ -118,13 +109,9 @@ describe('POST /api/admin/vocabulary-pools/from-pools', () => {
   });
 
   it('maps service conflicts with their actionable code', async () => {
-    const { VocabularyPoolFromPoolsError } = jest.requireMock('@/src/lib/vocabulary-pools/from-pools.server') as {
-      VocabularyPoolFromPoolsError: new (message: string, status: number, code: string) => Error;
-    };
     mockCreateVocabularyPoolFromPools.mockRejectedValueOnce(
-      new VocabularyPoolFromPoolsError(
+      new VocabularyPoolStateError(
         'Source membership changed; start a fresh copy',
-        409,
         'VOCABULARY_POOL_SOURCE_MEMBERSHIP_CHANGED'
       )
     );

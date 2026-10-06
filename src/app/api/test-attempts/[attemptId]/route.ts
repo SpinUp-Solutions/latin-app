@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { testAttemptService } from '@/src/lib/tests/attempt-service';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ attemptId: string }> }) {
@@ -14,6 +14,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (error) {
-    return testRouteErrorResponse(error, 'read test attempt');
+    return routeErrorResponse(error, 'read test attempt');
   }
 }

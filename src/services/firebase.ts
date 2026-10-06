@@ -59,8 +59,8 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   console.log('[Firebase] Connected to Functions emulator');
 }
 
-// Messaging and Analytics are deliberately not initialized here: nothing on
-// the critical path uses them, and their SDKs add script/network work to every
-// page load. When needed, import them dynamically after the app is idle.
+// Analytics is loaded after page load/idle by the root FirebaseAnalytics component.
+// Keep its SDK out of this eager module so it does not delay authentication.
+// Messaging remains uninitialized until a feature needs it.
 
-export { auth, db, storage, functions };
+export { app, auth, db, storage, functions };

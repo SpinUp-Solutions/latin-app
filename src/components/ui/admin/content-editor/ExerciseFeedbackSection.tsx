@@ -7,6 +7,9 @@ interface ExerciseFeedbackSectionProps {
   onChange: (config: FeedbackConfig) => void;
   itemProgressionDelay?: number;
   onItemProgressionDelayChange?: (delay: number) => void;
+  incorrectItemProgressionDelay?: number;
+  onIncorrectItemProgressionDelayChange?: (delay: number) => void;
+  hintAvailable?: boolean;
 }
 
 export const ExerciseFeedbackSection: React.FC<ExerciseFeedbackSectionProps> = ({
@@ -14,8 +17,11 @@ export const ExerciseFeedbackSection: React.FC<ExerciseFeedbackSectionProps> = (
   onChange,
   itemProgressionDelay,
   onItemProgressionDelayChange,
+  incorrectItemProgressionDelay,
+  onIncorrectItemProgressionDelayChange,
+  hintAvailable,
 }) => {
-  const showTimingConfig = itemProgressionDelay !== undefined && onItemProgressionDelayChange !== undefined;
+  const showTimingConfig = onItemProgressionDelayChange !== undefined;
 
   return (
     <div>
@@ -25,6 +31,9 @@ export const ExerciseFeedbackSection: React.FC<ExerciseFeedbackSectionProps> = (
         onChange={onChange}
         itemProgressionDelay={showTimingConfig ? itemProgressionDelay : undefined}
         onItemProgressionDelayChange={showTimingConfig ? onItemProgressionDelayChange : undefined}
+        incorrectItemProgressionDelay={incorrectItemProgressionDelay}
+        onIncorrectItemProgressionDelayChange={onIncorrectItemProgressionDelayChange}
+        hintAvailable={hintAvailable}
       />
     </div>
   );

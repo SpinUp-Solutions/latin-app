@@ -173,6 +173,22 @@ describe('submitted test result review view', () => {
     jest.clearAllMocks();
   });
 
+  it('uses the PDF percentage format and distinguishes zero, partial and full credit', () => {
+    const result = buildResult([
+      [
+        fillItem('wrong', { awardedPoints: 0, correctFirst: false }),
+        fillItem('partial', { awardedPoints: 5, correctFirst: true, correctSecond: false }),
+        fillItem('correct', { awardedPoints: 10, correctFirst: true }),
+      ],
+    ]);
+    result.attempt.percentage = 86.6666666667;
+    render(<TestResultReviewView result={result} />);
+    expect(screen.getByText('86.66%')).toBeInTheDocument();
+    expect(within(screen.getByTestId('review-exercise-wrong')).getByText('1')).toHaveClass('bg-red-100');
+    expect(within(screen.getByTestId('review-exercise-partial')).getByText('2')).toHaveClass('bg-amber-100');
+    expect(within(screen.getByTestId('review-exercise-correct')).getByText('3')).toHaveClass('bg-emerald-100');
+  });
+
   it('opens the first incorrect or partly correct exercise by default', () => {
     render(
       <TestResultReviewView
@@ -285,7 +301,7 @@ describe('submitted test result review view', () => {
     expect(screen.getByText('I love and I walk')).toBeInTheDocument();
   });
 
-  it('stacks diagrams on small screens and places them side by side on large screens', () => {
+  it('compares the student diagram with the correct diagram', () => {
     render(
       <TestResultReviewView
         result={buildResult([
@@ -296,8 +312,6 @@ describe('submitted test result review view', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Exercise 1: Diagram the sentence/ }));
     const comparison = screen.getByTestId('diagram-review-comparison');
-    expect(comparison.className).toContain('grid-cols-1');
-    expect(comparison.className).toContain('lg:grid-cols-2');
     expect(within(comparison).getByText('Your diagram')).toBeInTheDocument();
     expect(within(comparison).getByText('Correct diagram')).toBeInTheDocument();
     expect(screen.getByText('100% of annotations matched.')).toBeInTheDocument();

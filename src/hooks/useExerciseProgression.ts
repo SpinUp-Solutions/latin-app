@@ -99,7 +99,7 @@ export function useExerciseProgression({
   );
 
   const autoAdvanceIfEnabled = useCallback(
-    (afterAdvance: () => void, hasVisibleExplanation: boolean) => {
+    (afterAdvance: () => void, hasVisibleExplanation: boolean, delayOverride?: number) => {
       clearAutoAdvanceTimer();
 
       const autoAdvance = progressionRules?.autoAdvanceOnCorrect ?? false;
@@ -115,7 +115,7 @@ export function useExerciseProgression({
         pendingAdvanceRef.current = advance;
         setIsAwaitingConfirmation(true);
       } else {
-        const delay = itemProgressionDelay ?? DEFAULT_ITEM_PROGRESSION_DELAY;
+        const delay = delayOverride ?? itemProgressionDelay ?? DEFAULT_ITEM_PROGRESSION_DELAY;
         pendingTimerCallbackRef.current = advance;
         remainingDelayRef.current = delay;
         timerDeadlineRef.current = Date.now() + delay;
@@ -135,6 +135,16 @@ export function useExerciseProgression({
     ]
   );
 
+  /** Hold the current item until the student confirms, whatever the auto-advance setting. */
+  const awaitConfirmation = (afterAdvance: () => void) => {
+    clearAutoAdvanceTimer();
+    pendingAdvanceRef.current = () => {
+      nextItem();
+      afterAdvance();
+    };
+    setIsAwaitingConfirmation(true);
+  };
+
   const confirmAdvance = useCallback(() => {
     const pending = pendingAdvanceRef.current;
     if (pending) {
@@ -150,6 +160,7 @@ export function useExerciseProgression({
     isFirstItem,
     isAwaitingConfirmation,
     autoAdvanceIfEnabled,
+    awaitConfirmation,
     confirmAdvance,
     resetIndex,
     nextItem,

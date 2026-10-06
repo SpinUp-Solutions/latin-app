@@ -42,7 +42,7 @@ jest.mock('@/src/hooks/useFormSelection', () => ({
     handleClearSelection: jest.fn(),
   }),
 }));
-jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
+jest.mock('@/src/store/api/generatedExerciseApi', () => ({
   usePreviewGeneratedExerciseMutation: () => [mockPreview, previewState],
 }));
 

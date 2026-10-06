@@ -193,8 +193,10 @@ const GeneratedFormIdentificationEditorView: React.FC<{
           <Label htmlFor="retryIncorrectAnswers">Repeat incorrect words until correct</Label>
         </div>
         <p className="text-sm text-gray-500">
-          Practice only. Incorrect words return at the end of the queue, using the existing auto-advance setting and
-          delay. The reset-after-mistakes setting is ignored while this is enabled. Tests are unchanged.
+          Practice only. Incorrect words return at the end of the queue. If any feedback level has Show Answer, a missed
+          word shows the answer straight away and waits for the student to press Got it. Otherwise it moves on after the
+          Incorrect Answer Delay under Timing Configuration. The reset-after-mistakes setting is ignored while this is
+          enabled. Tests are unchanged.
         </p>
       </div>
 
@@ -265,7 +267,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
             if (isSingleField && prepared) {
               const formatPath = (path: Record<string, string | undefined>) =>
                 wordSteps
-                  .map(step => (path[step] ? getDisplayForm(path[step]) : null))
+                  .map(step => (path[step] ? getDisplayForm(step, path[step]) : null))
                   .filter(Boolean)
                   .join(',');
 
@@ -309,6 +311,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                         if (!displayValue) return null;
 
                         const answers = getAcceptedAnswersForStep(
+                          step,
                           uniquePrimaryValues.length > 0 ? uniquePrimaryValues[0] : displayValue
                         );
 
@@ -346,6 +349,13 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         onChange={feedbackConfig => editor.updateContent({ feedbackConfig })}
         itemProgressionDelay={editingContent.itemProgressionDelay}
         onItemProgressionDelayChange={itemProgressionDelay => editor.updateContent({ itemProgressionDelay })}
+        incorrectItemProgressionDelay={editingContent.incorrectItemProgressionDelay}
+        onIncorrectItemProgressionDelayChange={
+          (editingContent.data.retryIncorrectAnswers ?? true)
+            ? incorrectItemProgressionDelay => editor.updateContent({ incorrectItemProgressionDelay })
+            : undefined
+        }
+        hintAvailable={false}
       />
     </div>
   );

@@ -13,7 +13,7 @@ import {
   resolveGeneratedExercises,
   type GeneratedExercise,
 } from '@/src/lib/tests/generated-exercises';
-import { advancedVocabularyApi } from '@/src/store/api/advancedVocabularyApi';
+import { generatedExerciseApi } from '@/src/store/api/generatedExerciseApi';
 import { useAppDispatch } from '@/src/store/hooks';
 import type { Exercise } from '@/src/types/exercises';
 import type { Page } from '@/src/types/page';
@@ -52,7 +52,7 @@ function useResolvedGeneratedExercises(pages: Page[]) {
     const exercises = JSON.parse(key) as GeneratedExercise[];
     const loadItems = (exercise: GeneratedExercise) =>
       dispatch(
-        advancedVocabularyApi.endpoints.getGeneratedExerciseItems.initiate(
+        generatedExerciseApi.endpoints.getGeneratedExerciseItems.initiate(
           { exercise: generatedExerciseWordsRequest(exercise), source: { kind: 'admin-preview' } },
           { subscribe: false }
         )

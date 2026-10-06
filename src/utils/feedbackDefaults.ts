@@ -9,6 +9,9 @@ const FEEDBACK_DEFAULTS = {
 
 export const DEFAULT_ITEM_PROGRESSION_DELAY = 2000;
 
+/** How long a missed word's correction stays on screen before the word is requeued, unless the exercise sets its own. */
+export const MISSED_ANSWER_PROGRESSION_DELAY = 5000;
+
 export function getSuccessMessageWithDefaults(successMessage?: SuccessMessageConfig): SuccessMessageConfig {
   return {
     default: successMessage?.default || '',

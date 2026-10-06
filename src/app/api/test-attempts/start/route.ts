@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { startTestAttemptInputSchema } from '@/src/lib/tests/schemas';
 import { testAttemptService } from '@/src/lib/tests/attempt-service';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
@@ -13,6 +13,6 @@ export async function POST(request: NextRequest) {
     const result = await testAttemptService.startAttempt(input, student.uid);
     return NextResponse.json(result, { status: result.resumed ? 200 : 201 });
   } catch (error) {
-    return testRouteErrorResponse(error, 'start test attempt');
+    return routeErrorResponse(error, 'start test attempt');
   }
 }

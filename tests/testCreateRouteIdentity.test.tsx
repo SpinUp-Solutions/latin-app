@@ -3,6 +3,7 @@ import CreateTestPage from '@/src/app/admin/(shell)/tests/create/page';
 import CreateMockPage from '@/src/app/admin/(shell)/mock-tests/create/page';
 import CreateVersionPage from '@/src/app/admin/(shell)/tests/edit/[id]/versions/create/page';
 import type { TestVersionEditorSaveResult, TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
+import { clearStableTestEditorIdentity, getStableTestEditorIdentity } from '@/src/lib/tests/editor-session';
 
 const mockRouterReplace = jest.fn();
 const mockCreateTest = jest.fn();
@@ -65,6 +66,20 @@ describe('test create route editor identities', () => {
       unwrap: jest.fn().mockResolvedValue({ test: { id: 'test-1' }, version: { id: 'version-1' }, recovered: false }),
     });
   });
+
+  it.each(['normal-test-create', 'standalone-mock-create', 'normal-test-test-1-version-create'])(
+    'keeps the %s create identity stable across reloads until completion',
+    scope => {
+      sessionStorage.clear();
+      const testId = getStableTestEditorIdentity(scope, 'test', 'test');
+      const versionId = getStableTestEditorIdentity(scope, 'version', 'version');
+      expect(getStableTestEditorIdentity(scope, 'test', 'test')).toBe(testId);
+      expect(getStableTestEditorIdentity(scope, 'version', 'version')).toBe(versionId);
+      clearStableTestEditorIdentity(scope);
+      expect(sessionStorage.getItem(`test_editor_identity:${scope}:test`)).toBeNull();
+      expect(sessionStorage.getItem(`test_editor_identity:${scope}:version`)).toBeNull();
+    }
+  );
 
   it('scopes normal-test creation', () => {
     render(<CreateTestPage />);

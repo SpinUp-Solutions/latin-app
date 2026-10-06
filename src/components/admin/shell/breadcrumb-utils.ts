@@ -64,11 +64,6 @@ export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
   },
   { template: 'mock-tests', crumbs: ['Mock Tests'] },
   {
-    template: 'vocabulary/advanced',
-    crumbs: ['Vocabulary', 'Advanced Filters'],
-    parentHrefs: () => ['/admin/vocabulary'],
-  },
-  {
     template: 'vocabulary/pending',
     crumbs: ['Vocabulary', 'Pending Review'],
     parentHrefs: () => ['/admin/vocabulary'],
@@ -112,7 +107,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   'ai-evaluations': 'AI Evaluations',
   'diagramming-attempts': 'Diagramming Attempts',
   versions: 'Versions',
-  advanced: 'Advanced Filters',
   pending: 'Pending Review',
 };
 

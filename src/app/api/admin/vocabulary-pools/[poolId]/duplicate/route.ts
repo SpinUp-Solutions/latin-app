@@ -4,17 +4,17 @@ import { adminDb } from '@/src/services/firebase-admin';
 import { VOCABULARY_POOL_COLLECTION } from '@/src/lib/vocabulary-pools/archive.server';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { buildPoolSearchTokens } from '@/src/utils/vocabularyPoolSummary';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import {
   runVocabularyContentExclusiveMutation,
   runVocabularyContentMutation,
-  VocabularyContentSyncLockError,
 } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import {
   isVocabularyPoolCreationPending,
   VocabularyPoolStateError,
 } from '@/src/lib/vocabulary-pools/pool-state.server';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +35,7 @@ export async function POST(
     const result = await runVocabularyContentExclusiveMutation(adminDb, async lockOwnerId => {
       const sourceSnapshot = await sourcePoolRef.get();
       if (!sourceSnapshot.exists) {
-        throw new Error('Pool not found');
+        throw new VocabularyPoolStateError('Pool not found', 'VOCABULARY_POOL_NOT_FOUND', 404);
       }
 
       const sourceData = (await resolveVocabularyPool(
@@ -150,22 +150,6 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof VocabularyContentSyncLockError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    }
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    if (error instanceof VocabularyPoolStateError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    }
-
-    console.error('Error duplicating vocabulary pool:', error);
-    const notFound = error instanceof Error && error.message.includes('not found');
-    const status = notFound ? 404 : 500;
-    return NextResponse.json(
-      { success: false, error: notFound ? error.message : 'Failed to duplicate vocabulary pool' },
-      { status }
-    );
+    return routeErrorResponse(error, 'duplicate vocabulary pool');
   }
 }

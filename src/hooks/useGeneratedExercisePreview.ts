@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   usePreviewGeneratedExerciseMutation,
   type GeneratedExercisePreviewRequest,
-} from '@/src/store/api/advancedVocabularyApi';
+} from '@/src/store/api/generatedExerciseApi';
 import {
   fingerprintGeneratedExercisePreviewRequest,
   matchingGeneratedPreviewData,

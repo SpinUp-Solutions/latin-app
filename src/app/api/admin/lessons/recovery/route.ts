@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export interface RecoveryItem {
   id: string;
@@ -34,13 +35,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ recoveryItems });
   } catch (error) {
-    console.error('Error fetching recovery items:', error);
-    if (error instanceof Error) {
-      if (error.message === 'Unauthorized' || error.message === 'Forbidden') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    }
-    return NextResponse.json({ error: 'Failed to fetch recovery items' }, { status: 500 });
+    return routeErrorResponse(error, 'fetch recovery items');
   }
 }
 
@@ -80,12 +75,6 @@ export async function POST(request: NextRequest) {
       message: 'Lesson saved to recovery successfully',
     });
   } catch (error) {
-    console.error('Error saving to recovery:', error);
-    if (error instanceof Error) {
-      if (error.message === 'Unauthorized' || error.message === 'Forbidden') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    }
-    return NextResponse.json({ error: 'Failed to save to recovery' }, { status: 500 });
+    return routeErrorResponse(error, 'save lesson to recovery');
   }
 }

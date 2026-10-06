@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { mockTestService } from '@/src/lib/tests/mock-service';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 
@@ -13,6 +13,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const mockId = firestoreDocumentIdSchema.parse((await params).mockId);
     return NextResponse.json({ detail: await mockTestService.getStudentMockDetail(mockId, student.uid) });
   } catch (error) {
-    return testRouteErrorResponse(error, 'fetch mock test');
+    return routeErrorResponse(error, 'fetch mock test');
   }
 }

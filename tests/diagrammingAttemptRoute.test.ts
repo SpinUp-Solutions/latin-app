@@ -12,10 +12,11 @@ jest.mock('firebase-admin/firestore', () => ({
   },
 }));
 
+jest.mock('firebase-admin', () => ({
+  auth: () => ({ verifyIdToken: (...args: unknown[]) => mockVerifyIdToken(...args) }),
+}));
+
 jest.mock('@/src/services/firebase-admin', () => ({
-  adminAuth: {
-    verifyIdToken: (...args: unknown[]) => mockVerifyIdToken(...args),
-  },
   adminDb: {
     collection: (name: string) => {
       if (name === 'testAttempts') {

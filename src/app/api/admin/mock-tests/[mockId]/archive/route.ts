@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { mockTestService } from '@/src/lib/tests/mock-service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 type Context = { params: Promise<{ mockId: string }> };
@@ -11,6 +11,6 @@ export async function POST(request: NextRequest, { params }: Context) {
       mock: await mockTestService.archiveMock(firestoreDocumentIdSchema.parse((await params).mockId), actor.uid),
     });
   } catch (error) {
-    return testRouteErrorResponse(error, 'archive mock test');
+    return routeErrorResponse(error, 'archive mock test');
   }
 }

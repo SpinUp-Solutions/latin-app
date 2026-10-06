@@ -16,7 +16,7 @@
 - Student routes use `verifyRequestAuth(request)` and must enforce resource ownership; authentication alone is insufficient.
 - `withAdminAuth` is a client-side UX guard, not a security boundary.
 - Never trust client-supplied actor IDs. Derive `createdBy`, `updatedBy`, and ownership fields from the verified token.
-- Use `createAuthenticatedBaseQuery()` for authenticated RTK Query APIs.
+- Add authenticated RTK Query endpoints to `appApi` with `injectEndpoints`. Sign-out resets `appApi`; a separate `createApi` instance would keep one account's data in memory for the next. `generatedExerciseApi` is the one deliberate exception, because the app-wide refetch-on-focus would regenerate a student's exercise items.
 
 Authoritative examples:
 - `src/lib/verifyAdminAccess.ts`
@@ -26,7 +26,7 @@ Authoritative examples:
 ## Firestore and Persisted Data
 
 - Import collection names from `shared/constants/firestore.ts` or an existing domain constant. Do not duplicate collection-name strings.
-- The active vocabulary collection is `VOCABULARY_WORDS_COLLECTION` (`vocabulary_words_v5`). Legacy collections are migration inputs only.
+- The active vocabulary collection is `VOCABULARY_WORDS_COLLECTION` (`vocabulary_words_v5`). Routes never take a collection name from the request.
 - Firestore transactions must perform all reads before any writes.
 - Validate foreign document references inside the transaction that writes the relationship.
 - Reject missing documents and documents marked `_deletionPending`.
@@ -55,11 +55,13 @@ Authoritative examples:
 - Prefer the domain’s existing Zod schemas rather than TypeScript casts.
 - Invalid persisted data should normally fail closed with a specific `409` domain error; do not silently invent defaults unless an existing compatibility normalizer explicitly permits it.
 - Preserve deliberate legacy compatibility behavior. Do not “clean up” legacy defaults without tests showing migration safety.
-- For new domain-style routes, use `createRouteErrorResponse` and structured errors with stable `code` and `status` fields.
+- Expected failures are `DomainError` subclasses (or `RequestError` when no class of its own is needed) with stable `code` and `status` fields.
+- Every route maps errors with `routeErrorResponse(error, action)` in its `catch` block. Do not hand-write error responses there or branch on error messages: an unexpected error must be reported and answered with a generic 500.
 - Follow the response shape of neighboring routes; this repository contains both legacy `{ success, data }` envelopes and newer direct domain responses.
 
 Authoritative examples:
 - `src/lib/route-error-response.ts`
+- `src/lib/domain-error.ts`
 - `src/lib/learning-units/domain.ts`
 - `src/lib/tests/schemas.ts`
 
@@ -68,6 +70,7 @@ Authoritative examples:
 - Do not directly delete entities that may be referenced elsewhere.
 - Use the domain’s existing usage scan, confirmation challenge, revision/fingerprint, archive, and tombstone workflow.
 - Re-check invariants in the final transaction; a preflight read alone is not sufficient.
+- A lesson's content is created or replaced only through `saveLessonInTransaction`, and a student's lesson progress steps (page visit, exercise completion, finish) are written only through `recordLessonProgress`. Extend those rather than writing from a route.
 - Reordering APIs must validate the exact current scope so stale clients cannot silently drop or duplicate records.
 - Cross-document updates should be transactional unless an exclusive, retry-safe multi-transaction workflow is explicitly required.
 
@@ -78,6 +81,7 @@ Authoritative examples:
 - Before changing cache behavior, inspect `serializeQueryArgs`, `merge`, and `forceRefetch` together.
 - If pages share one cache key, a first-page response must replace the cache; cursor responses may append and deduplicate.
 - Do not insert an item into a partially loaded sorted cache unless its position relative to unloaded records is guaranteed.
+- An endpoint that must not follow the app-wide refetch policy exports its query hook through `withSubscriptionDefaults`; RTK Query cannot set that policy per endpoint.
 - If forcing a refresh while the same cache key may be pending, await `util.getRunningQueryThunk(...)` before dispatching the replacement request.
 - When mutating paginated lists, avoid synchronous tag invalidation races; use `util.selectInvalidatedBy(getState(), [{ type: 'EntityList', id: 'LIST' }])` and explicitly dispatch `endpoints.getList.initiate({ ...originalArgs, lastId: null }, { subscribe: false, forceRefetch: true })`.
 - Cache tests should cover:
@@ -121,6 +125,8 @@ Authoritative examples:
 ## Testing and Verification
 
 - Add regression tests for the actual failure mode, not only isolated helper functions.
+- Test behaviour through the route handler, service, rendered component, or a real store. Do not assert on source text (`readFileSync` plus `toContain`) or on Tailwind class strings: such tests pass while the behaviour is broken and fail on harmless refactors. Source scans are reserved for invariants no behaviour test can reach: `tests/adminRouteAuth.test.ts` holds the `verifyAdminAccess` rule for every admin route, including future ones, and the production-sync tests pin the apply order of a script that cannot be run against fakes end to end.
+- Browser specs in `tests/e2e` share one seeded emulator project, so they run with a single worker. `npm run test:e2e` runs all of them from one emulator and dev-server start.
 - Backend mutation tests should cover:
   - unauthorized access;
   - missing and deletion-pending references;

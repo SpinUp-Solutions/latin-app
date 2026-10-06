@@ -10,7 +10,7 @@ import { useFormSelectionControls } from '@/src/hooks/useFormSelection';
 
 interface MultiPosConfigSectionProps {
   availablePartOfSpeech: PartOfSpeech[];
-  wordCountsByPOS: Record<PartOfSpeech, number>;
+  wordCountsByPOS: Partial<Record<PartOfSpeech, number>>;
   posConfigs: Partial<Record<PartOfSpeech, PosGeneratorConfig>>;
   onUpdatePosConfig: (pos: PartOfSpeech, updates: Partial<PosGeneratorConfig>) => void;
   onTogglePOS: (pos: PartOfSpeech, enabled: boolean) => void;

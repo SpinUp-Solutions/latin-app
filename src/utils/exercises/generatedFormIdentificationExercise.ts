@@ -23,45 +23,8 @@ export const validateSingleFieldFormIdentificationExercise = (
   userAnswer: string,
   currentItem: SingleFieldFormIdentificationItem
 ) => {
-  const validatedItem = SingleFieldFormIdentificationItemSchema.parse(currentItem);
-  const userPaths = userAnswer.split(';').map(pathStr => pathStr.split(',').map(normalizeAnswer));
-
-  if (
-    !normalizeAnswer(userAnswer) ||
-    userPaths.length !== validatedItem.primaryFormPaths.length ||
-    userPaths.some(userPath => userPath.length !== validatedItem.steps.length)
-  ) {
-    return { isCorrect: false };
-  }
-
-  const primaryPaths = validatedItem.primaryFormPaths;
-  const matchedPathIndices = new Set<number>();
-
-  for (const userPath of userPaths) {
-    let foundMatch = false;
-
-    for (let pathIdx = 0; pathIdx < primaryPaths.length; pathIdx++) {
-      if (matchedPathIndices.has(pathIdx)) continue;
-
-      const path = primaryPaths[pathIdx];
-      const pathStepValues = validatedItem.steps.map(step => path[step]);
-
-      if (pathStepValues.some(v => !v)) continue;
-
-      const variantsPerStep = pathStepValues.map(value => getAcceptedAnswersForStep(value || '').map(normalizeAnswer));
-      const matchesPath = userPath.every((userPart, index) => variantsPerStep[index].includes(userPart));
-
-      if (matchesPath) {
-        matchedPathIndices.add(pathIdx);
-        foundMatch = true;
-        break;
-      }
-    }
-
-    if (!foundMatch) return { isCorrect: false };
-  }
-
-  return { isCorrect: true };
+  const score = scoreSingleFieldFormIdentificationAnswer(userAnswer, currentItem);
+  return { isCorrect: score.availableUnits > 0 && score.earnedUnits === score.availableUnits };
 };
 
 export interface SingleFieldPartialCredit {
@@ -70,10 +33,68 @@ export interface SingleFieldPartialCredit {
 }
 
 /**
- * Scores each requested grammatical field independently. Submitted paths are
- * paired with distinct expected paths to produce the highest legitimate score.
- * The submitted answer must retain the authored path and field shape so extra
- * guesses cannot be hidden among otherwise valid partial answers.
+ * Highest total from pairing each row with a different column (the Hungarian algorithm). The
+ * student's answer sets the matrix size, so trying every pairing could stall grading.
+ */
+const bestPairingTotal = (scores: number[][]): number => {
+  const tall = scores.length > (scores[0]?.length ?? 0);
+  const matrix = tall ? scores[0].map((_, column) => scores.map(row => row[column])) : scores;
+  const columnCount = matrix[0]?.length ?? 0;
+  const rowPotential = Array<number>(matrix.length + 1).fill(0);
+  const columnPotential = Array<number>(columnCount + 1).fill(0);
+  // Index 0 is a placeholder column holding the row currently being placed.
+  const rowOfColumn = Array<number>(columnCount + 1).fill(0);
+  const previousColumn = Array<number>(columnCount + 1).fill(0);
+
+  for (let row = 1; row <= matrix.length; row++) {
+    rowOfColumn[0] = row;
+    let column = 0;
+    const slack = Array<number>(columnCount + 1).fill(Infinity);
+    const visited = Array<boolean>(columnCount + 1).fill(false);
+    do {
+      visited[column] = true;
+      const currentRow = rowOfColumn[column];
+      let delta = Infinity;
+      let nextColumn = 0;
+      for (let candidate = 1; candidate <= columnCount; candidate++) {
+        if (visited[candidate]) continue;
+        const cost = -matrix[currentRow - 1][candidate - 1] - rowPotential[currentRow] - columnPotential[candidate];
+        if (cost < slack[candidate]) {
+          slack[candidate] = cost;
+          previousColumn[candidate] = column;
+        }
+        if (slack[candidate] < delta) {
+          delta = slack[candidate];
+          nextColumn = candidate;
+        }
+      }
+      for (let candidate = 0; candidate <= columnCount; candidate++) {
+        if (visited[candidate]) {
+          rowPotential[rowOfColumn[candidate]] += delta;
+          columnPotential[candidate] -= delta;
+        } else {
+          slack[candidate] -= delta;
+        }
+      }
+      column = nextColumn;
+    } while (rowOfColumn[column] !== 0);
+    do {
+      const previous = previousColumn[column];
+      rowOfColumn[column] = rowOfColumn[previous];
+      column = previous;
+    } while (column !== 0);
+  }
+
+  return rowOfColumn.reduce(
+    (total, row, column) => (column > 0 && row > 0 ? total + matrix[row - 1][column - 1] : total),
+    0
+  );
+};
+
+/**
+ * Each submitted answer is paired with a different expected answer and earns one unit for every
+ * part that matches it, whatever its other parts say; the pairing with the highest total is used.
+ * A missing or extra answer reduces the fraction earned without changing the item's weight.
  */
 export const scoreSingleFieldFormIdentificationAnswer = (
   userAnswer: string,
@@ -83,36 +104,63 @@ export const scoreSingleFieldFormIdentificationAnswer = (
   const expectedPaths = validatedItem.primaryFormPaths;
   const steps = validatedItem.steps;
   const availableUnits = expectedPaths.length * steps.length;
-  const userPaths = userAnswer.split(';').map(path => path.split(',').map(normalizeAnswer));
+  if (availableUnits === 0) return { earnedUnits: 0, availableUnits };
 
-  if (userPaths.length !== expectedPaths.length || userPaths.some(path => path.length > steps.length)) {
-    return { earnedUnits: 0, availableUnits };
+  const acceptedValues = (paths: typeof expectedPaths) =>
+    paths.map(path =>
+      steps.map(step => (path[step] ? getAcceptedAnswersForStep(step, path[step]).map(normalizeAnswer) : []))
+    );
+  const acceptedPaths = acceptedValues(expectedPaths);
+  const unaskedPaths = acceptedValues(validatedItem.optionalFormPaths);
+  const isComplete = (userPath: string[], accepted: string[][]) =>
+    userPath.length === steps.length && userPath.every((value, index) => accepted[index].includes(value));
+
+  const userPaths = new Map<string, string[]>();
+  let guessCount = 0;
+  for (const segment of userAnswer.split(';')) {
+    // A trailing comma is harmless; internal empty parts still retain their positions.
+    const userPath = segment
+      .trim()
+      .replace(/(?:,\s*)+$/u, '')
+      .split(',')
+      .map(normalizeAnswer);
+    // A stray semicolon is not a guess.
+    if (!userPath.some(Boolean)) continue;
+    // Answers matching the same expected values are one answer, so repeating an answer in other
+    // words, or naming both genders of a common-gender noun, neither earns nor costs credit.
+    const key = userPath
+      .map((value, index) => {
+        const matched = acceptedPaths.flatMap((accepted, path) => (accepted[index]?.includes(value) ? [path] : []));
+        return matched.length > 0 ? matched.join('|') : `=${value}`;
+      })
+      .join(',');
+    if (userPaths.has(key)) continue;
+    userPaths.set(key, userPath);
+    // A correct reading the exercise did not ask for is not a wrong guess.
+    const isUnaskedReading =
+      !acceptedPaths.some(accepted => isComplete(userPath, accepted)) &&
+      unaskedPaths.some(accepted => isComplete(userPath, accepted));
+    if (!isUnaskedReading) guessCount += 1;
   }
+  if (userPaths.size === 0) return { earnedUnits: 0, availableUnits };
 
-  const pathScores = userPaths.map(userPath =>
-    expectedPaths.map(expectedPath =>
-      steps.reduce((score, step, stepIndex) => {
-        const expected = expectedPath[step];
-        if (!expected || !userPath[stepIndex]) return score;
-        const accepted = getAcceptedAnswersForStep(expected).map(normalizeAnswer);
-        return score + (accepted.includes(userPath[stepIndex]) ? 1 : 0);
-      }, 0)
+  const matchedParts = bestPairingTotal(
+    [...userPaths.values()].map(userPath =>
+      acceptedPaths.map(accepted =>
+        userPath.length > steps.length
+          ? 0
+          : accepted.reduce(
+              (score, values, index) => score + (userPath[index] && values.includes(userPath[index]) ? 1 : 0),
+              0
+            )
+      )
     )
   );
 
-  const search = (userIndex: number, usedExpected: Set<number>): number => {
-    if (userIndex >= pathScores.length) return 0;
-    let best = search(userIndex + 1, usedExpected);
-    for (let expectedIndex = 0; expectedIndex < expectedPaths.length; expectedIndex++) {
-      if (usedExpected.has(expectedIndex)) continue;
-      usedExpected.add(expectedIndex);
-      best = Math.max(best, pathScores[userIndex][expectedIndex] + search(userIndex + 1, usedExpected));
-      usedExpected.delete(expectedIndex);
-    }
-    return best;
+  return {
+    earnedUnits: (matchedParts * expectedPaths.length) / Math.max(expectedPaths.length, guessCount),
+    availableUnits,
   };
-
-  return { earnedUnits: search(0, new Set()), availableUnits };
 };
 
 export const validateMultiAnswerStep = (userAnswer: string, currentItem: MultiAnswerFormIdentificationItem) => {
@@ -127,7 +175,7 @@ export const validateMultiAnswerStep = (userAnswer: string, currentItem: MultiAn
   const normalizedUserParts = userParts.map(normalizeAnswer);
   const acceptedByPath = primaryPaths.map(path => {
     const value = path[step];
-    return value ? getAcceptedAnswersForStep(value).map(normalizeAnswer) : [];
+    return value ? getAcceptedAnswersForStep(step, value).map(normalizeAnswer) : [];
   });
   const userAssignedToPath = Array<number>(acceptedByPath.length).fill(-1);
   const assignUserToPath = (userIndex: number, visitedPaths: Set<number>): boolean => {
@@ -178,7 +226,7 @@ export const validatePartialMultiAnswerPaths = (
         const userValue = normalizeAnswer(partialPath[step] || '');
         const primaryValue = primaryPath[step];
         if (!primaryValue) return false;
-        return getAcceptedAnswersForStep(primaryValue).map(normalizeAnswer).includes(userValue);
+        return getAcceptedAnswersForStep(step, primaryValue).map(normalizeAnswer).includes(userValue);
       });
 
       if (!matches) continue;

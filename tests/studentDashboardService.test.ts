@@ -25,14 +25,17 @@ const attemptsWith = (summary: jest.Mock) => ({
   loadAttemptSummaries: jest.fn(async () => ({ summary, scoreTrend: jest.fn(async () => []) })),
 });
 
-const snapshot = (id: string, value?: RecordData, ref?: unknown) => ({
+const snapshot = (id: string, value?: RecordData, ref?: unknown, updateTime?: number) => ({
   id,
   exists: value !== undefined,
   data: () => value,
   ref: ref ?? { id },
+  updateTime,
 });
 
 type QueryLogEntry = { collection: string; projected: boolean; docs: string[] };
+/** Whole-document reads and the version each document is at, which stands in for its Firestore update time. */
+type DocumentLog = { reads: string[]; versions: Map<string, number> };
 
 class FakeQuery {
   private filters: Array<{ field: string; operator: string; value: unknown }> = [];
@@ -43,7 +46,8 @@ class FakeQuery {
     private readonly collectionName: string,
     private readonly collections: Record<string, Record<string, RecordData>>,
     private readonly selectedFieldLog: string[][],
-    private readonly queryLog: QueryLogEntry[]
+    private readonly queryLog: QueryLogEntry[],
+    private readonly documents: DocumentLog
   ) {}
 
   where(field: string, operator: string, value: unknown) {
@@ -63,9 +67,22 @@ class FakeQuery {
   }
 
   doc(id: string) {
+    const key = `${this.collectionName}/${id}`;
+    const version = () => this.documents.versions.get(key) ?? 1;
     const ref = {
       id,
-      get: async () => snapshot(id, this.collections[this.collectionName]?.[id], ref),
+      path: key,
+      get: async () => {
+        this.documents.reads.push(key);
+        return snapshot(id, this.collections[this.collectionName]?.[id], ref, version());
+      },
+      update: async (changes: RecordData, precondition?: { lastUpdateTime?: number }) => {
+        if (precondition?.lastUpdateTime !== undefined && precondition.lastUpdateTime !== version()) {
+          throw Object.assign(new Error('The document changed since it was read'), { code: 9 });
+        }
+        this.collections[this.collectionName][id] = { ...this.collections[this.collectionName][id], ...changes };
+        this.documents.versions.set(key, version() + 1);
+      },
     };
     return ref;
   }
@@ -108,10 +125,39 @@ class FakeQuery {
 const createFakeDb = (collections: Record<string, Record<string, RecordData>>) => {
   const selectedFieldLog: string[][] = [];
   const queryLog: QueryLogEntry[] = [];
+  const documents: DocumentLog = { reads: [], versions: new Map() };
   const db = {
-    collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog, queryLog),
-    runTransaction: <T>(run: (transaction: unknown) => Promise<T>) =>
-      run({ get: (target: { get: () => Promise<unknown> }) => target.get(), getAll: db.getAll }),
+    collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog, queryLog, documents),
+    /**
+     * Applies a transaction's updates only if every document it read is unchanged,
+     * and otherwise runs it again, as Firestore does.
+     */
+    runTransaction: async <T>(run: (transaction: unknown) => Promise<T>): Promise<T> => {
+      for (let attempt = 1; ; attempt += 1) {
+        const versionsRead = new Map<string, number>();
+        const updates: Array<() => Promise<void>> = [];
+        const observe = <S>(read: S): S => {
+          const document = read as { ref?: { path?: string }; updateTime?: number };
+          if (document.ref?.path && document.updateTime !== undefined) {
+            versionsRead.set(document.ref.path, document.updateTime);
+          }
+          return read;
+        };
+        const result = await run({
+          get: async (target: { get: () => Promise<unknown> }) => observe(await target.get()),
+          getAll: async (...inputs: Parameters<typeof db.getAll>) => (await db.getAll(...inputs)).map(observe),
+          update: (ref: { update: (changes: RecordData) => Promise<void> }, changes: RecordData) => {
+            updates.push(() => ref.update(changes));
+          },
+        });
+        const unchanged = [...versionsRead].every(([path, version]) => (documents.versions.get(path) ?? 1) === version);
+        if (unchanged) {
+          for (const update of updates) await update();
+          return result;
+        }
+        if (attempt === 5) throw Object.assign(new Error('Too much contention on these documents'), { code: 10 });
+      }
+    },
     getAll: async (
       ...inputs: Array<{ get?: () => Promise<ReturnType<typeof snapshot>> } | { fieldMask: string[] }>
     ) => {
@@ -132,13 +178,14 @@ const createFakeDb = (collections: Record<string, Record<string, RecordData>>) =
             Object.fromEntries(
               fieldMask.filter(field => value[field] !== undefined).map(field => [field, value[field]])
             ),
-            full.ref
+            full.ref,
+            full.updateTime
           );
         })
       );
     },
   };
-  return { db, selectedFieldLog, queryLog };
+  return { db, selectedFieldLog, queryLog, documents };
 };
 
 const lesson = (overrides: RecordData): RecordData => ({
@@ -1088,6 +1135,206 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
       ['mismatched', 'in-progress', 67, 2],
       ['locked', 'locked', 0, undefined],
     ]);
+  });
+
+  describe('storing a recomputed progress summary', () => {
+    const staleLesson = (overrides: RecordData = {}) =>
+      lesson({
+        title: 'Edited',
+        version: 2,
+        pages: [
+          { id: 'page-1', items: [{ id: 'exercise-a', type: 'fill', title: 'A' }] },
+          { id: 'page-2', items: [{ id: 'exercise-b', type: 'fill', title: 'B' }] },
+          { id: 'page-3', items: [{ id: 'exercise-c', type: 'fill', title: 'C' }] },
+        ],
+        totalPages: 3,
+        totalExercises: 3,
+        ...overrides,
+      });
+    const exerciseHistory = [
+      { exerciseId: 'exercise-a', score: 100, completedAt: 'before' },
+      { exerciseId: 'exercise-b', score: 100, completedAt: 'before' },
+      { exerciseId: 'removed-exercise', score: 100, completedAt: 'before' },
+    ];
+    const staleProgress = (overrides: RecordData = {}) => ({
+      userId: 'user',
+      lessonId: 'edited',
+      status: 'in-progress',
+      furthestPageIndex: 2,
+      progress: 100,
+      completedExerciseCount: 3,
+      requiredExerciseCount: 3,
+      progressSchemaVersion: 4,
+      progressLessonVersion: 1,
+      exerciseProgress: exerciseHistory,
+      lastAccessedAt: 'earlier',
+      updatedAt: 'earlier',
+      ...overrides,
+    });
+    const setup = (editedLesson: RecordData, progress: RecordData) => {
+      const collections = {
+        lessons: { edited: editedLesson },
+        learningPaths: {
+          default: { id: 'default', revision: 1, unitIds: ['edited'], updatedAt: 'now', updatedBy: 'admin' },
+        },
+        userProgress: { user_edited: progress } as Record<string, RecordData>,
+      };
+      const fake = createFakeDb(collections);
+      const service = new StudentDashboardService(
+        fake.db as never,
+        { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
+      );
+      return { ...fake, service, stored: () => collections.userProgress.user_edited };
+    };
+    const editedUnit = async (service: StudentDashboardService) =>
+      (await service.getDashboard('user')).learningPath[0] as StudentLessonSummary;
+
+    it('recomputes a stale summary once and reads the stored one afterwards', async () => {
+      const { service, stored, documents } = setup(staleLesson(), staleProgress());
+
+      expect(await editedUnit(service)).toMatchObject({ status: 'in-progress', progress: 67 });
+      expect(stored()).toEqual(
+        staleProgress({ progress: 67, completedExerciseCount: 2, requiredExerciseCount: 3, progressLessonVersion: 2 })
+      );
+      // The summary projection reads the lesson once; recomputing reads it and the progress record in full.
+      expect(documents.reads.sort()).toEqual([
+        'learningPaths/default',
+        'lessons/edited',
+        'lessons/edited',
+        'userProgress/user_edited',
+      ]);
+
+      documents.reads.length = 0;
+      expect(await editedUnit(service)).toMatchObject({ status: 'in-progress', progress: 67 });
+      expect(documents.reads.sort()).toEqual(['learningPaths/default', 'lessons/edited']);
+    });
+
+    it('stores a completion that a lesson edit produced, with its completion time', async () => {
+      const { service, stored, documents } = setup(twoExerciseLesson(), staleProgress({ furthestPageIndex: 1 }));
+
+      expect(await editedUnit(service)).toMatchObject({ status: 'completed', progress: 100 });
+      expect(stored()).toMatchObject({
+        status: 'completed',
+        progress: 100,
+        completedExerciseCount: 2,
+        requiredExerciseCount: 2,
+        progressLessonVersion: 2,
+        completedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        exerciseProgress: exerciseHistory,
+      });
+
+      documents.reads.length = 0;
+      expect(await editedUnit(service)).toMatchObject({ status: 'completed', progress: 100 });
+      expect(documents.reads.sort()).toEqual(['learningPaths/default', 'lessons/edited']);
+    });
+
+    const twoExerciseLesson = () =>
+      staleLesson({
+        pages: [
+          { id: 'page-1', items: [{ id: 'exercise-a', type: 'fill', title: 'A' }] },
+          { id: 'page-2', items: [{ id: 'exercise-b', type: 'fill', title: 'B' }] },
+        ],
+        totalPages: 2,
+        totalExercises: 2,
+      });
+    /** Runs `change` once, after the refresh has read the progress record and before it stores the summary. */
+    const changeAfterRefreshReads = (db: ReturnType<typeof setup>['db'], change: () => Promise<void>) => {
+      const getAll = db.getAll;
+      let changed = false;
+      db.getAll = async (...refs: Parameters<typeof getAll>) => {
+        const snapshots = await getAll(...refs);
+        if (!changed && snapshots.some(document => document.id === 'user_edited')) {
+          changed = true;
+          await change();
+        }
+        return snapshots;
+      };
+    };
+
+    it('does not store a completion against a lesson that gained an exercise before the write', async () => {
+      const { service, stored, db, documents } = setup(twoExerciseLesson(), staleProgress({ furthestPageIndex: 1 }));
+      changeAfterRefreshReads(db, () =>
+        db
+          .collection('lessons')
+          .doc('edited')
+          .update(staleLesson({ version: 3 }))
+      );
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      await editedUnit(service);
+
+      expect(stored()).toEqual(
+        staleProgress({
+          furthestPageIndex: 1,
+          progress: 67,
+          completedExerciseCount: 2,
+          requiredExerciseCount: 3,
+          progressLessonVersion: 3,
+        })
+      );
+      documents.reads.length = 0;
+      expect(await editedUnit(service)).toMatchObject({ status: 'in-progress', progress: 67 });
+      expect(documents.reads).not.toContain('userProgress/user_edited');
+      consoleError.mockRestore();
+    });
+
+    it('leaves a progress record alone when the student wrote to it after it was read', async () => {
+      const { service, stored, db } = setup(staleLesson(), staleProgress());
+      const studentWrite = staleProgress({
+        status: 'completed',
+        completedAt: 'during the dashboard load',
+        progressLessonVersion: 2,
+        exerciseProgress: [
+          ...exerciseHistory,
+          { exerciseId: 'exercise-c', score: 100, completedAt: 'during the dashboard load' },
+        ],
+        updatedAt: 'during the dashboard load',
+      });
+      changeAfterRefreshReads(db, () => db.collection('userProgress').doc('user_edited').update(studentWrite));
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      expect(await editedUnit(service)).toMatchObject({ status: 'completed', progress: 100 });
+
+      expect(stored()).toEqual(studentWrite);
+      expect(consoleError).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+
+    it('fails the dashboard when a stale record cannot be read, rather than showing it as untouched', async () => {
+      const { service, db } = setup(staleLesson(), staleProgress());
+      changeAfterRefreshReads(db, () => Promise.reject(new Error('Firestore unavailable')));
+
+      await expect(service.getDashboard('user')).rejects.toThrow('Firestore unavailable');
+    });
+
+    it('does not rewrite a record that predates the current progress schema', async () => {
+      const legacy = staleProgress({ progressSchemaVersion: 2 });
+      const { service, stored } = setup(staleLesson(), legacy);
+
+      expect(await editedUnit(service)).toMatchObject({ status: 'in-progress', progress: 67 });
+      expect(stored()).toEqual(legacy);
+    });
+
+    it('still returns the dashboard when the summary cannot be stored', async () => {
+      const { service, stored, db } = setup(staleLesson(), staleProgress());
+      const collection = db.collection;
+      db.collection = (name: string) => {
+        const query = collection(name);
+        const doc = query.doc.bind(query);
+        query.doc = (id: string) =>
+          Object.assign(doc(id), { update: async () => Promise.reject(new Error('Firestore unavailable')) });
+        return query;
+      };
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      expect(await editedUnit(service)).toMatchObject({ status: 'in-progress', progress: 67 });
+      expect(stored()).toEqual(staleProgress());
+      expect(consoleError).toHaveBeenCalledWith(
+        'Unable to store the refreshed progress summary user_edited',
+        expect.any(Error)
+      );
+      consoleError.mockRestore();
+    });
   });
 
   it('does not unlock the next lesson from numeric 100 without completed status', async () => {

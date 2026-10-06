@@ -197,6 +197,116 @@ describe('test grading foundation', () => {
     ).toEqual({ awardedPoints: 4, maxPoints: 6 });
   });
 
+  it('weights every single-field word equally, however many answers it expects', () => {
+    const exercise = {
+      id: 'morphology',
+      type: 'generated-form-identification',
+      title: 'Morphology',
+      instructions: '',
+      maxPoints: 4,
+      feedbackConfig,
+      data: {
+        mode: 'single-field',
+        generatorConfig: { collection: 'words', wordSource: 'filters', count: 2 },
+        paradigmConfigs: {},
+      },
+    } as GeneratedFormIdentificationExercise;
+    const base = {
+      root_word: 'root',
+      dictionary_entry: null,
+      hasSelectedForm: true,
+      steps: ['case', 'number', 'gender'] as SingleFieldFormIdentificationItem['steps'],
+      correctAnswerDisplay: '',
+      optionalFormPaths: [],
+    };
+    const items: SingleFieldFormIdentificationItem[] = [
+      {
+        ...base,
+        id: 'mare',
+        wordId: 'mare',
+        word: 'mare',
+        selected_form: 'mare',
+        primaryFormPaths: [
+          { case: 'nominative', number: 'singular', gender: 'neuter' },
+          { case: 'accusative', number: 'singular', gender: 'neuter' },
+        ],
+      },
+      {
+        ...base,
+        id: 'puella',
+        wordId: 'puella',
+        word: 'puella',
+        selected_form: 'puellam',
+        primaryFormPaths: [{ case: 'accusative', number: 'singular', gender: 'feminine' }],
+      },
+    ];
+
+    expect(
+      gradeGeneratedFormIdentification(
+        exercise,
+        { type: 'generated-form-identification', answers: { mare: 'nom, s, n', puella: 'acc, s, f' } },
+        items
+      )
+    ).toEqual({ awardedPoints: 3, maxPoints: 4 });
+  });
+
+  it('weights every step-by-step word equally, however many questions it has', () => {
+    const exercise = {
+      id: 'morphology',
+      type: 'generated-form-identification',
+      title: 'Morphology',
+      instructions: '',
+      maxPoints: 4,
+      feedbackConfig,
+      data: {
+        mode: 'step-by-step',
+        generatorConfig: { collection: 'words', wordSource: 'filters', count: 2 },
+        paradigmConfigs: {},
+      },
+    } as GeneratedFormIdentificationExercise;
+    const base = {
+      root_word: 'root',
+      dictionary_entry: null,
+      hasSelectedForm: true,
+      hint: undefined,
+      optionalFormPaths: [],
+    };
+    const verb = {
+      ...base,
+      wordId: 'verb',
+      word: 'amamus',
+      selected_form: 'amamus',
+      primaryFormPaths: [{ person: 'first', number: 'plural', tense: 'present' }],
+    };
+    const items: FormIdentificationItem[] = [
+      { ...verb, id: 'person', step: 'person', correctAnswer: 'first', acceptedAnswers: ['first'] },
+      { ...verb, id: 'number', step: 'number', correctAnswer: 'plural', acceptedAnswers: ['plural'] },
+      { ...verb, id: 'tense', step: 'tense', correctAnswer: 'present', acceptedAnswers: ['present'] },
+      {
+        ...base,
+        id: 'case',
+        wordId: 'noun',
+        word: 'puella',
+        selected_form: 'puellam',
+        step: 'case',
+        correctAnswer: 'accusative',
+        acceptedAnswers: ['accusative'],
+        primaryFormPaths: [{ case: 'accusative' }],
+      },
+    ];
+
+    expect(
+      gradeGeneratedFormIdentification(
+        exercise,
+        {
+          type: 'generated-form-identification',
+          answers: { person: 'first', number: 'plural', tense: 'present', case: 'nominative' },
+        },
+        items
+      )
+    ).toEqual({ awardedPoints: 2, maxPoints: 4 });
+  });
+
   it('awards partial credit across step-by-step generated items', () => {
     const exercise = {
       id: 'morphology',

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { produce } from 'immer';
 import { useAppDispatch } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
-import type { GeneratedExercisePreviewRequest } from '@/src/store/api/advancedVocabularyApi';
+import type { GeneratedExercisePreviewRequest } from '@/src/store/api/generatedExerciseApi';
 import { useFormSelectionControls } from '@/src/hooks/useFormSelection';
 import { useGeneratedExercisePreview } from '@/src/hooks/useGeneratedExercisePreview';
 import { usePoolPOSSummary } from '@/src/hooks/usePoolPOSSummary';

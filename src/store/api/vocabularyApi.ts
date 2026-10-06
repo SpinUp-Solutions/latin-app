@@ -1,12 +1,10 @@
-import { createApi } from '@reduxjs/toolkit/query/react';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
-import { createAuthenticatedBaseQuery } from './baseQuery';
+import { appApi } from './appApi';
+import { STUDENT_POOLS_TAG } from './tags';
 import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
 import { z, ZodError } from 'zod';
 
 type ZodIssue = z.core.$ZodIssue;
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
-import { vocabularyPoolApi } from './vocabularyPoolApi';
 
 interface WordsResponse {
   success: boolean;
@@ -19,7 +17,6 @@ interface WordsResponse {
       wordType?: string;
       search?: string;
     };
-    collection?: string;
   };
 }
 
@@ -42,14 +39,7 @@ export interface VocabularySearchResult {
   dictionary_entry: string | null;
 }
 
-export const vocabularyApi = createApi({
-  reducerPath: 'vocabularyApi',
-  baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['Word', 'WordList', 'WordCounts'],
-  keepUnusedDataFor: 60 * 5,
-  refetchOnMountOrArgChange: 30,
-  refetchOnFocus: true,
-  refetchOnReconnect: true,
+export const vocabularyApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getWords: builder.query<
       { words: VocabularyWordWithId[]; hasMore: boolean; lastWordId: string | null },
@@ -58,16 +48,14 @@ export const vocabularyApi = createApi({
         search?: string;
         limit?: number;
         lastWordId?: string | null;
-        collection?: string;
       }
     >({
-      query: ({ wordType, search, limit = 20, lastWordId, collection = VOCABULARY_WORDS_COLLECTION }) => {
+      query: ({ wordType, search, limit = 20, lastWordId }) => {
         const params = new URLSearchParams({ limit: limit.toString() });
 
         if (wordType && wordType !== 'all') params.append('wordType', wordType);
         if (search) params.append('search', search);
         if (lastWordId) params.append('lastWordId', lastWordId);
-        if (collection) params.append('collection', collection);
 
         return `/admin/words?${params}`;
       },
@@ -82,7 +70,6 @@ export const vocabularyApi = createApi({
         return {
           wordType: queryArgs.wordType,
           search: queryArgs.search,
-          collection: queryArgs.collection || VOCABULARY_WORDS_COLLECTION,
         };
       },
       merge: (currentCache, newData, { arg }) => {
@@ -104,12 +91,6 @@ export const vocabularyApi = createApi({
         if (!previousArg) return true;
         if (currentArg?.search !== previousArg.search) return true;
         if (currentArg?.wordType !== previousArg.wordType) return true;
-        if (
-          (currentArg?.collection || VOCABULARY_WORDS_COLLECTION) !==
-          (previousArg.collection || VOCABULARY_WORDS_COLLECTION)
-        ) {
-          return true;
-        }
         return currentArg?.lastWordId !== previousArg.lastWordId;
       },
       providesTags: result =>
@@ -118,24 +99,18 @@ export const vocabularyApi = createApi({
           : [{ type: 'WordList', id: 'LIST' }],
     }),
 
-    getWordTypeCounts: builder.query<Record<string, number>, { collection?: string } | void>({
-      query: arg => {
-        const collection = arg?.collection || VOCABULARY_WORDS_COLLECTION;
-        return `/admin/words?countsOnly=true&collection=${encodeURIComponent(collection)}`;
-      },
+    getWordTypeCounts: builder.query<Record<string, number>, void>({
+      query: () => '/admin/words?countsOnly=true',
       transformResponse: (response: WordsResponse) => response.data.wordTypeCounts || {},
       providesTags: [{ type: 'WordCounts', id: 'COUNTS' }],
     }),
 
-    updateWord: builder.mutation<
-      VocabularyWordWithId,
-      { wordId: string; updates: Partial<VocabularyWord>; collection?: string }
-    >({
-      query: ({ wordId, updates, collection = VOCABULARY_WORDS_COLLECTION }) => {
+    updateWord: builder.mutation<VocabularyWordWithId, { wordId: string; updates: Partial<VocabularyWord> }>({
+      query: ({ wordId, updates }) => {
         return {
           url: '/admin/words',
           method: 'PUT',
-          body: { wordId, updates, collection },
+          body: { wordId, updates },
         };
       },
       transformResponse: (response: { success: boolean; updatedData: VocabularyWordWithId }) => {
@@ -151,57 +126,30 @@ export const vocabularyApi = createApi({
         }
       },
       async onQueryStarted({ wordId, updates }, { dispatch, queryFulfilled, getState }) {
-        const patchResults: { undo: () => void }[] = [];
-
-        const state = getState() as {
-          vocabularyApi?: { queries?: Record<string, { data?: { words?: VocabularyWordWithId[] } }> };
-        };
-        const cachedQueries = state.vocabularyApi?.queries || {};
-
-        Object.entries(cachedQueries).forEach(([key, value]) => {
-          if (key.startsWith('getWords') && value?.data?.words) {
-            const argsMatch = key.match(/getWords\((.*)\)/);
-            if (argsMatch) {
-              try {
-                const originalArgs = JSON.parse(argsMatch[1]);
-                const patchResult = dispatch(
-                  vocabularyApi.util.updateQueryData('getWords', originalArgs, draft => {
-                    const word = draft.words.find(w => w.id === wordId);
-                    if (word) {
-                      Object.assign(word, updates);
-                    }
-                  })
-                );
-                patchResults.push(patchResult);
-              } catch (e) {
-                console.error('Error parsing query args:', e);
-              }
-            }
-          }
-        });
-
-        try {
-          await queryFulfilled;
-          dispatch(vocabularyPoolApi.util.invalidateTags([{ type: 'Pool', id: 'STUDENT_LIST' }]));
-        } catch {
-          patchResults.forEach(patch => patch.undo());
-        }
+        // Show the edit in every loaded word list at once; a failed save rolls it back.
+        const patches = vocabularyApi.util.selectCachedArgsForQuery(getState(), 'getWords').map(cachedArgs =>
+          dispatch(
+            vocabularyApi.util.updateQueryData('getWords', cachedArgs, draft => {
+              const word = draft.words.find(candidate => candidate.id === wordId);
+              if (word) Object.assign(word, updates);
+            })
+          )
+        );
+        await queryFulfilled.catch(() => patches.forEach(patch => patch.undo()));
       },
       invalidatesTags: (result, error, { wordId }) => [
         { type: 'Word', id: wordId },
         { type: 'WordList', id: 'LIST' },
+        ...(error ? [] : [STUDENT_POOLS_TAG]),
       ],
     }),
 
-    createWord: builder.mutation<
-      VocabularyWordWithId,
-      { wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'>; collection?: string }
-    >({
-      query: ({ wordData, collection = VOCABULARY_WORDS_COLLECTION }) => {
+    createWord: builder.mutation<VocabularyWordWithId, { wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'> }>({
+      query: ({ wordData }) => {
         return {
           url: '/admin/words',
           method: 'POST',
-          body: { ...wordData, collection },
+          body: wordData,
         };
       },
       transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => {
@@ -237,20 +185,13 @@ export const vocabularyApi = createApi({
         ...(confirmationToken ? { body: { confirmationToken } } : {}),
       }),
       transformResponse: (response: DeleteWordResponse) => response,
-      async onQueryStarted(_argument, { dispatch, queryFulfilled }) {
-        try {
-          await queryFulfilled;
-          dispatch(vocabularyPoolApi.util.invalidateTags([{ type: 'Pool', id: 'STUDENT_LIST' }]));
-        } catch {
-          // Failed deletions leave cached pool content unchanged.
-        }
-      },
       invalidatesTags: result =>
         result?.success
           ? [
               { type: 'Word', id: 'LIST' },
               { type: 'WordList', id: 'LIST' },
               { type: 'WordCounts', id: 'COUNTS' },
+              STUDENT_POOLS_TAG,
             ]
           : [],
     }),

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { reorderPracticeCategoriesSchema } from '@/src/lib/practice-categories/schemas';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 
@@ -15,6 +15,6 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json({ success: true, categories });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'reorder practice categories');
+    return routeErrorResponse(error, 'reorder practice categories');
   }
 }

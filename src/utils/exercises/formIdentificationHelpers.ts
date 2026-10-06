@@ -171,13 +171,15 @@ export function filterPathsByPreviousAnswers<T extends Record<string, string | u
     previousEntries.every(([step, userAnswer]) => {
       const pathValue = path[step];
       if (!pathValue) return false;
-      return getAcceptedAnswersForStep(pathValue).map(normalizeAnswer).includes(normalizeAnswer(userAnswer));
+      return getAcceptedAnswersForStep(step as FormIdentificationStep, pathValue)
+        .map(normalizeAnswer)
+        .includes(normalizeAnswer(userAnswer));
     })
   );
 }
 
-export function getAcceptedAnswersForMultipleValues(correctValues: string[]): string[] {
-  return [...new Set(correctValues.flatMap(getAcceptedAnswersForStep))];
+export function getAcceptedAnswersForMultipleValues(step: FormIdentificationStep, correctValues: string[]): string[] {
+  return [...new Set(correctValues.flatMap(value => getAcceptedAnswersForStep(step, value)))];
 }
 
 export function formatPrimaryAnswersDisplay(
@@ -191,6 +193,7 @@ function generateMasculineFeminineVariants(): string[] {
   const mascForms = ['masculine', 'masc.', 'masc', 'm'];
   const femForms = ['feminine', 'fem.', 'fem', 'f'];
   const separators = [',', ', ', '/', '-', ' '];
+  const label = 'm/f';
 
   const variants: string[] = [
     ...mascForms,
@@ -198,7 +201,6 @@ function generateMasculineFeminineVariants(): string[] {
     'masculine-feminine',
     'masculine/feminine',
     'm./f.',
-    'm/f',
     'mf',
     'fm',
   ];
@@ -212,14 +214,98 @@ function generateMasculineFeminineVariants(): string[] {
     }
   }
 
-  return [...new Set(variants)];
+  return [...new Set(variants.filter(variant => variant !== label)), label];
 }
 
-const createVariantMap = () => {
-  const v: Record<string, string[]> = {};
+const NUMBER_NAMES: Record<string, string[]> = {
+  '1': ['1st', 'first', '1'],
+  '2': ['2nd', 'second', '2'],
+  '3': ['3rd', 'third', '3'],
+  '4': ['4th', 'fourth', '4'],
+  '5': ['5th', 'fifth', '5'],
+};
 
-  CaseSchema.options.forEach(val => {
-    const abbr: Record<string, string> = {
+const numberNames = (number: string) => NUMBER_NAMES[number] ?? [number];
+
+/** Every name with and without the noun ("3rd declension", "3rd"), ending on the bare names. */
+const withNoun = (names: string[], noun: string) => [...names.map(name => `${name} ${noun}`), ...names];
+
+type VariantMap = Record<string, string[]>;
+
+/**
+ * Accepted spellings for each value of each question. The last spelling is the label shown in
+ * answer keys. Questions are kept apart so that values sharing a name, such as the third
+ * declension and the third conjugation, do not share spellings.
+ */
+const createVariantMap = (): Record<FormIdentificationStep, VariantMap> => {
+  const abbreviated = (values: readonly string[], abbreviations: Record<string, string>): VariantMap =>
+    Object.fromEntries(
+      values.map(value => {
+        const abbreviation = abbreviations[value];
+        return [value, abbreviation ? [value, `${abbreviation}.`, abbreviation] : [value]];
+      })
+    );
+
+  const person: VariantMap = {
+    '1st': ['1st', 'first', '1', '1st person', 'first person'],
+    '2nd': ['2nd', 'second', '2', '2nd person', 'second person'],
+    '3rd': ['3rd', 'third', '3', '3rd person', 'third person'],
+  } satisfies Record<(typeof PronounPersonSchema.options)[number], string[]>;
+  const verbPersons: Record<(typeof PersonSchema.options)[number], string[]> = {
+    first: ['first', '1st', '1'],
+    second: ['second', '2nd', '2'],
+    third: ['third', '3rd', '3'],
+  };
+  PersonSchema.options.forEach(value => {
+    person[value] = verbPersons[value];
+    person[`${value} person`] = verbPersons[value].map(name => `${name} person`);
+  });
+
+  const declension: VariantMap = {};
+  NounDeclensionSchema.options.forEach(value => {
+    const names = numberNames(value.replace('-istem', ''));
+    declension[value] = withNoun(names, 'declension');
+    if (value.endsWith('-istem')) {
+      declension[value].push(...names.flatMap(name => [`${name}-istem`, `${name} i-stem`, `${name} istem`]));
+    }
+  });
+  AdjectiveDeclensionSchema.options.forEach(value => {
+    const [first, second] = value.split('-');
+    if (!second) {
+      declension[value] = withNoun(numberNames(first), 'declension');
+      return;
+    }
+    const seconds = numberNames(second);
+    const names = numberNames(first).flatMap((name, index) => [
+      `${name}/${seconds[index]}`,
+      `${name} and ${seconds[index]}`,
+      `${name}-${seconds[index]}`,
+    ]);
+    declension[value] = withNoun(['2-1-2', ...names], 'declension');
+  });
+
+  const conjugation: VariantMap = {};
+  VerbConjugationSchema.options.forEach(value => {
+    if (value === 'irregular') {
+      conjugation[value] = ['irregular conjugation', 'irregular', 'irr.', 'irr'];
+      return;
+    }
+    const names = numberNames(value.replace('io', ''));
+    conjugation[value] = withNoun(names, 'conjugation');
+    if (value.endsWith('io')) {
+      conjugation[value].push(...names.flatMap(name => [`${name} io`, `${name}-io`]), value);
+    }
+  });
+
+  const nonFiniteVerbForms: VariantMap = {
+    infinitive: ['infinitive', 'inf.', 'inf'],
+    participle: ['participle', 'part.', 'part'],
+    gerund: ['gerund', 'ger.', 'ger'],
+    supine: ['supine', 'sup.', 'sup'],
+  };
+
+  return {
+    case: abbreviated(CaseSchema.options, {
       nominative: 'nom',
       genitive: 'gen',
       dative: 'dat',
@@ -227,85 +313,55 @@ const createVariantMap = () => {
       ablative: 'abl',
       locative: 'loc',
       vocative: 'voc',
-    };
-    const a = abbr[val];
-    v[val] = a ? [val, `${a}.`, a] : [val];
-  });
-
-  NumberSchema.options.forEach(val => {
-    v[val] = val === 'singular' ? ['singular', 'sg', 'sing', 's'] : ['plural', 'pl', 'plur', 'p'];
-  });
-
-  GenderSchema.options.forEach(val => {
-    const map: Record<string, string[]> = {
+    }),
+    number: {
+      singular: ['singular', 'sg', 'sing', 's'],
+      plural: ['plural', 'pl', 'plur', 'p'],
+    } satisfies Record<(typeof NumberSchema.options)[number], string[]>,
+    gender: {
       masculine: ['masculine', 'masc.', 'masc', 'm'],
       feminine: ['feminine', 'fem.', 'fem', 'f'],
       neuter: ['neuter', 'neut.', 'neut', 'n'],
       'masculine-feminine': generateMasculineFeminineVariants(),
-    };
-    v[val] = map[val] || [val];
-  });
-
-  VoiceSchema.options.forEach(val => {
-    const map: Record<string, string[]> = {
+    } satisfies Record<(typeof GenderSchema.options)[number], string[]>,
+    voice: {
       active: ['active', 'act.', 'act', 'a'],
       passive: ['passive', 'pass.', 'pass'],
-    };
-    v[val] = map[val] || [val];
-  });
-
-  PersonSchema.options.forEach(val => {
-    const map: Record<string, string[]> = {
-      first: ['first', '1st', '1'],
-      second: ['second', '2nd', '2'],
-      third: ['third', '3rd', '3'],
-    };
-    v[val] = map[val] || [val];
-    v[`${val} person`] = map[val]?.map(x => `${x} person`) || [`${val} person`];
-  });
-
-  DegreeSchema.options.forEach(val => {
-    const abbr: Record<string, string> = {
+    } satisfies Record<(typeof VoiceSchema.options)[number], string[]>,
+    person,
+    degree: abbreviated(DegreeSchema.options, {
       positive: 'pos',
       comparative: 'comp',
       superlative: 'superl',
-    };
-    const a = abbr[val];
-    v[val] = a ? [val, `${a}.`, a] : [val];
-  });
-
-  Object.assign(v, {
-    present: ['present', 'pres.', 'pres'],
-    imperfect: ['imperfect', 'imperf.', 'imperf', 'imp.', 'imp'],
-    future: ['future', 'fut.', 'fut'],
-    perfect: ['perfect', 'perf.', 'perf', 'per.', 'per'],
-    pluperfect: ['pluperfect', 'pluperf.', 'pluperf', 'plup.', 'plup', 'pp'],
-    future_perfect: [
-      'future perfect',
-      'fut. perf.',
-      'fut perf',
-      'futp.',
-      'futp',
-      'fp',
-      'futureperfect',
-      'future perf',
-      'fut perfect',
-    ],
-  });
-
-  Object.assign(v, {
-    finite: ['finite', 'fin.', 'fin'],
-    indicative: ['indicative', 'ind.', 'ind'],
-    subjunctive: ['subjunctive', 'subj.', 'subj'],
-    imperative: ['imperative', 'imp.', 'imp'],
-    infinitive: ['infinitive', 'inf.', 'inf'],
-    participle: ['participle', 'part.', 'part'],
-    gerund: ['gerund', 'ger.', 'ger'],
-    supine: ['supine', 'sup.', 'sup'],
-  });
-
-  PronounTypeSchema.options.forEach(val => {
-    const abbr: Record<string, string> = {
+    }),
+    tense: {
+      present: ['present', 'pres.', 'pres'],
+      // "imp" alone also means imperative, so the answer key spells the tense out further.
+      imperfect: ['imperfect', 'imperf.', 'imp.', 'imp', 'imperf'],
+      future: ['future', 'fut.', 'fut'],
+      perfect: ['perfect', 'perf.', 'perf', 'per.', 'per'],
+      pluperfect: ['pluperfect', 'pluperf.', 'pluperf', 'plup.', 'plup', 'pp'],
+      future_perfect: [
+        'future perfect',
+        'fut. perf.',
+        'fut perf',
+        'futp.',
+        'futp',
+        'fp',
+        'futureperfect',
+        'future perf',
+        'fut perfect',
+      ],
+    },
+    verb_form: { finite: ['finite', 'fin.', 'fin'], ...nonFiniteVerbForms },
+    // Legacy resolved test attempts encoded non-finite form kinds in `mood`.
+    mood: {
+      indicative: ['indicative', 'ind.', 'ind'],
+      subjunctive: ['subjunctive', 'subj.', 'subj'],
+      imperative: ['imperative', 'imp.', 'imp'],
+      ...nonFiniteVerbForms,
+    },
+    pronoun_type: abbreviated(PronounTypeSchema.options, {
       personal: 'pers',
       reflexive: 'refl',
       demonstrative: 'dem',
@@ -314,48 +370,15 @@ const createVariantMap = () => {
       interrogative: 'interr',
       indefinite: 'indef',
       possessive: 'poss',
-    };
-    const a = abbr[val];
-    v[val] = a ? [val, `${a}.`, a] : [val];
-  });
-
-  PronounPersonSchema.options.forEach(val => {
-    const map: Record<string, string[]> = {
-      '1st': ['1st', 'first', '1', '1st person', 'first person'],
-      '2nd': ['2nd', 'second', '2', '2nd person', 'second person'],
-      '3rd': ['3rd', 'third', '3', '3rd person', 'third person'],
-    };
-    v[val] = map[val] || [val];
-  });
-
-  NounDeclensionSchema.options.forEach(val => {
-    const n = val.replace('-istem', '');
-    v[val] = [`${n} declension`, val, n];
-    if (val.includes('-')) v[val].push(val.replace('-istem', ' istem'));
-  });
-
-  AdjectiveDeclensionSchema.options.forEach(val => {
-    v[val] = [`${val} declension`, val];
-  });
-
-  VerbConjugationSchema.options.forEach(val => {
-    if (val === 'irregular') {
-      v[val] = ['irregular conjugation', 'irregular', 'irr.', 'irr'];
-      return;
-    }
-    const n = val.replace('io', '');
-    v[val] = val.includes('io') ? [`${n} conjugation`, val, `${n}io`, `${n}-io`, n] : [`${n} conjugation`, val, n];
-  });
-
-  return v;
+    }),
+    declension,
+    conjugation,
+  };
 };
 
 const ANSWER_VARIANTS = createVariantMap();
 
-const normalizeVariantKey = (value: string): string => {
-  const normalized = value.toLowerCase().trim();
-  if (!normalized) return normalized;
-
+const normalizeGenderKey = (normalized: string): string => {
   const directGenderAliases: Record<string, string> = {
     m: 'masculine',
     'masc.': 'masculine',
@@ -391,14 +414,16 @@ const normalizeVariantKey = (value: string): string => {
   return normalized;
 };
 
-export const getAcceptedAnswersForStep = (correctAnswer: string): string[] => {
-  const normalized = normalizeVariantKey(correctAnswer);
-  return ANSWER_VARIANTS[normalized] || [correctAnswer];
+const variantsFor = (step: FormIdentificationStep, value: string): string[] | undefined => {
+  const normalized = value.toLowerCase().trim();
+  return ANSWER_VARIANTS[step]?.[step === 'gender' ? normalizeGenderKey(normalized) : normalized];
 };
 
-export const getDisplayForm = (value: string): string => {
-  const normalized = normalizeVariantKey(value);
-  const variants = ANSWER_VARIANTS[normalized];
+export const getAcceptedAnswersForStep = (step: FormIdentificationStep, correctAnswer: string): string[] =>
+  variantsFor(step, correctAnswer) ?? [correctAnswer];
+
+export const getDisplayForm = (step: FormIdentificationStep, value: string): string => {
+  const variants = variantsFor(step, value);
   return variants ? variants[variants.length - 1] : value;
 };
 

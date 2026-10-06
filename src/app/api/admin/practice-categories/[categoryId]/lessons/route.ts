@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { addPracticeCategoryLessonsSchema } from '@/src/lib/practice-categories/schemas';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const detail = await practiceCategoryService.getCategoryLessons(categoryId);
     return NextResponse.json(detail);
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'fetch category lessons');
+    return routeErrorResponse(error, 'fetch category lessons');
   }
 }
 
@@ -25,6 +25,6 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const memberships = await practiceCategoryService.addLessons(categoryId, input.lessonIds, actor.uid);
     return NextResponse.json({ success: true, memberships });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'add category lessons');
+    return routeErrorResponse(error, 'add category lessons');
   }
 }
