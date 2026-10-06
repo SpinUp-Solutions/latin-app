@@ -112,6 +112,8 @@ it('offers a separate incorrect answer delay only to exercises that requeue a mi
   const incorrect = () => screen.getByRole('spinbutton', { name: 'Incorrect Answer Delay (ms)' });
   expect(screen.getByRole('spinbutton', { name: 'Item Progression Delay (ms)' })).toHaveValue(750);
   expect(incorrect()).toHaveValue(5000);
+  fireEvent.blur(incorrect());
+  expect(onIncorrectDelayChange).not.toHaveBeenCalled();
   rerender(view(0));
   expect(incorrect()).toHaveValue(0);
   fireEvent.change(incorrect(), { target: { value: '8000' } });

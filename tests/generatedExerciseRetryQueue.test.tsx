@@ -240,6 +240,17 @@ it.each([
   expect(screen.getByText('duo')).toBeInTheDocument();
 });
 
+it('requeues a mistake at once when the incorrect answer delay is zero', () => {
+  jest.useFakeTimers();
+  const exercise = translation();
+  exercise.incorrectItemProgressionDelay = 0;
+  exercise.feedbackConfig = { ...feedbackConfig, progressionRules: { autoAdvanceOnCorrect: true } };
+  render(<Translation exercise={exercise} resolvedItems={prompts} />);
+  answer('wrong');
+  act(() => jest.advanceTimersByTime(0));
+  expect(screen.getByText('duo')).toBeInTheDocument();
+});
+
 it.each([undefined, 750])('still moves on from a correct answer after the exercise delay (%s)', delay => {
   jest.useFakeTimers();
   const exercise = translation();

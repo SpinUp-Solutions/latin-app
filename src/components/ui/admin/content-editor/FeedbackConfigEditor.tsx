@@ -42,7 +42,8 @@ const DelayInput: React.FC<DelayInputProps> = ({ label, description, value, defa
     const numValue = parseInt(inputValue);
     const finalValue = isNaN(numValue) || numValue < 0 ? defaultValue : numValue;
     setInputValue(finalValue.toString());
-    onCommit(finalValue);
+    // Leaving the field untouched must not pin an unset delay to today's default.
+    if (finalValue !== (value ?? defaultValue)) onCommit(finalValue);
   };
 
   return (
