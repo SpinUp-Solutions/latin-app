@@ -68,6 +68,7 @@ const answer = (value: string) => {
   fireEvent.click(screen.getByRole('button', { name: 'Check' }));
 };
 const next = () => fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+const gotIt = () => fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
 const callbacks = () => ({ onComplete: jest.fn(), onCompletionAccepted: jest.fn() });
 
 afterEach(() => {
@@ -94,13 +95,14 @@ it('rotates mistakes, preserves completed words and escalates feedback across re
   expect(screen.getByText('Look at the answer')).toBeInTheDocument();
   expect(screen.getByText('one')).toBeInTheDocument();
   expect(screen.getByText('1 of 3 complete (33%)')).toBeInTheDocument();
-  next();
+  expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+  gotIt();
   expect(screen.getByText('tres')).toBeInTheDocument();
   answer('three');
   next();
   expect(done.onCompletionAccepted).not.toHaveBeenCalled();
   answer('still wrong');
-  next();
+  gotIt();
   expect(screen.getByText('unus')).toBeInTheDocument();
   expect(screen.getByRole('textbox')).toHaveValue('');
   expect(screen.getByText('2 of 3 complete (67%)')).toBeInTheDocument();
@@ -447,15 +449,17 @@ it.each([
   ['morphology', true],
   ['morphology', false],
 ] as const)(
-  'shows the correction during the hold only when a feedback level enables it (%s, configured %s)',
+  'keeps a configured correction on screen until the student presses Got it (%s, configured %s)',
   (kind, configured) => {
     jest.useFakeTimers();
     const exercise = kind === 'translation' ? translation() : morphology('single');
     exercise.feedbackConfig = {
       escalationLevels: configured ? [{ message: 'Look at the answer', showAnswer: true }] : [],
-      progressionRules: { autoAdvanceOnCorrect: true },
+      // Neither the explanation pause nor a zero delay decides whether a shown answer waits.
+      progressionRules: { autoAdvanceOnCorrect: true, pauseForExplanation: false },
     };
     exercise.itemProgressionDelay = 750;
+    exercise.incorrectItemProgressionDelay = configured ? 0 : undefined;
     if (exercise.type === 'generated-translation') {
       render(<Translation exercise={exercise} resolvedItems={prompts} />);
     } else {
@@ -469,19 +473,169 @@ it.each([
         />
       );
     }
+    const [missed, following] = kind === 'translation' ? ['unus', 'duo'] : ['amo', 'amas'];
     answer('wrong');
     if (!configured) {
       expect(screen.getByText(/try this word again/)).toBeInTheDocument();
       expect(screen.queryByText(/Correct answer/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
+      act(() => jest.advanceTimersByTime(5000));
+      expect(screen.getByText(following)).toBeInTheDocument();
       return;
     }
+    act(() => jest.advanceTimersByTime(60000));
     expect(screen.getByText(/Correct answer/)).toBeInTheDocument();
-    act(() => jest.advanceTimersByTime(4999));
-    expect(screen.getByText(/Correct answer/)).toBeInTheDocument();
-    act(() => jest.advanceTimersByTime(1));
+    expect(screen.getByText(missed)).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    gotIt();
     expect(screen.queryByText(/Correct answer/)).not.toBeInTheDocument();
+    expect(screen.getByText(following)).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toBeEnabled();
+    expect(screen.getByRole('textbox')).toHaveValue('');
   }
 );
+
+it('waits for Got it on a shown hint, and keeps the timer when the word has no hint to show', () => {
+  jest.useFakeTimers();
+  const exercise = translation();
+  exercise.feedbackConfig = {
+    escalationLevels: [{ message: 'Here is a hint', showHint: true }],
+    progressionRules: { autoAdvanceOnCorrect: true },
+  };
+  render(
+    <Translation
+      exercise={exercise}
+      resolvedItems={[{ ...prompts[0], hint: 'a number below two' }, { ...prompts[1], hint: '<p> </p>' }, prompts[2]]}
+    />
+  );
+  answer('wrong');
+  act(() => jest.advanceTimersByTime(60000));
+  expect(screen.getByText('a number below two')).toBeInTheDocument();
+  expect(screen.queryByText(/Correct answer/)).not.toBeInTheDocument();
+  gotIt();
+  expect(screen.getByText('duo')).toBeInTheDocument();
+  answer('wrong');
+  expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(5000));
+  expect(screen.getByText('tres')).toBeInTheDocument();
+  answer('wrong');
+  expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(5000));
+  expect(screen.getByText('unus')).toBeInTheDocument();
+});
+
+it('times a miss on a level that reveals nothing, then waits once a later level shows the answer', () => {
+  jest.useFakeTimers();
+  const exercise = translation();
+  exercise.feedbackConfig = { ...feedbackConfig, progressionRules: { autoAdvanceOnCorrect: true } };
+  render(<Translation exercise={exercise} resolvedItems={[prompts[0]]} />);
+  answer('wrong');
+  expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(5000));
+  expect(screen.getByRole('textbox')).toBeEnabled();
+  answer('wrong again');
+  act(() => jest.advanceTimersByTime(60000));
+  expect(screen.getByText('Look at the answer')).toBeInTheDocument();
+  gotIt();
+  expect(screen.getByRole('textbox')).toBeEnabled();
+  expect(screen.queryByText('Look at the answer')).not.toBeInTheDocument();
+});
+
+it.each(['step', 'multi'])(
+  'holds a revealed miss on a later %s morphology step, then restarts the whole word',
+  variant => {
+    jest.useFakeTimers();
+    const exercise = morphology(variant);
+    exercise.itemProgressionDelay = 250;
+    exercise.feedbackConfig = {
+      escalationLevels: [{ showAnswer: true }],
+      progressionRules: { autoAdvanceOnCorrect: true },
+    };
+    const words = [word('amo', 'first', 'singular'), word('amant', 'third', 'plural')];
+    const done = callbacks();
+    render(
+      <Morphology
+        exercise={exercise}
+        resolvedItems={createGeneratedFormIdentificationItems(exercise, words)}
+        {...done}
+      />
+    );
+    const correct = (value: string) => {
+      answer(value);
+      act(() => jest.advanceTimersByTime(250));
+    };
+    correct('first');
+    answer('wrong');
+    act(() => jest.advanceTimersByTime(60000));
+    expect(screen.getByText('amo')).toBeInTheDocument();
+    expect(screen.getByText(/Correct answer/)).toBeInTheDocument();
+    gotIt();
+    expect(screen.getByText('amant')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    correct('third');
+    correct('plural');
+    // The missed word comes back at its first step, so its earlier answer is asked again.
+    expect(screen.getByText('amo')).toBeInTheDocument();
+    correct('first');
+    answer('singular');
+    expect(done.onCompletionAccepted).toHaveBeenCalledWith(100);
+  }
+);
+
+it('keeps a pending Got it when leaving and returning to a lesson page, and drops it for a new exercise', () => {
+  jest.useFakeTimers();
+  const exercise = translation();
+  exercise.feedbackConfig = {
+    escalationLevels: [{ showAnswer: true }],
+    progressionRules: { autoAdvanceOnCorrect: true },
+  };
+  const viewAt = (mode: 'visible' | 'hidden', shown = exercise, items = prompts) => (
+    <Activity mode={mode}>
+      <Translation exercise={shown} resolvedItems={items} />
+    </Activity>
+  );
+  const view = render(viewAt('visible'));
+  answer('wrong');
+  view.rerender(viewAt('hidden'));
+  act(() => jest.advanceTimersByTime(60000));
+  view.rerender(viewAt('visible'));
+  expect(screen.getByText('unus')).toBeInTheDocument();
+  gotIt();
+  expect(screen.getByText('duo')).toBeInTheDocument();
+  answer('wrong');
+  view.rerender(viewAt('visible', { ...exercise, id: 'replacement' }, [prompts[2]]));
+  expect(screen.getByText('tres')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox')).toBeEnabled();
+});
+
+it.each(['translation', 'morphology'] as const)('never asks for Got it in a %s test', kind => {
+  const exercise = kind === 'translation' ? translation() : morphology('single');
+  exercise.feedbackConfig = {
+    escalationLevels: [{ showAnswer: true, showHint: true }],
+    progressionRules: { autoAdvanceOnCorrect: true },
+  };
+  if (exercise.type === 'generated-translation') {
+    render(<Translation exercise={exercise} runtimeMode="test" resolvedItems={prompts} onAnswer={jest.fn()} />);
+  } else {
+    render(
+      <Morphology
+        exercise={exercise}
+        runtimeMode="test"
+        resolvedItems={createGeneratedFormIdentificationItems(exercise, [
+          word('amo', 'first', 'singular'),
+          word('amas', 'second', 'singular'),
+        ])}
+        onAnswer={jest.fn()}
+      />
+    );
+  }
+  answer('wrong');
+  expect(screen.getByText(kind === 'translation' ? 'duo' : 'amas')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Correct answer/)).not.toBeInTheDocument();
+});
 
 it.each(['single', 'step'])('accepts 1st in morphology practice (%s)', variant => {
   const exercise = morphology(variant);

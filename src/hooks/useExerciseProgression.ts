@@ -135,6 +135,16 @@ export function useExerciseProgression({
     ]
   );
 
+  /** Hold the current item until the student confirms, whatever the auto-advance setting. */
+  const awaitConfirmation = (afterAdvance: () => void) => {
+    clearAutoAdvanceTimer();
+    pendingAdvanceRef.current = () => {
+      nextItem();
+      afterAdvance();
+    };
+    setIsAwaitingConfirmation(true);
+  };
+
   const confirmAdvance = useCallback(() => {
     const pending = pendingAdvanceRef.current;
     if (pending) {
@@ -150,6 +160,7 @@ export function useExerciseProgression({
     isFirstItem,
     isAwaitingConfirmation,
     autoAdvanceIfEnabled,
+    awaitConfirmation,
     confirmAdvance,
     resetIndex,
     nextItem,

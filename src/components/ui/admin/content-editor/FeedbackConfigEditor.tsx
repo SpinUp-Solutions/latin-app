@@ -432,7 +432,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
               {onIncorrectItemProgressionDelayChange && (
                 <DelayInput
                   label="Incorrect Answer Delay (ms)"
-                  description="Time a missed word and its feedback stay on screen before the word goes back in line"
+                  description="Time a missed word and its feedback stay on screen before the word goes back in line. Feedback that shows a hint or the answer waits for the student to press Got it instead."
                   value={incorrectItemProgressionDelay}
                   defaultValue={MISSED_ANSWER_PROGRESSION_DELAY}
                   onCommit={onIncorrectItemProgressionDelayChange}

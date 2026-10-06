@@ -27,6 +27,7 @@ import type {
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 import { MISSED_ANSWER_PROGRESSION_DELAY } from '@/src/utils/feedbackDefaults';
+import { revealsHintOrAnswer } from '@/src/utils/feedbackVisibility';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
@@ -78,6 +79,7 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
     isLastItem,
     isAwaitingConfirmation,
     autoAdvanceIfEnabled,
+    awaitConfirmation,
     confirmAdvance,
     resetIndex,
     goToItem,
@@ -106,8 +108,10 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
 
   const resetRequired = mode === 'practice' && !queueEnabled && shouldResetExercise;
   const escalationLevels = exercise.feedbackConfig.escalationLevels ?? [];
-  const queueLevel = escalationLevels[Math.min((failures[itemIndex] ?? 0) - 1, escalationLevels.length - 1)];
+  const levelAfterMisses = (misses: number) => escalationLevels[Math.min(misses - 1, escalationLevels.length - 1)];
+  const queueLevel = levelAfterMisses(failures[itemIndex] ?? 0);
   const feedbackLevel = queueEnabled && isCorrect === false ? queueLevel : level;
+  const correctAnswerOf = (item: GeneratedTranslationItem) => item.acceptedAnswers.join(' OR ');
   const feedbackMessage =
     queueEnabled && isCorrect === false ? queueLevel?.message || 'Incorrect. You’ll try this word again.' : message;
 
@@ -148,16 +152,19 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
     if (queueEnabled && !validation.isCorrect) {
       handleIncorrect();
       setFailures(previous => ({ ...previous, [itemIndex]: (previous[itemIndex] ?? 0) + 1 }));
-      autoAdvanceIfEnabled(
-        () => {
-          goToItem(requeueWord(currentIndex));
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-        },
-        false,
-        exercise.incorrectItemProgressionDelay ?? MISSED_ANSWER_PROGRESSION_DELAY
-      );
+      const requeue = () => {
+        goToItem(requeueWord(currentIndex));
+        setUserAnswer('');
+        reset();
+        setIsProcessing(false);
+      };
+      // A shown hint or answer stays until the student acknowledges it.
+      const missLevel = levelAfterMisses((failures[itemIndex] ?? 0) + 1);
+      if (revealsHintOrAnswer(missLevel, currentItem.hint, correctAnswerOf(currentItem))) {
+        awaitConfirmation(requeue);
+      } else {
+        autoAdvanceIfEnabled(requeue, false, exercise.incorrectItemProgressionDelay ?? MISSED_ANSWER_PROGRESSION_DELAY);
+      }
       return;
     }
 
@@ -205,6 +212,10 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
   }
 
   const currentItem = items[itemIndex];
+  const acknowledgesReveal =
+    queueEnabled &&
+    isCorrect === false &&
+    revealsHintOrAnswer(feedbackLevel, currentItem.hint, correctAnswerOf(currentItem));
   const inputPlaceholder =
     translationDirection === 'english-to-latin' ? 'Type the Latin root word...' : 'Type your answer...';
 
@@ -249,9 +260,10 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
               message={feedbackMessage}
               level={feedbackLevel}
               hint={currentItem.hint}
-              correctAnswer={currentItem.acceptedAnswers.join(' OR ')}
+              correctAnswer={correctAnswerOf(currentItem)}
               showExplanation={showExplanation}
               onContinue={(isCorrect || queueEnabled) && isAwaitingConfirmation ? confirmAdvance : undefined}
+              continueLabel={acknowledgesReveal ? 'Got it' : undefined}
               allowContinueOnIncorrect={queueEnabled}
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />

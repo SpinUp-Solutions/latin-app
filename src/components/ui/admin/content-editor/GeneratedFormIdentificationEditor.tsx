@@ -194,7 +194,8 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         </div>
         <p className="text-sm text-gray-500">
           Practice only. Incorrect words return at the end of the queue, using the existing auto-advance setting and the
-          Incorrect Answer Delay under Timing Configuration. The reset-after-mistakes setting is ignored while this is
+          Incorrect Answer Delay under Timing Configuration. When the feedback shows a hint or the answer, the word
+          waits for the student to press Got it instead. The reset-after-mistakes setting is ignored while this is
           enabled. Tests are unchanged.
         </p>
       </div>
