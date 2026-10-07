@@ -130,6 +130,20 @@ describe('single-answer exercises in practice', () => {
     fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
     expectCompletion(onComplete, onCompletionAccepted);
   });
+
+  it('offers no Try Again after a correct odd-one-out answer, so the way on stays', () => {
+    const onComplete = jest.fn();
+    const onCompletionAccepted = jest.fn();
+    render(
+      <OddOneOutExercise exercise={oddOneOut} onComplete={onComplete} onCompletionAccepted={onCompletionAccepted} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'amo' }));
+    fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
+
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    expectCompletion(onComplete, onCompletionAccepted);
+  });
 });
 
 it('records a test answer without grading or feedback', () => {

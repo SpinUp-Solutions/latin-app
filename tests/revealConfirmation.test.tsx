@@ -126,6 +126,19 @@ describe('matching: a miss that shows a hint or the answer waits for Got it', ()
     expect(gotIt()).toBeInTheDocument();
   });
 
+  it('holds an answer shown by a miss made during the flash of an earlier miss', () => {
+    render(<MatchingTable exercise={matching(answerOnSecondMiss)} />);
+
+    pair('Alpha', 'Two');
+    pair('Beta', 'One');
+    wait(1500);
+
+    expect(screen.getByText('Here it is')).toBeInTheDocument();
+    expect(shownAnswer().getByText('Two')).toBeInTheDocument();
+    fireEvent.click(button('Got it'));
+    expect(button('Alpha')).toBeEnabled();
+  });
+
   it('holds a shown hint', () => {
     const feedbackConfig = { ...answerOnMiss, escalationLevels: [{ message: 'Not quite', showHint: true }] };
     render(<MatchingTable exercise={matching(feedbackConfig, { hint: 'Count the letters' })} />);
