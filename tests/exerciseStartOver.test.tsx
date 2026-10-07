@@ -139,11 +139,13 @@ describe('exercise start over flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
     fireEvent.click(screen.getByRole('button', { name: 'Two' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
     fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
     fireEvent.click(screen.getByRole('button', { name: 'One' }));
 
     expect(screen.getByText(/try again/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start over/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Alpha' })).toBeDisabled();
     expect(screen.getByText('Correct answer')).toBeInTheDocument();
 
@@ -161,7 +163,7 @@ describe('exercise start over flow', () => {
       type: 'matching',
       title: 'Match',
       instructions: '',
-      feedbackConfig: resetFeedbackConfig,
+      feedbackConfig: { ...resetFeedbackConfig, escalationLevels: [{ message: 'Try again' }] },
       data: {
         leftColumn: [
           { id: 'left-a', value: 'Alpha' },

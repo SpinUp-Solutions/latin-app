@@ -33,6 +33,7 @@ import type {
   RuntimeMode,
 } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
+import { confirmLabel } from '@/src/utils/feedbackVisibility';
 
 export interface SentenceDiagramStudentProps {
   exercise: SentenceDiagrammingExercise;
@@ -161,7 +162,7 @@ const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> 
 
       {isCorrect === true && onContinue ? (
         <Button onClick={onContinue} className="w-full">
-          Continue
+          {confirmLabel(shouldShowExplanation)}
         </Button>
       ) : null}
 

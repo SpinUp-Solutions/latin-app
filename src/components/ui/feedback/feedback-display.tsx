@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Check, X, HelpCircle, ChevronRight, RotateCcw } from 'lucide-react';
 import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
+import { confirmLabel, hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 
 type FeedbackBody = React.ReactNode;
 
@@ -15,7 +15,6 @@ interface FeedbackDisplayProps {
   explanation?: FeedbackBody;
   showExplanation?: boolean;
   onContinue?: () => void;
-  continueLabel?: string;
   allowContinueOnIncorrect?: boolean;
   onStartOver?: () => void;
 }
@@ -37,7 +36,6 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
   explanation,
   showExplanation = false,
   onContinue,
-  continueLabel = 'Continue',
   allowContinueOnIncorrect = false,
   onStartOver,
 }) => {
@@ -138,7 +136,7 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
           className={`mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-white font-medium rounded-lg transition-colors ${
             isCorrect ? 'bg-green-600 hover:bg-green-700' : 'bg-roman-red hover:bg-red-700'
           }`}>
-          {continueLabel}
+          {confirmLabel(shouldShowHint || shouldShowAnswer || shouldShowExplanationPanel)}
           <ChevronRight className="h-4 w-4" />
         </button>
       )}
