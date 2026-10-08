@@ -121,7 +121,10 @@ describe('exercise start over flow', () => {
       type: 'matching',
       title: 'Match',
       instructions: '',
-      feedbackConfig: resetFeedbackConfig,
+      feedbackConfig: {
+        ...resetFeedbackConfig,
+        escalationLevels: [{ message: 'Try again' }, { message: 'Here it is', showAnswer: true }],
+      },
       data: {
         leftColumn: [
           { id: 'left-a', value: 'Alpha' },
@@ -142,8 +145,9 @@ describe('exercise start over flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
     fireEvent.click(screen.getByRole('button', { name: 'One' }));
 
-    expect(screen.getByText(/try again/i)).toBeInTheDocument();
+    expect(screen.getByText('Here it is')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start over/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Alpha' })).toBeDisabled();
     expect(screen.getByText('Correct answer')).toBeInTheDocument();
 
@@ -151,8 +155,14 @@ describe('exercise start over flow', () => {
       jest.advanceTimersByTime(1500);
     });
 
-    expect(screen.getByText(/try again/i)).toBeInTheDocument();
+    expect(screen.getByText('Here it is')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /shuffle/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /start over/i }));
+
+    expect(screen.queryByText('Here it is')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Alpha' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /shuffle/i })).toBeEnabled();
   });
 
   it('does not let a stale matching timeout erase newer correct feedback', () => {
@@ -161,7 +171,7 @@ describe('exercise start over flow', () => {
       type: 'matching',
       title: 'Match',
       instructions: '',
-      feedbackConfig: resetFeedbackConfig,
+      feedbackConfig: { ...resetFeedbackConfig, escalationLevels: [{ message: 'Try again' }] },
       data: {
         leftColumn: [
           { id: 'left-a', value: 'Alpha' },

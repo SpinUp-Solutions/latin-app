@@ -185,7 +185,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
               className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white">
               {isProcessing ? 'Checking...' : 'Submit Answer'}
             </Button>
-          ) : hasSubmitted && !testAnswerMode && !resetRequired ? (
+          ) : hasSubmitted && isCorrect !== true && !testAnswerMode && !resetRequired ? (
             <Button
               onClick={handleReset}
               variant="outline"

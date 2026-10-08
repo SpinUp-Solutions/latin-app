@@ -15,7 +15,7 @@ describe('MultipleChoiceExercise pause for explanation', () => {
     jest.useRealTimers();
   });
 
-  it('waits for explicit continue when explanation pause is enabled', () => {
+  it('waits for Got it when explanation pause is enabled', () => {
     const onComplete = jest.fn();
     const onCompletionAccepted = jest.fn();
     const exercise: MultipleChoiceExerciseType = {
@@ -60,7 +60,7 @@ describe('MultipleChoiceExercise pause for explanation', () => {
     fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
 
     expect(screen.getByText(/because this option matches the prompt/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument();
     expect(onCompletionAccepted).toHaveBeenCalledWith(100);
     expect(onComplete).not.toHaveBeenCalled();
 
@@ -70,7 +70,7 @@ describe('MultipleChoiceExercise pause for explanation', () => {
 
     expect(onComplete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
 
     expect(onComplete).toHaveBeenCalledWith(100);
   });
