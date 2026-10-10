@@ -445,7 +445,9 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
             )}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+          {/* `relative` keeps the hidden native inputs Radix renders for form controls inside this scroller;
+              without it they are positioned against the page and make the whole document scrollable. */}
+          <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
             <div className="space-y-6">
               <BaseWordForm />
               {renderPosForm()}
