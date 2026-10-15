@@ -345,7 +345,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
                 </label>
                 <div className="text-xs text-gray-500 mt-1">
                   Controls whether to display detailed explanations for correct answers (e.g., &quot;Second person
-                  singular present tense&quot;)
+                  singular present tense&quot;). Students press &quot;Got it&quot; before moving on from a displayed
+                  explanation.
                 </div>
               </div>
             </div>
@@ -374,27 +375,14 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
                 <input
                   type="checkbox"
                   checked={progressionRulesWithDefaults.autoAdvanceOnCorrect}
-                  onChange={e => {
-                    const updates: Partial<ProgressionRules> = { autoAdvanceOnCorrect: e.target.checked };
-                    if (!e.target.checked) {
-                      updates.pauseForExplanation = true;
-                    }
-                    updateProgressionRules(updates);
-                  }}
+                  onChange={e => updateProgressionRules({ autoAdvanceOnCorrect: e.target.checked })}
                 />
                 Auto-advance on correct answer
               </label>
-
-              <label
-                className={`flex items-center gap-2 text-sm ${!progressionRulesWithDefaults.autoAdvanceOnCorrect ? 'opacity-50' : ''}`}>
-                <input
-                  type="checkbox"
-                  checked={progressionRulesWithDefaults.pauseForExplanation}
-                  onChange={e => updateProgressionRules({ pauseForExplanation: e.target.checked })}
-                  disabled={!progressionRulesWithDefaults.autoAdvanceOnCorrect}
-                />
-                Pause for explanation when auto-advancing
-              </label>
+              <div className="text-xs text-gray-500">
+                Auto-advance applies when no explanation is displayed. Displayed explanations always wait for &quot;Got
+                it&quot;.
+              </div>
 
               <label className="flex items-center gap-2 text-sm">
                 <input

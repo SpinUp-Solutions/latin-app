@@ -24,6 +24,7 @@ export interface SuccessMessageConfig {
 
 export interface ProgressionRules {
   autoAdvanceOnCorrect?: boolean;
+  /** @deprecated Retained for saved content compatibility. Visible explanations always require acknowledgement. */
   pauseForExplanation?: boolean;
   showProgress?: boolean;
 }

@@ -297,23 +297,33 @@ describe('the button after a correct answer', () => {
     expect(button('Continue')).toBeInTheDocument();
   });
 
-  it('holds an explanation for Got it when auto-advance pauses for explanations', () => {
-    render(<FillExercise exercise={fill(timed)} />);
+  it.each([true, false, undefined])(
+    'holds an explanation for Got it with legacy pause flag %s',
+    pauseForExplanation => {
+      render(<FillExercise exercise={fill({ ...timed, pauseForExplanation })} />);
+
+      answer('one');
+      wait(5000);
+
+      expect(screen.getByText('One comes first.')).toBeInTheDocument();
+      fireEvent.click(button('Got it'));
+      expect(screen.getByText('Second')).toBeInTheDocument();
+    }
+  );
+
+  it.each([
+    ['missing', undefined, true],
+    ['empty', '<p></p>', true],
+    ['hidden', 'One comes first.', false],
+  ])('still auto-advances when the explanation is %s', (_name, explanation, showExplanation) => {
+    const exercise = fill({ ...timed, pauseForExplanation: false });
+    exercise.data.items[0].explanation = explanation;
+    exercise.feedbackConfig.successMessage = { showExplanation };
+    render(<FillExercise exercise={exercise} />);
 
     answer('one');
-    wait(5000);
 
-    expect(screen.getByText('One comes first.')).toBeInTheDocument();
-    fireEvent.click(button('Got it'));
-    expect(screen.getByText('Second')).toBeInTheDocument();
-  });
-
-  it('moves on by the timer when the teacher turned the explanation pause off', () => {
-    render(<FillExercise exercise={fill({ ...timed, pauseForExplanation: false })} />);
-
-    answer('one');
-
-    expect(screen.getByText('One comes first.')).toBeInTheDocument();
+    expect(screen.queryByText('One comes first.')).not.toBeInTheDocument();
     expect(gotIt()).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
     wait(400);
@@ -321,9 +331,10 @@ describe('the button after a correct answer', () => {
   });
 
   it.each([
-    ['Got it', 'The verb comes first.'],
-    ['Continue', ''],
-  ])('says %s in sentence diagramming for explanation "%s"', (label, explanation) => {
+    ['Got it', 'The verb comes first.', manual],
+    ['Continue', '', manual],
+    ['Got it', 'The verb comes first.', { ...timed, pauseForExplanation: false }],
+  ])('says %s in sentence diagramming for explanation "%s"', (label, explanation, progressionRules) => {
     const annotation = {
       id: 'verb',
       kind: 'verb' as const,
@@ -334,7 +345,7 @@ describe('the button after a correct answer', () => {
       type: 'sentence-diagramming',
       title: 'Diagram',
       instructions: '',
-      feedbackConfig: { escalationLevels: [], progressionRules: manual },
+      feedbackConfig: { escalationLevels: [], progressionRules },
       data: {
         ...createEmptySentenceDiagramDocument('amo te', 'I love you', {
           explanation: createSentenceDiagramFeedbackContent(explanation),
@@ -352,6 +363,8 @@ describe('the button after a correct answer', () => {
     );
 
     fireEvent.click(button(/check/i));
+    wait(5000);
+    expect(onComplete).not.toHaveBeenCalled();
     fireEvent.click(button(label));
 
     expect(onComplete).toHaveBeenCalledTimes(1);

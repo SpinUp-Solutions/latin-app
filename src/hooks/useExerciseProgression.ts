@@ -103,9 +103,9 @@ export function useExerciseProgression({
       clearAutoAdvanceTimer();
 
       const autoAdvance = progressionRules?.autoAdvanceOnCorrect ?? false;
-      const pauseForExplanation = progressionRules?.pauseForExplanation ?? true;
 
-      const shouldShowContinue = !autoAdvance || (pauseForExplanation && hasVisibleExplanation);
+      // Visible explanations always wait for "Got it", including legacy exercises with the pause flag off.
+      const shouldShowContinue = !autoAdvance || hasVisibleExplanation;
       const advance = () => {
         nextItem();
         afterAdvance();
@@ -126,13 +126,7 @@ export function useExerciseProgression({
         }, delay);
       }
     },
-    [
-      progressionRules?.autoAdvanceOnCorrect,
-      progressionRules?.pauseForExplanation,
-      itemProgressionDelay,
-      nextItem,
-      clearAutoAdvanceTimer,
-    ]
+    [progressionRules?.autoAdvanceOnCorrect, itemProgressionDelay, nextItem, clearAutoAdvanceTimer]
   );
 
   /** Hold the current item until the student confirms, whatever the auto-advance setting. */
