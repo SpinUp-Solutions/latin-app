@@ -2,7 +2,9 @@ import type { FeedbackConfig, SuccessMessageConfig, ProgressionRules, FeedbackLe
 
 const FEEDBACK_DEFAULTS = {
   showExplanation: true,
-  autoAdvanceOnCorrect: true,
+  // Saved content without the field advances manually: it replaced `autoAdvance` with no migration, and
+  // the runtime has always read it unset as off. New exercises are created with it on.
+  autoAdvanceOnCorrect: false,
   pauseForExplanation: true,
   showProgress: true,
 } as const;
@@ -41,7 +43,7 @@ export function createDefaultFeedbackConfig(): FeedbackConfig {
   return {
     escalationLevels: [],
     successMessage: getSuccessMessageWithDefaults(),
-    progressionRules: getProgressionRulesWithDefaults(),
+    progressionRules: { ...getProgressionRulesWithDefaults(), autoAdvanceOnCorrect: true },
   };
 }
 

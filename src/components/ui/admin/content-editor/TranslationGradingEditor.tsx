@@ -198,8 +198,7 @@ export const TranslationGradingEditor: React.FC = () => {
       <ExerciseFeedbackSection
         feedbackConfig={editingContent.feedbackConfig}
         onChange={feedbackConfig => updateContent({ feedbackConfig })}
-        itemProgressionDelay={editingContent.itemProgressionDelay}
-        onItemProgressionDelayChange={itemProgressionDelay => updateContent({ itemProgressionDelay })}
+        autoAdvanceAvailable={false}
       />
     </div>
   );
