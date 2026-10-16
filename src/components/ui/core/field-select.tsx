@@ -11,6 +11,8 @@ interface FieldSelectProps {
   label: string;
   matchedIndices?: Set<number>;
   showIncorrect?: boolean;
+  /** False keeps an incorrect selection red without the pulse, for one that stays on screen. */
+  pulseIncorrect?: boolean;
   disabled?: boolean;
   className?: string;
 }
@@ -25,6 +27,7 @@ const FieldSelect: React.FC<FieldSelectProps> = ({
   label,
   matchedIndices,
   showIncorrect = false,
+  pulseIncorrect = true,
   disabled = false,
   className = '',
 }) => {
@@ -50,7 +53,7 @@ const FieldSelect: React.FC<FieldSelectProps> = ({
               isMatched
                 ? 'bg-gray-200 border border-gray-300 text-gray-400 opacity-50 cursor-not-allowed pointer-events-none'
                 : showIncorrect && isSelected
-                  ? 'bg-red-100 border-2 border-red-400 text-red-700 animate-pulse'
+                  ? `bg-red-100 border-2 border-red-400 text-red-700 ${pulseIncorrect ? 'animate-pulse' : ''}`
                   : isSelected
                     ? 'bg-roman-gold/10 border border-roman-gold'
                     : 'bg-white border border-gray-200 hover:border-roman-red/50'

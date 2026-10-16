@@ -19,3 +19,8 @@ export function revealsHintOrAnswer(
     (Boolean(level?.showAnswer) && hasVisibleFeedbackContent(correctAnswer))
   );
 }
+
+/** The button that dismisses feedback: "Got it" acknowledges something shown to read, "Continue" only moves on. */
+export function confirmLabel(revealsContent: boolean): string {
+  return revealsContent ? 'Got it' : 'Continue';
+}

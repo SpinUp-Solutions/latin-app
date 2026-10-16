@@ -215,10 +215,6 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
   }
 
   const currentItem = items[itemIndex];
-  const acknowledgesReveal =
-    queueEnabled &&
-    isCorrect === false &&
-    revealsHintOrAnswer(feedbackLevel, currentItem.hint, correctAnswerOf(currentItem));
   const inputPlaceholder =
     translationDirection === 'english-to-latin' ? 'Type the Latin root word...' : 'Type your answer...';
 
@@ -266,7 +262,6 @@ const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationIt
               correctAnswer={correctAnswerOf(currentItem)}
               showExplanation={showExplanation}
               onContinue={(isCorrect || queueEnabled) && isAwaitingConfirmation ? confirmAdvance : undefined}
-              continueLabel={acknowledgesReveal ? 'Got it' : undefined}
               allowContinueOnIncorrect={queueEnabled}
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />

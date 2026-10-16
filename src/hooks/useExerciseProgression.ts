@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { ProgressionRules } from '@/src/types/exercises/base';
-import { DEFAULT_ITEM_PROGRESSION_DELAY } from '@/src/utils/feedbackDefaults';
+import { DEFAULT_ITEM_PROGRESSION_DELAY, getProgressionRulesWithDefaults } from '@/src/utils/feedbackDefaults';
 
 interface ExerciseProgressionOptions {
   totalItems: number;
@@ -26,6 +26,7 @@ export function useExerciseProgression({
   const remainingDelayRef = useRef(0);
   const timerDeadlineRef = useRef(0);
   const pendingTimerCallbackRef = useRef<(() => void) | null>(null);
+  const { autoAdvanceOnCorrect } = getProgressionRulesWithDefaults(progressionRules);
 
   const clearAutoAdvanceTimer = useCallback(() => {
     if (autoAdvanceTimerRef.current) {
@@ -102,10 +103,8 @@ export function useExerciseProgression({
     (afterAdvance: () => void, hasVisibleExplanation: boolean, delayOverride?: number) => {
       clearAutoAdvanceTimer();
 
-      const autoAdvance = progressionRules?.autoAdvanceOnCorrect ?? false;
-      const pauseForExplanation = progressionRules?.pauseForExplanation ?? true;
-
-      const shouldShowContinue = !autoAdvance || (pauseForExplanation && hasVisibleExplanation);
+      // Visible explanations always wait for "Got it", including legacy exercises with the pause flag off.
+      const shouldShowContinue = !autoAdvanceOnCorrect || hasVisibleExplanation;
       const advance = () => {
         nextItem();
         afterAdvance();
@@ -126,13 +125,7 @@ export function useExerciseProgression({
         }, delay);
       }
     },
-    [
-      progressionRules?.autoAdvanceOnCorrect,
-      progressionRules?.pauseForExplanation,
-      itemProgressionDelay,
-      nextItem,
-      clearAutoAdvanceTimer,
-    ]
+    [autoAdvanceOnCorrect, itemProgressionDelay, nextItem, clearAutoAdvanceTimer]
   );
 
   /** Hold the current item until the student confirms, whatever the auto-advance setting. */

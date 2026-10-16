@@ -5,7 +5,7 @@ import FillExercise from '@/src/components/ui/exercises/fill-exercise';
 import type { FillExercise as FillExerciseType } from '@/src/types/exercises/fill';
 import type { MultipleChoiceExercise as MultipleChoiceExerciseType } from '@/src/types/exercises/multiple-choice';
 
-describe('MultipleChoiceExercise pause for explanation', () => {
+describe('exercise explanation acknowledgement', () => {
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -15,7 +15,7 @@ describe('MultipleChoiceExercise pause for explanation', () => {
     jest.useRealTimers();
   });
 
-  it('waits for explicit continue when explanation pause is enabled', () => {
+  it.each([true, false, undefined])('waits for Got it with legacy pause flag %s', pauseForExplanation => {
     const onComplete = jest.fn();
     const onCompletionAccepted = jest.fn();
     const exercise: MultipleChoiceExerciseType = {
@@ -33,7 +33,7 @@ describe('MultipleChoiceExercise pause for explanation', () => {
         },
         progressionRules: {
           autoAdvanceOnCorrect: true,
-          pauseForExplanation: true,
+          pauseForExplanation,
           showProgress: true,
         },
       },
@@ -49,18 +49,14 @@ describe('MultipleChoiceExercise pause for explanation', () => {
     };
 
     render(
-      <MultipleChoiceExercise
-        exercise={exercise}
-        onComplete={onComplete}
-        onCompletionAccepted={onCompletionAccepted}
-      />
+      <MultipleChoiceExercise exercise={exercise} onComplete={onComplete} onCompletionAccepted={onCompletionAccepted} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: /right/i }));
     fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
 
     expect(screen.getByText(/because this option matches the prompt/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument();
     expect(onCompletionAccepted).toHaveBeenCalledWith(100);
     expect(onComplete).not.toHaveBeenCalled();
 
@@ -70,7 +66,7 @@ describe('MultipleChoiceExercise pause for explanation', () => {
 
     expect(onComplete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
 
     expect(onComplete).toHaveBeenCalledWith(100);
   });
@@ -99,7 +95,7 @@ describe('MultipleChoiceExercise pause for explanation', () => {
         },
       },
       data: {
-        items: [{ text: 'Translate amo.', answer: 'I love', explanation: 'A first-person verb.' }],
+        items: [{ text: 'Translate amo.', answer: 'I love' }],
       },
     };
 
