@@ -142,6 +142,9 @@ describe('lesson network recovery with a real RTK Query store', () => {
     mockBaseQuery.mockResolvedValue({ error: networkError });
     render(page());
     await screen.findByText('We couldn’t open this lesson');
+    expect(
+      screen.getByText('We’re having trouble connecting. Check your internet connection and try again.')
+    ).toBeInTheDocument();
     expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
     expect(Sentry.captureException).toHaveBeenCalledWith(
       expect.any(Error),
@@ -196,6 +199,7 @@ describe('lesson network recovery with a real RTK Query store', () => {
     await refresh({ status: 'PARSING_ERROR', originalStatus: 200, data: 'bad', error: 'Invalid JSON' });
     expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
     expect(screen.getByText('We couldn’t open this lesson')).toBeInTheDocument();
+    expect(screen.getByText('This lesson isn’t available right now.')).toBeInTheDocument();
   });
 
   it.each(['lesson', 'account'])(

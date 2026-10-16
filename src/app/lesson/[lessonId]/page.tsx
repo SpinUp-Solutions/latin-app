@@ -9,7 +9,7 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { PageLoading } from '@/src/components/ui/page-loading';
 import { ConnectionRetryBanner } from '@/src/components/ui/core/connection-retry-banner';
 import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
-import { isRetryableApiError } from '@/src/store/api/baseQuery';
+import { hasApiErrorStatus, isRetryableApiError } from '@/src/store/api/baseQuery';
 
 function LessonUnavailableScreen({
   title,
@@ -108,9 +108,12 @@ export default function DynamicLessonPage() {
   }
 
   if (error && !isRefreshFailure) {
+    const isConnectionError = hasApiErrorStatus(error, 'FETCH_ERROR') || hasApiErrorStatus(error, 'TIMEOUT_ERROR');
     const errorMessage = isLockedError
       ? 'Complete the previous lesson to unlock this one.'
-      : 'This lesson isn’t available right now.';
+      : isConnectionError
+        ? 'We’re having trouble connecting. Check your internet connection and try again.'
+        : 'This lesson isn’t available right now.';
     return (
       <LessonUnavailableScreen
         title={isLockedError ? 'Lesson Locked' : 'We couldn’t open this lesson'}
