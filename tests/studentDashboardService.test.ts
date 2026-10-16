@@ -12,6 +12,7 @@ jest.mock('@/src/lib/tests/attempt-service', () => ({
 }));
 jest.mock('@/src/lib/tests/mock-service', () => ({
   mockTestService: {
+    loadLiveMocks: jest.fn(async () => []),
     listStudentLiveMocks: jest.fn(async () => []),
     listPastStudentMockResults: jest.fn(async () => []),
     getRelatedLiveMocks: jest.fn(),
@@ -787,6 +788,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
         }))
       ) as never,
       {
+        loadLiveMocks: jest.fn(async () => []),
         listStudentLiveMocks: jest.fn(async () => []),
         listPastStudentMockResults: jest.fn(async () => []),
         getRelatedLiveMocks,
@@ -806,6 +808,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     outcome = 'score-only';
     expect((await service.getDashboard('user')).learningPath[1]).not.toHaveProperty('relatedLiveMocks');
     expect(getRelatedLiveMocks).toHaveBeenCalledTimes(2);
+    expect(getRelatedLiveMocks).toHaveBeenCalledWith('test', expect.any(Promise));
   });
 
   it('does not let an inserted required-pass test relock a reached later unit', async () => {
@@ -997,13 +1000,14 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
       }))
     );
     const getAssignmentsForLessonIds = jest.fn(async () => new Map());
+    const loadLiveMocks = jest.fn(async () => []);
     const listStudentLiveMocks = jest.fn(async () => []);
     const listPastStudentMockResults = jest.fn(async () => []);
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds } as never,
       attemptsWith(getAttemptSummary) as never,
-      { listStudentLiveMocks, listPastStudentMockResults, getRelatedLiveMocks: jest.fn() } as never
+      { loadLiveMocks, listStudentLiveMocks, listPastStudentMockResults, getRelatedLiveMocks: jest.fn() } as never
     );
 
     const dashboardPromise = service.getDashboard('user');
@@ -1013,7 +1017,9 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
 
     expect(getAttemptSummary).toHaveBeenCalledTimes(1);
     expect(getAssignmentsForLessonIds).toHaveBeenCalledTimes(1);
-    expect(listStudentLiveMocks).toHaveBeenCalledWith('user', expect.anything());
+    // The cards share the dashboard's one live-mock load.
+    expect(loadLiveMocks).toHaveBeenCalledTimes(1);
+    expect(listStudentLiveMocks).toHaveBeenCalledWith('user', expect.any(Promise), loadLiveMocks.mock.results[0].value);
     expect(listPastStudentMockResults).toHaveBeenCalledWith('user');
 
     releaseAttempts();
@@ -1044,7 +1050,12 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never,
       attemptsWith(jest.fn(async () => ({}))) as never,
-      { listStudentLiveMocks, listPastStudentMockResults, getRelatedLiveMocks: jest.fn() } as never
+      {
+        loadLiveMocks: jest.fn(async () => []),
+        listStudentLiveMocks,
+        listPastStudentMockResults,
+        getRelatedLiveMocks: jest.fn(),
+      } as never
     );
 
     const dashboard = await service.getDashboard('user');
