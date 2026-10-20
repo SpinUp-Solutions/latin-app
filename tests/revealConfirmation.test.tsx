@@ -152,6 +152,7 @@ describe('matching: a miss that shows a hint or the answer waits for Got it', ()
 
   it.each([
     ['a hint with no text', { showHint: true }, { hint: '<p></p>' }],
+    ['a hint of only a non-breaking space', { showHint: true }, { hint: '<p>&nbsp;</p>' }],
     [
       'an answer with no text',
       { showAnswer: true },
@@ -314,6 +315,7 @@ describe('the button after a correct answer', () => {
   it.each([
     ['missing', undefined, true],
     ['empty', '<p></p>', true],
+    ['only a non-breaking space', '<p>&nbsp;</p>', true],
     ['hidden', 'One comes first.', false],
   ])('still auto-advances when the explanation is %s', (_name, explanation, showExplanation) => {
     const exercise = fill({ ...timed, pauseForExplanation: false });

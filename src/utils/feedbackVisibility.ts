@@ -1,8 +1,10 @@
 import type { FeedbackLevel } from '@/src/types/exercises/base';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 
 export function hasVisibleFeedbackContent(content: unknown): boolean {
   if (typeof content === 'string') {
-    return content.replace(/<[^>]*>/g, '').trim() !== '';
+    // An editor's empty paragraph, `<p>&nbsp;</p>`, renders as nothing.
+    return richTextToPlainText(content) !== '';
   }
 
   return Boolean(content);

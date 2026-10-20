@@ -1,5 +1,4 @@
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
-import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 type ExerciseIntroVariant = 'compact' | 'passage' | 'plain';
@@ -26,7 +25,7 @@ const INSTRUCTIONS_CLASS: Record<ExerciseIntroVariant, string> = {
 export function ExerciseIntro({ title, audioPath, instructions, variant = 'compact' }: ExerciseIntroProps) {
   const showTitle = variant === 'plain' || Boolean(title);
   const visibleInstructions =
-    typeof instructions === 'string' && hasVisibleFeedbackContent(instructions) ? instructions : null;
+    typeof instructions === 'string' && instructions.replace(/<[^>]*>/g, '').trim() !== '' ? instructions : null;
 
   return (
     <>
