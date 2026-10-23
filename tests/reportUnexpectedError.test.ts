@@ -7,6 +7,7 @@ import {
   reportWatchedEvent,
   shouldReportClientHardFail,
 } from '@/src/lib/report-unexpected-error';
+import { GOOGLE_SIGN_IN_BLOCKED_MESSAGE } from '@/src/store/api/baseQuery';
 import { captureException, captureMessage } from '@sentry/nextjs';
 
 describe('report-unexpected-error', () => {
@@ -61,6 +62,19 @@ describe('report-unexpected-error', () => {
         expect.objectContaining({
           tags: { surface: 'exercise_error_boundary', lessonId: 'lesson-1' },
         })
+      );
+    });
+
+    it('reports a blocked Google sign-in once per page load as a warning', () => {
+      const blocked = { status: 'FETCH_ERROR', error: GOOGLE_SIGN_IN_BLOCKED_MESSAGE };
+      reportUnexpectedError(blocked, { tags: { surface: 'lesson_load', lessonId: 'lesson-1' } });
+      reportUnexpectedError(blocked, { tags: { surface: 'lesson_load', lessonId: 'lesson-1' } });
+      reportUnexpectedError(blocked, { tags: { surface: 'page_progress' }, includeExpected: true });
+      expect(captureException).not.toHaveBeenCalled();
+      expect(captureMessage).toHaveBeenCalledTimes(1);
+      expect(captureMessage).toHaveBeenCalledWith(
+        'Google sign-in service blocked on this device or network',
+        expect.objectContaining({ level: 'warning', tags: { surface: 'lesson_load', lessonId: 'lesson-1' } })
       );
     });
 

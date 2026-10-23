@@ -9,7 +9,12 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { PageLoading } from '@/src/components/ui/page-loading';
 import { ConnectionRetryBanner } from '@/src/components/ui/core/connection-retry-banner';
 import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
-import { hasApiErrorStatus, isRetryableApiError } from '@/src/store/api/baseQuery';
+import {
+  GOOGLE_SIGN_IN_BLOCKED_MESSAGE,
+  hasApiErrorStatus,
+  isGoogleSignInBlockedError,
+  isRetryableApiError,
+} from '@/src/store/api/baseQuery';
 
 function LessonUnavailableScreen({
   title,
@@ -111,9 +116,11 @@ export default function DynamicLessonPage() {
     const isConnectionError = hasApiErrorStatus(error, 'FETCH_ERROR') || hasApiErrorStatus(error, 'TIMEOUT_ERROR');
     const errorMessage = isLockedError
       ? 'Complete the previous lesson to unlock this one.'
-      : isConnectionError
-        ? 'We’re having trouble connecting. Check your internet connection and try again.'
-        : 'This lesson isn’t available right now.';
+      : isGoogleSignInBlockedError(error)
+        ? GOOGLE_SIGN_IN_BLOCKED_MESSAGE
+        : isConnectionError
+          ? 'We’re having trouble connecting. Check your internet connection and try again.'
+          : 'This lesson isn’t available right now.';
     return (
       <LessonUnavailableScreen
         title={isLockedError ? 'Lesson Locked' : 'We couldn’t open this lesson'}
@@ -141,7 +148,11 @@ export default function DynamicLessonPage() {
           className="shrink-0"
           retrying={isFetching}
           onRetry={() => void refetch()}
-          message="We’re having trouble connecting. Your place and answers are still here, but your progress may not be saved. Please try again."
+          message={
+            isGoogleSignInBlockedError(error)
+              ? `${GOOGLE_SIGN_IN_BLOCKED_MESSAGE} Your place and answers are still here, but your progress may not be saved.`
+              : 'We’re having trouble connecting. Your place and answers are still here, but your progress may not be saved. Please try again.'
+          }
         />
       )}
 
