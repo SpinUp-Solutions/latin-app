@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
-import { getApiErrorCode } from '@/src/store/api/baseQuery';
+import { getApiErrorCode, isGoogleSignInBlockedError } from '@/src/store/api/baseQuery';
 
 const EXPECTED_ERROR_CODES = new Set([
   'LESSON_LOCKED',
@@ -79,10 +79,20 @@ function toError(error: unknown): Error {
   }
 }
 
+let reportedGoogleSignInBlocked = false;
+
 /** Report an unexpected failure, skipping known expected API/domain errors unless asked. */
 export function reportUnexpectedError(error: unknown, context?: ReportErrorContext): void {
   const expected = isExpectedApiError(error);
   if (expected && !context?.includeExpected) return;
+  if (isGoogleSignInBlockedError(error)) {
+    // Every request fails this way until the student changes their device or
+    // network, so one warning per page load shows who is affected.
+    if (reportedGoogleSignInBlocked) return;
+    reportedGoogleSignInBlocked = true;
+    reportWatchedEvent('Google sign-in service blocked on this device or network', { ...context, level: 'warning' });
+    return;
+  }
   Sentry.captureException(toError(error), {
     level: context?.level ?? (expected ? 'warning' : 'error'),
     tags: context?.tags,

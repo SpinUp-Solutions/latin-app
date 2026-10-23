@@ -1,6 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { createAuthenticatedBaseQuery } from '@/src/store/api/baseQuery';
+import {
+  GOOGLE_SIGN_IN_BLOCKED_MESSAGE,
+  createAuthenticatedBaseQuery,
+  isGoogleSignInBlockedError,
+  isRetryableApiError,
+} from '@/src/store/api/baseQuery';
 import { appApi } from '@/src/store/api/appApi';
 import { lessonApi } from '@/src/store/api/lessonApi';
 
@@ -147,6 +152,7 @@ describe('authenticated read network recovery', () => {
 
   it('normalizes exhausted token network failures without exposing token error details', async () => {
     mockGetIdToken.mockRejectedValue(tokenNetworkError);
+    mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
     const request = store.dispatch(api.endpoints.read.initiate());
     await jest.advanceTimersByTimeAsync(2000);
     const result = await request;
@@ -154,8 +160,24 @@ describe('authenticated read network recovery', () => {
       status: 'FETCH_ERROR',
       error: 'We’re having trouble connecting. Please try again.',
     });
+    expect(isGoogleSignInBlockedError(result.error)).toBe(false);
     expect(mockGetIdToken).toHaveBeenCalledTimes(3);
-    expect(mockFetch).not.toHaveBeenCalled();
+    // Only the reachability probe ran; the lesson request never left without a token.
+    expect(mockFetch.mock.calls).toEqual([['/api/health', expect.objectContaining({ cache: 'no-store' })]]);
+  });
+
+  it('blames a blocked Google sign-in when token refresh fails but our own API answers', async () => {
+    mockGetIdToken.mockRejectedValue(tokenNetworkError);
+    mockFetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const request = store.dispatch(api.endpoints.read.initiate());
+    await jest.advanceTimersByTimeAsync(2000);
+    const result = await request;
+    expect(result.error).toEqual({ status: 'FETCH_ERROR', error: GOOGLE_SIGN_IN_BLOCKED_MESSAGE });
+    expect(isGoogleSignInBlockedError(result.error)).toBe(true);
+    expect(isRetryableApiError(result.error)).toBe(true);
+    expect(mockGetIdToken).toHaveBeenCalledTimes(3);
+    // Probed once, after the retries ran out.
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it.each([401, 403, 404, 409, 500])('does not retry an HTTP %s response', async status => {
