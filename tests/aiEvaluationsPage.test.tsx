@@ -202,9 +202,9 @@ describe('AI evaluation admin workspace', () => {
       },
       cells: [
         cell('baseline', 'gpt-5.4-mini', 'Excellent'),
-        cell('candidate', 'gpt-5.6-luna', 'Very good'),
+        cell('candidate', 'gpt-6-luna', 'Very good'),
         testCell('baseline', 'gpt-5.4-mini'),
-        testCell('candidate', 'gpt-5.6-luna'),
+        testCell('candidate', 'gpt-6-luna'),
       ],
     };
     mockedSaveEvaluationCaseInFirebase.mockResolvedValue(savedCase as never);
@@ -237,7 +237,7 @@ describe('AI evaluation admin workspace', () => {
     );
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument());
     expect(screen.getAllByText('GPT-5.4 Mini · Low').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('GPT-5.6 Luna · High').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('GPT-6 Luna · High').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Good work.')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'Test scoring' })).toBeInTheDocument();
     expect(screen.getAllByText('8.5/10')).toHaveLength(2);
