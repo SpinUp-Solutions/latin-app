@@ -210,7 +210,8 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
                       ? 'bg-roman-parchment text-roman-red'
                       : 'hover:bg-roman-parchment hover:text-roman-red'
                 }`}>
-                <SimpleRichDisplay content={wordHtml} className="inline not-prose" />
+                {/* text-inherit: prose's own text colour would hide the highlight's white or red text. */}
+                <SimpleRichDisplay content={wordHtml} className="inline not-prose text-inherit" />
               </div>
             ))}
           </div>

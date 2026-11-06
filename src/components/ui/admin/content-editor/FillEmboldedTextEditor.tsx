@@ -226,7 +226,7 @@ export const FillEmboldedTextEditor: React.FC = () => {
                 isExistingWord ? 'bg-red-100 font-bold text-red-700 border border-red-200' : 'hover:bg-blue-100'
               }`}
               title={isExistingWord ? `Click to edit word: ${word}` : `Click to add word: ${word} (index: ${index})`}>
-              <SimpleRichDisplay content={wordHtml} className="inline not-prose" />
+              <SimpleRichDisplay content={wordHtml} className="inline not-prose text-inherit" />
             </div>
           );
         })}
