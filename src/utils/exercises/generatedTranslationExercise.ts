@@ -18,8 +18,12 @@ export const splitTranslationAnswers = (value?: string | null): string[] => {
     .filter(Boolean);
 };
 
+// Dictionary entries mark endings with a hyphen ("avidus, -a, -um"), which students often leave out.
+const ENDING_HYPHEN = /(^|[\s,;])[-–]+/g;
+
 const transformValue = (value: string, shouldStripInfinitive: boolean, shouldStripMacrons: boolean): string => {
-  const normalized = shouldStripMacrons ? stripMacrons(normalizeAnswer(value)) : normalizeAnswer(value);
+  const answer = normalizeAnswer(value.replace(ENDING_HYPHEN, '$1 '));
+  const normalized = shouldStripMacrons ? stripMacrons(answer) : answer;
   return shouldStripInfinitive ? normalized.replace(/^to\s+/, '') : normalized;
 };
 
