@@ -7,6 +7,7 @@ import {
 } from '@/shared/openai/model-registry';
 import { createEvaluationCacheKey } from '@/src/lib/ai-evaluations/cache-key';
 import { evaluationCaseInputSchema } from '@/src/lib/ai-evaluations/contracts';
+import { LESSON_EVALUATION_CASES } from '@/src/lib/ai-evaluations/lesson-cases';
 import { parseEvaluationCaseSnapshot } from '@/src/lib/ai-evaluations/persistence';
 
 describe('AI evaluation pricing and cache contracts', () => {
@@ -173,5 +174,14 @@ describe('AI evaluation pricing and cache contracts', () => {
     };
     expect(evaluationCaseInputSchema.parse({ ...input, modes: ['test', 'lesson'] }).modes).toEqual(['lesson', 'test']);
     expect(evaluationCaseInputSchema.safeParse({ ...input, modes: ['lesson', 'lesson'] }).success).toBe(false);
+  });
+
+  it('ships lesson cases with unique titles that the save callable accepts', () => {
+    for (const lessonCase of LESSON_EVALUATION_CASES) {
+      expect(evaluationCaseInputSchema.parse(lessonCase)).toEqual(lessonCase);
+    }
+    expect(new Set(LESSON_EVALUATION_CASES.map(lessonCase => lessonCase.title)).size).toBe(
+      LESSON_EVALUATION_CASES.length
+    );
   });
 });
