@@ -59,6 +59,7 @@ const FieldSelect: React.FC<FieldSelectProps> = ({
                     : 'bg-white border border-gray-200 hover:border-roman-red/50'
             }`}
             onClick={() => !isMatched && !disabled && onSelect(item, index)}
+            aria-pressed={isSelected}
             disabled={isMatched || disabled}>
             <SimpleRichDisplay content={item} />
           </button>

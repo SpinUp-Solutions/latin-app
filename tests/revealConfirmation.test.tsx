@@ -89,6 +89,9 @@ describe('matching: a miss that shows a hint or the answer waits for Got it', ()
     for (const name of ['Alpha', 'Beta', 'One', 'Two', /shuffle/i, /clear selection/i]) {
       expect(button(name)).toBeDisabled();
     }
+    expect(button('Alpha')).toHaveAttribute('aria-pressed', 'true');
+    expect(button('Two')).toHaveAttribute('aria-pressed', 'true');
+    expect(button('One')).toHaveAttribute('aria-pressed', 'false');
 
     pair('Beta', 'Two');
     expect(screen.getByText('0 of 2 matches completed')).toBeInTheDocument();
@@ -99,6 +102,8 @@ describe('matching: a miss that shows a hint or the answer waits for Got it', ()
     expect(screen.queryByText('Not quite')).not.toBeInTheDocument();
     expect(screen.queryByText('Correct answer')).not.toBeInTheDocument();
     expect(gotIt()).not.toBeInTheDocument();
+    expect(button('Alpha')).toHaveAttribute('aria-pressed', 'false');
+    expect(button('Two')).toHaveAttribute('aria-pressed', 'false');
     // The wrong pair is gone: a right-column click on its own no longer completes a pair.
     fireEvent.click(button('One'));
     expect(screen.getByText('0 of 2 matches completed')).toBeInTheDocument();
@@ -152,6 +157,7 @@ describe('matching: a miss that shows a hint or the answer waits for Got it', ()
 
   it.each([
     ['a hint with no text', { showHint: true }, { hint: '<p></p>' }],
+    ['a hint of only a non-breaking space', { showHint: true }, { hint: '<p>&nbsp;</p>' }],
     [
       'an answer with no text',
       { showAnswer: true },
@@ -314,6 +320,7 @@ describe('the button after a correct answer', () => {
   it.each([
     ['missing', undefined, true],
     ['empty', '<p></p>', true],
+    ['only a non-breaking space', '<p>&nbsp;</p>', true],
     ['hidden', 'One comes first.', false],
   ])('still auto-advances when the explanation is %s', (_name, explanation, showExplanation) => {
     const exercise = fill({ ...timed, pauseForExplanation: false });
