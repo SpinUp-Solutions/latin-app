@@ -42,7 +42,6 @@ export interface SentenceDiagramStudentProps {
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
-  answerEditing?: boolean;
   onAttempt?: (attempt: DiagramAuditSubmission) => void;
 }
 
@@ -186,7 +185,6 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   runtimeMode,
   onAnswer,
   initialAnswer,
-  answerEditing = false,
   onAttempt,
 }) => {
   const mode = runtimeMode ?? 'practice';
@@ -197,19 +195,19 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   const emitAnswer = useEffectEvent((next: DiagramAnnotation[]) =>
     onAnswer?.({ type: 'sentence-diagramming', annotations: next })
   );
+  // A test records every change, including clearing the diagram, so nothing is
+  // lost when the student moves to Review section or reloads. The section
+  // confirmation, not a per-exercise Check, is what finalises the answer.
   const lastEmittedAnnotations = useRef(annotations);
   useEffect(() => {
-    if (answerEditing && lastEmittedAnnotations.current !== annotations) {
+    if (testAnswerMode && lastEmittedAnnotations.current !== annotations) {
       lastEmittedAnnotations.current = annotations;
       emitAnswer(annotations);
     }
-  }, [annotations, answerEditing]);
+  }, [annotations, testAnswerMode]);
   const [selection, setSelection] = useState<DiagramSelection | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [surfaceResetKey, setSurfaceResetKey] = useState(0);
-  const [testSubmitted, setTestSubmitted] = useState(
-    !answerEditing && testAnswerMode && initialAnswer?.type === 'sentence-diagramming'
-  );
   const historyRef = useRef<DiagramAnnotation[][]>([]);
   const normalizedTools = normalizeAnnotationTools(exercise.data.availableStudentTools);
   const availableTools = normalizedTools.length ? normalizedTools : DEFAULT_STUDENT_TOOLS;
@@ -249,7 +247,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   );
 
   const resetRequired = mode === 'practice' && shouldResetExercise;
-  const interactionLocked = resetRequired || isCorrect === true || testSubmitted;
+  const interactionLocked = resetRequired || isCorrect === true;
 
   const handleExerciseReset = () => {
     historyRef.current = [];
@@ -318,15 +316,8 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   };
 
   const handleSubmit = () => {
-    if (testSubmitted || resetRequired) return;
+    if (resetRequired) return;
     onAttempt?.({ studentAnnotations: annotations });
-
-    if (testAnswerMode) {
-      onAnswer?.({ type: 'sentence-diagramming', annotations });
-      setTestSubmitted(true);
-      onComplete?.(0);
-      return;
-    }
 
     const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'sentence-diagramming', annotations }));
 
@@ -489,7 +480,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 px-5 py-3">
-          {!answerEditing && (
+          {!testAnswerMode && (
             <Button
               size="sm"
               onClick={handleSubmit}
@@ -517,6 +508,11 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
             <RotateCcw className="h-3.5 w-3.5" />
             Reset
           </Button>
+          {testAnswerMode ? (
+            <p className="basis-full text-xs text-stone-500 sm:ml-auto sm:basis-auto">
+              Diagram changes save automatically. You can keep editing until you confirm this section.
+            </p>
+          ) : null}
         </div>
       </div>
 
