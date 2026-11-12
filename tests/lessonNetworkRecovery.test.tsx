@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import * as Sentry from '@sentry/nextjs';
 import { appApi } from '@/src/store/api/appApi';
 import { lessonApi } from '@/src/store/api/lessonApi';
+import { GOOGLE_SIGN_IN_BLOCKED_MESSAGE } from '@/src/store/api/baseQuery';
 import DynamicLessonPage from '@/src/app/lesson/[lessonId]/page';
 
 const mockBaseQuery = jest.fn();
@@ -48,6 +49,7 @@ const createStore = () =>
   });
 const lessonResponse = (id = 'lesson-1') => ({ data: { lesson: { id, title: id, type: 'normal', pages: [] } } });
 const networkError = { status: 'FETCH_ERROR', error: 'TypeError: Failed to fetch' };
+const googleBlockedError = { status: 'FETCH_ERROR', error: GOOGLE_SIGN_IN_BLOCKED_MESSAGE };
 
 describe('lesson network recovery with a real RTK Query store', () => {
   let store: ReturnType<typeof createStore>;
@@ -156,6 +158,25 @@ describe('lesson network recovery with a real RTK Query store', () => {
     mockBaseQuery.mockResolvedValue(lessonResponse());
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await screen.findByText('Player lesson-1');
+  });
+
+  it('says Google sign-in is blocked, keeps Try again, and does not report an error', async () => {
+    mockBaseQuery.mockResolvedValue({ error: googleBlockedError });
+    render(page());
+    await screen.findByText('We couldn’t open this lesson');
+    expect(screen.getByText(GOOGLE_SIGN_IN_BLOCKED_MESSAGE)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(mockBaseQuery).toHaveBeenCalledTimes(2));
+    await screen.findByRole('button', { name: 'Try again' });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it('keeps the player when a refresh hits a blocked Google sign-in', async () => {
+    await loadLesson();
+    await refresh(googleBlockedError);
+    expect(screen.getByRole('status')).toHaveTextContent(GOOGLE_SIGN_IN_BLOCKED_MESSAGE);
+    expect(screen.getByRole('textbox', { name: 'Answer' })).toHaveValue('in-progress answer');
+    expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
   it.each([401, 403, 404, 409])('does not show cached content after HTTP %s', async status => {
