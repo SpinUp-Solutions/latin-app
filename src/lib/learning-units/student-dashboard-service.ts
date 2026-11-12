@@ -194,7 +194,7 @@ export class StudentDashboardService {
     private readonly attempts: Pick<TestAttemptService, 'loadAttemptSummaries'> = testAttemptService,
     private readonly mocks: Pick<
       MockTestService,
-      'listStudentLiveMocks' | 'getRelatedLiveMocks' | 'listPastStudentMockResults'
+      'loadLiveMocks' | 'listStudentLiveMocks' | 'getRelatedLiveMocks' | 'listPastStudentMockResults'
     > = mockTestService
   ) {}
 
@@ -210,7 +210,10 @@ export class StudentDashboardService {
     return this.db.collection(TEST_VERSIONS_COLLECTION);
   }
 
-  /** Practice lessons only: normal lessons come from the learning path, so reading them here would be wasted. */
+  /**
+   * Practice lessons only, grouped by practice type: normal lessons come from
+   * the learning path, so reading them here would be wasted.
+   */
   private async getLivePracticeLessonSummaries(): Promise<LessonSummary[]> {
     const snapshot = await this.units
       .where('isLive', '==', true)
@@ -236,7 +239,8 @@ export class StudentDashboardService {
       })
     );
 
-    return summaries.filter((lesson): lesson is CanonicalLessonSummary => lesson !== null);
+    const lessons = summaries.filter((lesson): lesson is CanonicalLessonSummary => lesson !== null);
+    return PRACTICE_TYPE_ORDER.flatMap(type => lessons.filter(lesson => lesson.type === type));
   }
 
   /**
@@ -245,6 +249,11 @@ export class StudentDashboardService {
    * order of the remaining valid units.
    */
   async getPlacedUnitSummaries(unitIds: string[]): Promise<LearningPathUnitSummary[]> {
+    return this.withTestVersions(await this.getPlacedUnits(unitIds));
+  }
+
+  /** The placed units as stored. Their tests still need their versions, which only `withTestVersions` reads. */
+  private async getPlacedUnits(unitIds: string[]): Promise<ProjectedLearningPathUnit[]> {
     if (unitIds.length === 0) return [];
     const snapshots = await this.db.getAll(...unitIds.map(unitId => this.units.doc(unitId)), {
       fieldMask: [...LEARNING_UNIT_SUMMARY_FIELDS],
@@ -286,7 +295,10 @@ export class StudentDashboardService {
       }
       projectedUnits.push(fallback);
     }
+    return projectedUnits;
+  }
 
+  private async withTestVersions(projectedUnits: ProjectedLearningPathUnit[]): Promise<LearningPathUnitSummary[]> {
     const versionIds = [
       ...new Set(
         projectedUnits.flatMap(unit =>
@@ -634,51 +646,44 @@ export class StudentDashboardService {
     }
   }
 
-  private async getProjectedLessonSummaries(): Promise<{
-    normalUnits: LearningPathUnitSummary[];
-    rawPracticeLessons: LessonSummary[];
-  }> {
-    const [practiceLessons, normalUnits] = await Promise.all([
-      this.getLivePracticeLessonSummaries(),
-      this.getNormalUnitSummaries(),
-    ]);
-    const rawPracticeLessons = PRACTICE_TYPE_ORDER.flatMap(type =>
-      practiceLessons.filter(lesson => lesson.type === type)
-    );
-
-    return { normalUnits, rawPracticeLessons };
-  }
-
-  private async getNormalUnitSummaries(): Promise<LearningPathUnitSummary[]> {
+  private async getLearningPathUnits(): Promise<ProjectedLearningPathUnit[]> {
     const pathSnapshot = await this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID).get();
     const path = parseLearningPathSnapshot(pathSnapshot);
-    return path ? this.getPlacedUnitSummaries(path.unitIds) : [];
+    return path ? this.getPlacedUnits(path.unitIds) : [];
   }
 
   async getDashboard(userId: string): Promise<StudentDashboard> {
-    // One load covers every test and mock on the dashboard, so it is shared with the mock listing below.
-    const [{ normalUnits, rawPracticeLessons }, progressByLessonId, storedAttemptSummaries] = await Promise.all([
-      this.getProjectedLessonSummaries(),
-      this.getProgressByLessonId(userId),
-      this.attempts.loadAttemptSummaries(userId),
-    ]);
-    const testUnits = normalUnits.filter((unit): unit is TestUnitSummary => unit.kind === 'test');
-    const lessonSummaries = [
-      ...normalUnits.filter((unit): unit is CanonicalLessonSummary => unit.kind === 'lesson'),
-      ...rawPracticeLessons,
-    ];
+    // Every read starts as soon as the reads it needs have finished, so the
+    // response waits only for the longest chain: the learning path document,
+    // its units, then their test versions. One attempt-summary load and one
+    // live-mock load serve every test and mock on the dashboard.
+    const pathUnits = this.getLearningPathUnits();
+    const rawPracticeLessons = this.getLivePracticeLessonSummaries();
+    const progressByLessonId = this.getProgressByLessonId(userId);
+    const storedAttemptSummaries = this.attempts.loadAttemptSummaries(userId);
+    const liveMocks = this.mocks.loadLiveMocks();
 
-    // Attempt summaries, practice enrichment, and mock listing are independent
-    // of each other, so they all run concurrently instead of one-after-another.
     // The past-result projection runs unfiltered here and is reconciled against
     // the live cards below, which keeps it off the mock listing's critical path.
-    const [attemptSummaries, practiceLessons, mockTests, pastMockResults, canonicalProgressByLessonId] =
+    const [normalUnits, practiceLessons, canonicalProgressByLessonId, attemptSummaries, mockTests, pastMockResults] =
       await Promise.all([
-        this.getAttemptSummaries(testUnits, storedAttemptSummaries),
-        this.enrichPracticeLessons(rawPracticeLessons),
-        this.mocks.listStudentLiveMocks(userId, storedAttemptSummaries),
+        pathUnits.then(units => this.withTestVersions(units)),
+        rawPracticeLessons.then(lessons => this.enrichPracticeLessons(lessons)),
+        Promise.all([pathUnits, rawPracticeLessons, progressByLessonId]).then(([units, practice, progress]) =>
+          this.hydrateCanonicalProgressSummaries(
+            userId,
+            [...units.filter((unit): unit is CanonicalLessonSummary => unit.kind === 'lesson'), ...practice],
+            progress
+          )
+        ),
+        Promise.all([pathUnits, storedAttemptSummaries]).then(([units, stored]) =>
+          this.getAttemptSummaries(
+            units.flatMap(unit => (unit.kind === 'test' ? [unit.id] : [])),
+            stored
+          )
+        ),
+        this.mocks.listStudentLiveMocks(userId, storedAttemptSummaries, liveMocks),
         this.mocks.listPastStudentMockResults(userId),
-        this.hydrateCanonicalProgressSummaries(userId, lessonSummaries, progressByLessonId),
       ]);
 
     const liveMockTests = mockTests ?? [];
@@ -691,7 +696,7 @@ export class StudentDashboardService {
         // The frozen attempt outcome, rather than the test's current settings,
         // is the only remediation signal.  Settings can change after submit.
         if (unit.kind === 'test' && unit.attemptSummary.latest?.outcome === 'not-passed') {
-          unit.relatedLiveMocks = await this.mocks.getRelatedLiveMocks(unit.id);
+          unit.relatedLiveMocks = await this.mocks.getRelatedLiveMocks(unit.id, liveMocks);
         }
       })
     );
@@ -704,13 +709,13 @@ export class StudentDashboardService {
   }
 
   private async getAttemptSummaries(
-    testUnits: TestUnitSummary[],
+    testIds: string[],
     stored: StudentAttemptSummaries
   ): Promise<Map<string, TestAttemptOriginSummary>> {
     const attemptSummaries = new Map<string, TestAttemptOriginSummary>();
     await Promise.all(
-      testUnits.map(async test => {
-        attemptSummaries.set(test.id, await stored.summary({ kind: 'normal-test', testId: test.id }));
+      testIds.map(async testId => {
+        attemptSummaries.set(testId, await stored.summary({ kind: 'normal-test', testId }));
       })
     );
     return attemptSummaries;
