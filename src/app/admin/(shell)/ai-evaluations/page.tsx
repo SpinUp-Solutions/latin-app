@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   BarChart3,
+  BookOpen,
   Check,
   ChevronDown,
   Clock3,
@@ -54,6 +55,7 @@ import {
   runEvaluationInFirebase,
   saveEvaluationCaseInFirebase,
 } from '@/src/lib/ai-evaluations/firebase-client';
+import { LESSON_EVALUATION_CASES } from '@/src/lib/ai-evaluations/lesson-cases';
 
 const newAnswer = (index: number) => ({ id: `answer-${Date.now()}-${index}`, label: `Answer ${index}`, text: '' });
 
@@ -630,6 +632,7 @@ function AIEvaluationsPage() {
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [addingLessonCases, setAddingLessonCases] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -647,7 +650,10 @@ function AIEvaluationsPage() {
   }, [form, savedForm]);
   const valid = useMemo(() => isValidCase(form), [form]);
   const selectedCase = cases.find(item => item.id === selectedId) ?? null;
-  const interactionLocked = running || saving || deleting;
+  const interactionLocked = running || saving || deleting || addingLessonCases;
+  const missingLessonCases = LESSON_EVALUATION_CASES.filter(
+    lessonCase => !cases.some(item => item.title === lessonCase.title)
+  );
   const runGenerationRef = useRef(0);
   const navigationGuard = useUnsavedNavigationGuard(
     dirty,
@@ -743,6 +749,24 @@ function AIEvaluationsPage() {
     }
   };
 
+  const addLessonCases = async () => {
+    if (interactionLocked || loadError || missingLessonCases.length === 0) return;
+    setAddingLessonCases(true);
+    const added: EvaluationCase[] = [];
+    try {
+      // Saved last to first so the newest-first list keeps lesson order.
+      for (const lessonCase of [...missingLessonCases].reverse()) {
+        added.unshift(await saveEvaluationCaseInFirebase(lessonCase));
+      }
+      toast.success(`Added ${added.length} lesson ${added.length === 1 ? 'case' : 'cases'}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to add lesson cases');
+    } finally {
+      setCases(previous => [...added, ...previous]);
+      if (!selectedId && !dirty && added.length > 0) applySelectedCase(added[0]);
+      setAddingLessonCases(false);
+    }
+  };
   const deleteCase = async () => {
     if (!selectedId || interactionLocked) return;
     setDeleting(true);
@@ -811,10 +835,24 @@ function AIEvaluationsPage() {
         title="AI Model Evaluations"
         description="Compare configured translation-grading profiles across lesson feedback and test scoring."
         actions={
-          <Button type="button" variant="outline" onClick={requestNewCase} disabled={interactionLocked}>
-            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-            New case
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void addLessonCases()}
+              disabled={interactionLocked || Boolean(loadError) || missingLessonCases.length === 0}>
+              {addingLessonCases ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <BookOpen className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              {addingLessonCases ? 'Adding…' : 'Add lesson cases'}
+            </Button>
+            <Button type="button" variant="outline" onClick={requestNewCase} disabled={interactionLocked}>
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              New case
+            </Button>
+          </>
         }
       />
 
@@ -828,7 +866,7 @@ function AIEvaluationsPage() {
           </div>
           {cases.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-white/60 p-4 text-sm text-roman-stone">
-              Create your first case to begin a comparison.
+              Create your first case, or add the lesson cases, to begin a comparison.
             </div>
           ) : (
             <div className="space-y-2">

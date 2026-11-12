@@ -60,15 +60,15 @@ describe('translation grading runner', () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data).toEqual({ ...output, isPassing: true });
-    expect(result.requestedModel).toBe('gpt-5.6-luna');
+    expect(result.requestedModel).toBe('gpt-6-luna');
     expect(result.usage?.cachedInputTokens).toBe(20);
     expect(result.usage?.reasoningTokens).toBe(12);
-    expect(result.cost?.pricingVersion).toBe('2026-08-01');
+    expect(result.cost?.pricingVersion).toBe('2026-11-06');
 
     const call = createResponse.mock.calls[0][0];
     expect(call).toEqual(
       expect.objectContaining({
-        model: 'gpt-5.6-luna',
+        model: 'gpt-6-luna',
         reasoning: { effort: 'high' },
         prompt_cache_key: expect.stringMatching(/^translation-grading-v3:candidate:shard-[0-3]$/),
         prompt_cache_options: { mode: 'explicit', ttl: '30m' },
@@ -215,7 +215,7 @@ describe('translation grading runner', () => {
         ? 'The translation grader returned an incomplete response.'
         : 'The translation grader returned malformed structured output.'
     );
-    expect(result.model).toBe('gpt-5.6-luna');
+    expect(result.model).toBe('gpt-6-luna');
     expect(result.usage?.totalTokens).toBe(150);
     expect(result.costMeasurement.status).toBe('measured');
     expect(result.cost?.totalCost).toBeGreaterThan(0);

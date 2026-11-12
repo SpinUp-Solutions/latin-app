@@ -2,12 +2,12 @@
  * Versioned OpenAI model metadata used by both production grading and the
  * admin evaluation suite. Prices are standard, short-context USD per 1M
  * tokens and were verified against OpenAI's pricing documentation on
- * 2026-08-01: https://developers.openai.com/api/docs/pricing
+ * 2026-11-06: https://developers.openai.com/api/docs/pricing
  */
 
 import type { CostBreakdown, TokenUsage, TranslationGradingMode } from './types';
 
-const OPENAI_PRICING_VERSION = '2026-08-01';
+const OPENAI_PRICING_VERSION = '2026-11-06';
 const OPENAI_PRICING_SOURCE = 'https://developers.openai.com/api/docs/pricing';
 type OpenAIReasoningEffort = 'low' | 'high';
 
@@ -34,10 +34,11 @@ const BASELINE_PRICING: OpenAIModelPricing = {
 };
 
 const CANDIDATE_PRICING: OpenAIModelPricing = {
-  inputPerMillion: 0.2,
-  cachedInputPerMillion: 0.02,
-  cacheWritePerMillion: 0.25,
-  outputPerMillion: 1.2,
+  inputPerMillion: 0.1,
+  cachedInputPerMillion: 0.01,
+  // The 30-minute cache-write rate, matching the candidate's explicit cache TTL.
+  cacheWritePerMillion: 0.125,
+  outputPerMillion: 0.5,
 };
 
 export const OPENAI_MODEL_CATALOG = {
@@ -46,9 +47,9 @@ export const OPENAI_MODEL_CATALOG = {
     label: 'GPT-5.4 Mini',
     pricing: BASELINE_PRICING,
   },
-  gpt56Luna: {
-    model: 'gpt-5.6-luna',
-    label: 'GPT-5.6 Luna',
+  gpt6Luna: {
+    model: 'gpt-6-luna',
+    label: 'GPT-6 Luna',
     pricing: CANDIDATE_PRICING,
   },
 } as const satisfies Record<string, OpenAIModelDefinition>;
@@ -108,7 +109,7 @@ export const TRANSLATION_GRADING_PROFILES = {
     promptCacheMode: 'automatic',
     profileVersion: 'translation-grading-v3:baseline',
   }),
-  candidate: defineTranslationGradingProfile('candidate', 'gpt56Luna', {
+  candidate: defineTranslationGradingProfile('candidate', 'gpt6Luna', {
     labelSuffix: 'High',
     reasoningEffort: 'high',
     maxOutputTokens: { lesson: 8000, test: 8000 },

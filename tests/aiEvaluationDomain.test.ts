@@ -7,6 +7,7 @@ import {
 } from '@/shared/openai/model-registry';
 import { createEvaluationCacheKey } from '@/src/lib/ai-evaluations/cache-key';
 import { evaluationCaseInputSchema } from '@/src/lib/ai-evaluations/contracts';
+import { LESSON_EVALUATION_CASES } from '@/src/lib/ai-evaluations/lesson-cases';
 import { parseEvaluationCaseSnapshot } from '@/src/lib/ai-evaluations/persistence';
 
 describe('AI evaluation pricing and cache contracts', () => {
@@ -32,10 +33,11 @@ describe('AI evaluation pricing and cache contracts', () => {
 
     const cost = calculateTokenUsageCost(tokens, TRANSLATION_GRADING_PROFILES.candidate.pricing);
     expect(cost.tokens.reasoningTokens).toBe(120);
-    expect(cost.inputCost).toBeCloseTo((700 * 0.2 + 200 * 0.02 + 100 * 0.25) / 1_000_000);
-    expect(cost.outputCost).toBeCloseTo((500 * 1.2) / 1_000_000);
+    expect(TRANSLATION_GRADING_PROFILES.candidate.model).toBe('gpt-6-luna');
+    expect(cost.inputCost).toBeCloseTo((700 * 0.1 + 200 * 0.01 + 100 * 0.125) / 1_000_000, 12);
+    expect(cost.outputCost).toBeCloseTo((500 * 0.5) / 1_000_000, 12);
     expect(cost.totalCost).toBeCloseTo(cost.inputCost + cost.outputCost);
-    expect(cost.pricingVersion).toBe('2026-08-01');
+    expect(cost.pricingVersion).toBe('2026-11-06');
   });
 
   it('rejects malformed or inconsistent provider usage instead of billing zeroes', () => {
@@ -110,7 +112,7 @@ describe('AI evaluation pricing and cache contracts', () => {
       createEvaluationCacheKey({ ...base, profileVersion: 'translation-grading-v3:baseline-reasoning-high' })
     );
     expect(createEvaluationCacheKey(base)).not.toBe(
-      createEvaluationCacheKey({ ...base, model: 'gpt-5.6-luna', reasoningEffort: 'high' })
+      createEvaluationCacheKey({ ...base, model: 'gpt-6-luna', reasoningEffort: 'high' })
     );
     expect(createEvaluationCacheKey(base)).not.toBe(createEvaluationCacheKey({ ...base, gradingMode: 'test' }));
     expect(createEvaluationCacheKey(base)).not.toBe(createEvaluationCacheKey({ ...base, profileId: 'candidate' }));
@@ -125,7 +127,7 @@ describe('AI evaluation pricing and cache contracts', () => {
         { id: 'one', label: 'A', text: 'Gaul is divided.' },
         { id: 'one', label: 'B', text: 'Gaul is split.' },
       ],
-      model: 'gpt-5.6-luna',
+      model: 'gpt-6-luna',
     });
 
     expect(invalid.success).toBe(false);
@@ -172,5 +174,14 @@ describe('AI evaluation pricing and cache contracts', () => {
     };
     expect(evaluationCaseInputSchema.parse({ ...input, modes: ['test', 'lesson'] }).modes).toEqual(['lesson', 'test']);
     expect(evaluationCaseInputSchema.safeParse({ ...input, modes: ['lesson', 'lesson'] }).success).toBe(false);
+  });
+
+  it('ships lesson cases with unique titles that the save callable accepts', () => {
+    for (const lessonCase of LESSON_EVALUATION_CASES) {
+      expect(evaluationCaseInputSchema.parse(lessonCase)).toEqual(lessonCase);
+    }
+    expect(new Set(LESSON_EVALUATION_CASES.map(lessonCase => lessonCase.title)).size).toBe(
+      LESSON_EVALUATION_CASES.length
+    );
   });
 });

@@ -9,6 +9,7 @@ import {
   saveEvaluationCaseInFirebase,
 } from '@/src/lib/ai-evaluations/firebase-client';
 import type { EvaluationCase, EvaluationCellResult, EvaluationRunResult } from '@/src/lib/ai-evaluations/contracts';
+import { LESSON_EVALUATION_CASES } from '@/src/lib/ai-evaluations/lesson-cases';
 
 const mockedRunEvaluationInFirebase = jest.mocked(runEvaluationInFirebase);
 const mockedListEvaluationCasesInFirebase = jest.mocked(listEvaluationCasesInFirebase);
@@ -74,6 +75,37 @@ describe('AI evaluation admin workspace', () => {
 
     await waitFor(() => expect(mockedListEvaluationCasesInFirebase).toHaveBeenCalledTimes(2));
     expect(await screen.findByLabelText('Case title')).toHaveValue('Loaded case');
+  });
+
+  it('adds only the lesson cases that are not saved yet and keeps them in lesson order', async () => {
+    const asSavedCase = (input: (typeof LESSON_EVALUATION_CASES)[number], id: string) =>
+      ({
+        ...input,
+        id,
+        createdAt: '2026-08-01T00:00:00.000Z',
+        createdBy: 'admin',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+        updatedBy: 'admin',
+      }) as EvaluationCase;
+    const [alreadySaved, ...missing] = LESSON_EVALUATION_CASES;
+    mockedListEvaluationCasesInFirebase.mockResolvedValue([asSavedCase(alreadySaved, 'existing')]);
+    mockedSaveEvaluationCaseInFirebase.mockImplementation(async input =>
+      asSavedCase(input, `saved-${LESSON_EVALUATION_CASES.indexOf(input)}`)
+    );
+
+    render(<AIEvaluationsPage />);
+    const addButton = await screen.findByRole('button', { name: 'Add lesson cases' });
+    fireEvent.click(addButton);
+
+    await waitFor(() => expect(mockedSaveEvaluationCaseInFirebase).toHaveBeenCalledTimes(missing.length));
+    expect(mockedSaveEvaluationCaseInFirebase.mock.calls.map(([input]) => input)).toEqual([...missing].reverse());
+    const caseList = screen.getByRole('complementary', { name: 'Saved evaluation cases' });
+    await waitFor(() =>
+      expect(Array.from(caseList.querySelectorAll('button p:first-child'), title => title.textContent)).toEqual(
+        [...missing, alreadySaved].map(lessonCase => lessonCase.title)
+      )
+    );
+    expect(screen.getByRole('button', { name: 'Add lesson cases' })).toBeDisabled();
   });
 
   it('saves a case before enabling a comparison and renders both model cells', async () => {
@@ -202,9 +234,9 @@ describe('AI evaluation admin workspace', () => {
       },
       cells: [
         cell('baseline', 'gpt-5.4-mini', 'Excellent'),
-        cell('candidate', 'gpt-5.6-luna', 'Very good'),
+        cell('candidate', 'gpt-6-luna', 'Very good'),
         testCell('baseline', 'gpt-5.4-mini'),
-        testCell('candidate', 'gpt-5.6-luna'),
+        testCell('candidate', 'gpt-6-luna'),
       ],
     };
     mockedSaveEvaluationCaseInFirebase.mockResolvedValue(savedCase as never);
@@ -237,7 +269,7 @@ describe('AI evaluation admin workspace', () => {
     );
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument());
     expect(screen.getAllByText('GPT-5.4 Mini · Low').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('GPT-5.6 Luna · High').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('GPT-6 Luna · High').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Good work.')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'Test scoring' })).toBeInTheDocument();
     expect(screen.getAllByText('8.5/10')).toHaveLength(2);
