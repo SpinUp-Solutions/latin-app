@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { toast } from 'sonner';
 import VocabAutocompleteEvaluationsPage from '@/src/app/admin/(shell)/vocab-autocomplete-evaluations/page';
 import { AdminSidebar } from '@/src/components/admin/shell/AdminSidebar';
 import { getAdminBreadcrumbs } from '@/src/components/admin/shell';
@@ -165,5 +166,30 @@ describe('vocab autocomplete evaluation admin page', () => {
     expect(screen.getByText(/Forms not compared: GPT-6.1 Terra returned no entry/)).toBeInTheDocument();
     expect(screen.getByText('32,000 / 32,000 · 100%')).toBeInTheDocument();
     expect(screen.getByText('2×', { exact: false })).toHaveTextContent('2× cheaper');
+
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy as Markdown' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const markdown: string = writeText.mock.calls[0][0];
+    expect(markdown).toContain('# Vocab autocomplete evaluation: Verbs');
+    expect(markdown).toContain('| GPT-6.1 Terra · Medium | gpt-6.1-terra | medium | 32,000 |');
+    expect(markdown).toContain('| Ran out of output tokens | 0 | 1 |');
+    // Only the forms that differ are listed, the outright difference first.
+    expect(markdown).toContain('### Forms that differ (3 of 4; 1 match exactly)');
+    const formRows = markdown
+      .split('\n')
+      .filter(line => line.startsWith('| conjugation_table') || line.startsWith('| principal_parts'));
+    expect(formRows).toEqual([
+      '| conjugation_table.indicative.active.present.singular.second | amās | amāris | different |',
+      '| principal_parts.1.full_form | amō | amo | macrons or capitals only |',
+      '| principal_parts.1.shortened_form | amō | amo | macrons or capitals only |',
+    ]);
+    expect(markdown).toContain('| translation | to love | to love, like |');
+    expect(markdown).toContain(
+      '| GPT-6.1 Terra · Medium | failed: token-budget — OpenAI started the vocabulary JSON but did not finish it. |'
+    );
+    expect(markdown).toContain('Forms not compared: GPT-6.1 Terra · Medium returned no entry.');
+    expect(toast.success).toHaveBeenCalledWith('Results copied as Markdown');
   });
 });

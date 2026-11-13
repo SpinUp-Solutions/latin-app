@@ -5,6 +5,7 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
+  ClipboardCopy,
   Clock3,
   CopyPlus,
   Database,
@@ -57,6 +58,7 @@ import {
   type FormRow,
   type VocabularyRunSummary,
 } from '@/src/lib/vocabulary-autocomplete-evaluations/comparison';
+import { vocabularyRunToMarkdown } from '@/src/lib/vocabulary-autocomplete-evaluations/markdown-export';
 
 const PROFILES = [
   EVALUATION_VOCABULARY_AUTOCOMPLETE_PROFILE_IDS[0],
@@ -639,18 +641,32 @@ function Results({
   const summary = summarizeVocabularyRun(result.cells, PROFILES);
   const failed = result.cells.filter(cell => !cell.output).length;
   const costThisRun = result.cells.reduce((sum, cell) => sum + (cell.costThisRun?.totalCost ?? 0), 0);
+  const copyAsMarkdown = async () => {
+    try {
+      await navigator.clipboard.writeText(vocabularyRunToMarkdown(result, evaluationCase, PROFILES));
+      toast.success('Results copied as Markdown');
+    } catch {
+      toast.error('Unable to copy the results. Check the browser allows clipboard access.');
+    }
+  };
   return (
     <section aria-labelledby="vocabulary-results-heading" className="space-y-4">
-      <div>
-        <h2 id="vocabulary-results-heading" className="font-serif text-xl">
-          Results
-        </h2>
-        <p className="mt-1 text-xs text-roman-stone">
-          {result.cells.length - failed} of {result.cells.length} autocompletes completed
-          {failed > 0 && <span className="text-red-700"> · {failed} failed</span>} · run took{' '}
-          {formatDuration(result.wallTimeMs)} · API cost this run {formatCost(costThisRun)}
-          {result.forceRefresh && ' · cache skipped'}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="vocabulary-results-heading" className="font-serif text-xl">
+            Results
+          </h2>
+          <p className="mt-1 text-xs text-roman-stone">
+            {result.cells.length - failed} of {result.cells.length} autocompletes completed
+            {failed > 0 && <span className="text-red-700"> · {failed} failed</span>} · run took{' '}
+            {formatDuration(result.wallTimeMs)} · API cost this run {formatCost(costThisRun)}
+            {result.forceRefresh && ' · cache skipped'}
+          </p>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={() => void copyAsMarkdown()}>
+          <ClipboardCopy className="h-4 w-4" />
+          Copy as Markdown
+        </Button>
       </div>
       <RunSummary summary={summary} />
       <div
