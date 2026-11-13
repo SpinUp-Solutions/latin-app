@@ -232,3 +232,19 @@ export function differingSpan(text: string, other: string): [string, string, str
   }
   return [text.slice(0, start), text.slice(start, text.length - end), text.slice(text.length - end)];
 }
+
+const searchText = (text: string) =>
+  stripMarks(text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_.]/g, ' ')).replace(/\s+/g, ' ');
+
+/**
+ * Whether a form matches a search: every word of the query must start a word
+ * of the form's path or of either model's value, ignoring case and macrons, so
+ * "subj perf pl" finds the perfect subjunctive plurals (not the imperfect or
+ * pluperfect) and "amaver" finds amāverītis.
+ */
+export function formMatchesQuery(row: FormRow, query: string) {
+  const words = searchText(query).trim().split(' ').filter(Boolean);
+  if (words.length === 0) return true;
+  const haystack = searchText([row.field, ...row.path, ...row.values.flat()].join(' ')).split(' ');
+  return words.every(word => haystack.some(item => item.startsWith(word)));
+}
