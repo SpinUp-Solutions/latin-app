@@ -212,6 +212,45 @@ it('retains matching pairs and an incomplete selection', () => {
   expect(screen.getByText('2 of 2 matches completed')).toBeVisible();
 });
 
+it('keeps a matching miss held for Got it through Next/Prev', () => {
+  const matching: MatchingExercise = {
+    id: 'matching',
+    type: 'matching',
+    title: 'Pairs',
+    instructions: '',
+    feedbackConfig: {
+      escalationLevels: [{ message: 'Not quite', showAnswer: true }],
+      progressionRules: { autoAdvanceOnCorrect: true, pauseForExplanation: true, showProgress: true },
+    },
+    data: {
+      leftColumn: [
+        { id: 'a', value: 'Alpha' },
+        { id: 'b', value: 'Beta' },
+      ],
+      rightColumn: [
+        { id: 'c', value: 'One' },
+        { id: 'd', value: 'Two' },
+      ],
+      answers: { a: 'c', b: 'd' },
+    },
+  };
+  const data = lesson();
+  data.pages[0].items = [matching];
+  render(<LessonPlayer lesson={data} trackProgress={false} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Two' }));
+  next();
+  act(() => jest.advanceTimersByTime(5000));
+  prev();
+  expect(within(screen.getByText('Correct answer').parentElement!).getByText('One')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Alpha' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+  expect(screen.queryByText('Correct answer')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
+  fireEvent.click(screen.getByRole('button', { name: 'One' }));
+  expect(screen.getByText('1 of 2 matches completed')).toBeVisible();
+});
+
 it('stops exercise audio and cancels a delayed audio request when its page is hidden', async () => {
   Object.assign(auth, { currentUser: { getIdToken: async () => 'test-token' } });
   const play = jest.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();

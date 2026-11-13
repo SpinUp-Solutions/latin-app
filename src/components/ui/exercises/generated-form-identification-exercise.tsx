@@ -285,8 +285,6 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
   }
 
   const currentItem = itemAt(itemIndex);
-  const acknowledgesReveal =
-    queueEnabled && isCorrect === false && revealsHintOrAnswer(feedbackLevel, undefined, correctAnswerOf(currentItem));
   const nextWordId = items[order[currentIndex + 1]]?.wordId;
   const completedWords =
     new Set(
@@ -415,7 +413,6 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
               correctAnswer={correctAnswerOf(currentItem)}
               showExplanation={showExplanation}
               onContinue={(isCorrect || queueEnabled) && isAwaitingConfirmation ? confirmAdvance : undefined}
-              continueLabel={acknowledgesReveal ? 'Got it' : undefined}
               allowContinueOnIncorrect={queueEnabled}
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />

@@ -1,5 +1,5 @@
 import { useReducer, useCallback, useMemo } from 'react';
-import type { FeedbackConfig, FeedbackState, FeedbackAction } from '@/src/types/exercises/base';
+import type { FeedbackConfig, FeedbackState, FeedbackAction, FeedbackLevel } from '@/src/types/exercises/base';
 import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
 
 const createInitialState = (): FeedbackState => ({
@@ -12,13 +12,16 @@ const createInitialState = (): FeedbackState => ({
   shouldShowExplanation: false,
 });
 
+/** The level an incorrect answer shows on the given attempt; the last level repeats once they run out. */
+const levelForAttempt = (escalationLevels: FeedbackLevel[], attempt: number) =>
+  escalationLevels[Math.min(attempt - 1, escalationLevels.length - 1)] || null;
+
 function feedbackReducer(state: FeedbackState, action: FeedbackAction): FeedbackState {
   switch (action.type) {
     case 'ANSWER_INCORRECT': {
       const { escalationLevels } = action;
       const nextAttempt = state.currentAttempt + 1;
-      const levelIndex = Math.min(nextAttempt - 1, escalationLevels.length - 1);
-      const activeLevel = escalationLevels[levelIndex] || null;
+      const activeLevel = levelForAttempt(escalationLevels, nextAttempt);
 
       return {
         phase: 'attempting',
@@ -106,6 +109,8 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     machineConfig.maxLevelFailures > 0 &&
     state.currentAttempt + 1 >= machineConfig.maxLevelFailures;
 
+  const nextIncorrectLevel = levelForAttempt(machineConfig.escalationLevels, state.currentAttempt + 1);
+
   return {
     feedbackState: state,
     level: state.activeLevel,
@@ -118,6 +123,7 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     reset,
     shouldResetExercise,
     willResetOnNextIncorrect,
+    nextIncorrectLevel,
     resetExercise: reset,
   };
 }

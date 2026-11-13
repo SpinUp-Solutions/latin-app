@@ -2,12 +2,13 @@
  * Versioned OpenAI model metadata used by both production grading and the
  * admin evaluation suite. Prices are standard, short-context USD per 1M
  * tokens and were verified against OpenAI's pricing documentation on
- * 2026-08-01: https://developers.openai.com/api/docs/pricing
+ * 2026-11-06: https://developers.openai.com/api/docs/pricing
  */
 
 import type { CostBreakdown, TokenUsage, TranslationGradingMode } from './types';
+import { WARM_LESSON_TONE_INSTRUCTIONS } from './translation-grading-tone';
 
-const OPENAI_PRICING_VERSION = '2026-08-01';
+const OPENAI_PRICING_VERSION = '2026-11-06';
 const OPENAI_PRICING_SOURCE = 'https://developers.openai.com/api/docs/pricing';
 type OpenAIReasoningEffort = 'low' | 'high';
 
@@ -34,10 +35,11 @@ const BASELINE_PRICING: OpenAIModelPricing = {
 };
 
 const CANDIDATE_PRICING: OpenAIModelPricing = {
-  inputPerMillion: 0.2,
-  cachedInputPerMillion: 0.02,
-  cacheWritePerMillion: 0.25,
-  outputPerMillion: 1.2,
+  inputPerMillion: 0.1,
+  cachedInputPerMillion: 0.01,
+  // The 30-minute cache-write rate, matching the candidate's explicit cache TTL.
+  cacheWritePerMillion: 0.125,
+  outputPerMillion: 0.5,
 };
 
 export const OPENAI_MODEL_CATALOG = {
@@ -46,9 +48,9 @@ export const OPENAI_MODEL_CATALOG = {
     label: 'GPT-5.4 Mini',
     pricing: BASELINE_PRICING,
   },
-  gpt56Luna: {
-    model: 'gpt-5.6-luna',
-    label: 'GPT-5.6 Luna',
+  gpt6Luna: {
+    model: 'gpt-6-luna',
+    label: 'GPT-6 Luna',
     pricing: CANDIDATE_PRICING,
   },
 } as const satisfies Record<string, OpenAIModelDefinition>;
@@ -70,6 +72,18 @@ interface TranslationGradingProfileDefinition {
   promptCacheMode: 'automatic' | 'explicit';
   profileVersion: string;
   pricing: OpenAIModelPricing;
+  /** Appended to the shared task prompt for this profile only, e.g. to tune one model's tone. */
+  extraInstructions?: Partial<Record<TranslationGradingMode, string>>;
+}
+
+/** The shared task prompt plus any instructions this profile adds for the mode. */
+export function profileInstructions(
+  profile: TranslationGradingProfileDefinition,
+  mode: TranslationGradingMode,
+  sharedPrompt: string
+): string {
+  const extra = profile.extraInstructions?.[mode];
+  return extra ? `${sharedPrompt}\n\n${extra}` : sharedPrompt;
 }
 
 type TranslationGradingProfileOptions = Omit<
@@ -108,13 +122,16 @@ export const TRANSLATION_GRADING_PROFILES = {
     promptCacheMode: 'automatic',
     profileVersion: 'translation-grading-v3:baseline',
   }),
-  candidate: defineTranslationGradingProfile('candidate', 'gpt56Luna', {
-    labelSuffix: 'High',
-    reasoningEffort: 'high',
+  candidate: defineTranslationGradingProfile('candidate', 'gpt6Luna', {
+    labelSuffix: 'Low',
+    reasoningEffort: 'low',
     maxOutputTokens: { lesson: 8000, test: 8000 },
     promptCacheKey: 'translation-grading-v3:candidate',
     promptCacheMode: 'explicit',
-    profileVersion: 'translation-grading-v3:candidate',
+    // Bumped with the tone instructions so cached evaluation results are regenerated.
+    profileVersion: 'translation-grading-v3:candidate:warm-tone-v1',
+    // GPT-6 Luna reads the shared "warm tutor" prompt more clinically than GPT-5.4 Mini.
+    extraInstructions: { lesson: WARM_LESSON_TONE_INSTRUCTIONS },
   }),
 } as const satisfies Record<string, TranslationGradingProfileDefinition>;
 

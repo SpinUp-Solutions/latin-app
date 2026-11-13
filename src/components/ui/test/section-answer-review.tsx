@@ -405,7 +405,6 @@ function ExerciseAnswers({
           exercise={{ ...exercise, feedbackConfig: TEST_RUNTIME_FEEDBACK_CONFIG }}
           runtimeMode="test"
           initialAnswer={answer}
-          answerEditing
           onAnswer={onChange}
         />
       );

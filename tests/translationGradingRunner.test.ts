@@ -54,22 +54,22 @@ describe('translation grading runner', () => {
     createResponse.mockResolvedValue(responseFor());
   });
 
-  it('reuses the production schema/prompt runner for the high-reasoning candidate profile', async () => {
+  it('reuses the production schema/prompt runner for the low-reasoning candidate profile', async () => {
     const result = await translationGrader.grade('lesson', request, 'candidate');
 
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data).toEqual({ ...output, isPassing: true });
-    expect(result.requestedModel).toBe('gpt-5.6-luna');
+    expect(result.requestedModel).toBe('gpt-6-luna');
     expect(result.usage?.cachedInputTokens).toBe(20);
     expect(result.usage?.reasoningTokens).toBe(12);
-    expect(result.cost?.pricingVersion).toBe('2026-08-01');
+    expect(result.cost?.pricingVersion).toBe('2026-11-06');
 
     const call = createResponse.mock.calls[0][0];
     expect(call).toEqual(
       expect.objectContaining({
-        model: 'gpt-5.6-luna',
-        reasoning: { effort: 'high' },
+        model: 'gpt-6-luna',
+        reasoning: { effort: 'low' },
         prompt_cache_key: expect.stringMatching(/^translation-grading-v3:candidate:shard-[0-3]$/),
         prompt_cache_options: { mode: 'explicit', ttl: '30m' },
         service_tier: 'default',
@@ -109,6 +109,22 @@ describe('translation grading runner', () => {
     expect(call.prompt_cache_key).toBe('translation-grading-v3:baseline');
     expect(typeof call.input).toBe('string');
     expect(String(call.input)).toContain("Student's translation (English): All Gaul is divided.");
+  });
+
+  it('adds the warm-tone instructions to lesson grading for the candidate profile only', async () => {
+    await translationGrader.grade('lesson', request, 'candidate');
+    await translationGrader.grade('lesson', request, 'baseline');
+    await translationGrader.grade('test', request, 'candidate');
+
+    const [candidateLesson, baselineLesson, candidateTest] = createResponse.mock.calls.map(
+      ([call]) => call.instructions
+    );
+    expect(candidateLesson).toContain('You are a warm, encouraging Latin tutor');
+    expect(candidateLesson).toContain('Tone for the student-facing text');
+    expect(candidateLesson).toContain('Choose the feedback level strictly by the rubric above.');
+    expect(baselineLesson).toContain('You are a warm, encouraging Latin tutor');
+    expect(baselineLesson).not.toContain('Tone for the student-facing text');
+    expect(candidateTest).not.toContain('Tone for the student-facing text');
   });
 
   it('uses a separate compact score-and-feedback prompt and schema for test grading', async () => {
@@ -173,7 +189,9 @@ describe('translation grading runner', () => {
 
     expect(testTask.promptVersion).toBe('translation-grading-test-v2');
     expect(lessonTask.promptVersion).toBe('translation-grading-lesson-v3');
-    expect(lessonTask.systemPrompt).not.toContain('Deduct points only for actual mistakes in vocabulary and morphology');
+    expect(lessonTask.systemPrompt).not.toContain(
+      'Deduct points only for actual mistakes in vocabulary and morphology'
+    );
 
     expect(testTask.systemPrompt).toContain('intermediate student');
     expect(testTask.systemPrompt).toContain('Every word must be accounted for accurately.');
@@ -215,7 +233,7 @@ describe('translation grading runner', () => {
         ? 'The translation grader returned an incomplete response.'
         : 'The translation grader returned malformed structured output.'
     );
-    expect(result.model).toBe('gpt-5.6-luna');
+    expect(result.model).toBe('gpt-6-luna');
     expect(result.usage?.totalTokens).toBe(150);
     expect(result.costMeasurement.status).toBe('measured');
     expect(result.cost?.totalCost).toBeGreaterThan(0);

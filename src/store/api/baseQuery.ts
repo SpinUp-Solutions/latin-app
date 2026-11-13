@@ -94,6 +94,33 @@ export const getApiErrorCode = (error: unknown): string | undefined => {
   return typeof error.data.code === 'string' ? error.data.code : undefined;
 };
 
+const CONNECTION_TROUBLE_MESSAGE = 'We’re having trouble connecting. Please try again.';
+
+export const GOOGLE_SIGN_IN_BLOCKED_MESSAGE =
+  'Something on your device or network is blocking Google’s sign-in service, which keeps you signed in. Turn off any content blocker, VPN or web filter, or switch networks, then try again.';
+
+/** A token refresh failed while our own API stayed reachable, so Google's servers are being blocked. */
+export const isGoogleSignInBlockedError = (error: unknown) =>
+  isObject(error) && error.status === 'FETCH_ERROR' && error.error === GOOGLE_SIGN_IN_BLOCKED_MESSAGE;
+
+const canReachOwnApi = async (signal: AbortSignal) => {
+  try {
+    return (await fetch('/api/health', { cache: 'no-store', signal })).ok;
+  } catch {
+    return false;
+  }
+};
+
+// Firebase reports every failed token refresh as auth/network-request-failed.
+// If our own API still answers, the connection works and something on the
+// device or network (a content blocker, VPN or filter) is blocking Google.
+const tokenRefreshFailure = async (signal: AbortSignal): Promise<{ error: FetchBaseQueryError }> => ({
+  error: {
+    status: 'FETCH_ERROR',
+    error: (await canReachOwnApi(signal)) ? GOOGLE_SIGN_IN_BLOCKED_MESSAGE : CONNECTION_TROUBLE_MESSAGE,
+  },
+});
+
 type AuthenticatedQueryOptions = { retryNetworkErrors?: boolean };
 
 const NETWORK_RETRY_DELAYS_MS = [500, 1500];
@@ -137,20 +164,21 @@ export const createAuthenticatedBaseQuery = (): BaseQueryFn<
     const canRetry = extraOptions?.retryNetworkErrors && api.type === 'query' && method === 'GET';
     for (let attempt = 0; ; attempt += 1) {
       let result: Awaited<ReturnType<typeof authenticatedFetch>>;
+      let tokenRefreshFailed = false;
       try {
         result = await authenticatedFetch(args, api, extraOptions);
       } catch (error) {
         // prepareHeaders runs outside fetchBaseQuery's fetch try/catch. Token
         // refresh failures must use the same recoverable state as failed GETs.
         if (!isObject(error) || error.code !== 'auth/network-request-failed') throw error;
-        result = {
-          error: { status: 'FETCH_ERROR', error: 'We’re having trouble connecting. Please try again.' },
-        };
+        tokenRefreshFailed = true;
+        result = { error: { status: 'FETCH_ERROR', error: CONNECTION_TROUBLE_MESSAGE } };
       }
 
       const networkFailure = result.error?.status === 'FETCH_ERROR' || result.error?.status === 'TIMEOUT_ERROR';
       if (!canRetry || !networkFailure || attempt >= NETWORK_RETRY_DELAYS_MS.length || api.signal.aborted) {
-        return result;
+        // Probe our own API only once the failure is final, not on every retry.
+        return tokenRefreshFailed ? tokenRefreshFailure(api.signal) : result;
       }
       await waitForNetworkRetry(NETWORK_RETRY_DELAYS_MS[attempt], api.signal);
       // An aborted request or an account switch must not start another fetch.

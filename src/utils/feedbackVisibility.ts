@@ -1,8 +1,10 @@
 import type { FeedbackLevel } from '@/src/types/exercises/base';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 
 export function hasVisibleFeedbackContent(content: unknown): boolean {
   if (typeof content === 'string') {
-    return content.replace(/<[^>]*>/g, '').trim() !== '';
+    // An editor's empty paragraph, `<p>&nbsp;</p>`, renders as nothing.
+    return richTextToPlainText(content) !== '';
   }
 
   return Boolean(content);
@@ -18,4 +20,9 @@ export function revealsHintOrAnswer(
     (Boolean(level?.showHint) && hasVisibleFeedbackContent(hint)) ||
     (Boolean(level?.showAnswer) && hasVisibleFeedbackContent(correctAnswer))
   );
+}
+
+/** The button that dismisses feedback: "Got it" acknowledges something shown to read, "Continue" only moves on. */
+export function confirmLabel(revealsContent: boolean): string {
+  return revealsContent ? 'Got it' : 'Continue';
 }

@@ -3,6 +3,7 @@ import {
   calculateTokenUsageCost,
   parseOpenAIUsage,
   PRODUCTION_TRANSLATION_POLICY,
+  profileInstructions,
   TRANSLATION_GRADING_PROFILES,
   type TranslationGradingProfile,
   type TranslationGradingProfileId,
@@ -102,7 +103,7 @@ async function grade<M extends TranslationGradingMode>(
       {
         model: profile.model,
         max_output_tokens: profile.maxOutputTokens[task.mode],
-        instructions: task.systemPrompt,
+        instructions: profileInstructions(profile, task.mode, task.systemPrompt),
         reasoning: { effort: profile.reasoningEffort },
         input: explicitPromptCaching
           ? [

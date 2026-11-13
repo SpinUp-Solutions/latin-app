@@ -49,4 +49,34 @@ describe('validateGeneratedTranslationExercise', () => {
     expect(validateGeneratedTranslationExercise('is, ea, id', latinEntry).isCorrect).toBe(true);
     expect(validateGeneratedTranslationExercise('is, ea', latinEntry).isCorrect).toBe(false);
   });
+
+  describe('dictionary entries typed for English-to-Latin items', () => {
+    const latinItem = (dictionaryEntry: string) => ({
+      text: 'greedy',
+      acceptedAnswers: [dictionaryEntry],
+      stripInfinitive: false,
+      stripMacrons: true,
+    });
+    const isLatinCorrect = (answer: string, dictionaryEntry: string) =>
+      validateGeneratedTranslationExercise(answer, latinItem(dictionaryEntry)).isCorrect;
+
+    it('accepts endings written without their hyphens', () => {
+      expect(isLatinCorrect('avidus, a, um', 'avidus, -a, -um')).toBe(true);
+      expect(isLatinCorrect('avidus a um', 'avidus, -a, -um')).toBe(true);
+      expect(isLatinCorrect('avidus,-a,-um', 'avidus, -a, -um')).toBe(true);
+      expect(isLatinCorrect('laudo, are, avi, atum', 'laudō, -āre, -āvī, -ātum')).toBe(true);
+      expect(isLatinCorrect('avidus, -a, -um', 'avidus, –a, –um')).toBe(true);
+    });
+
+    it('still accepts the entry exactly as written', () => {
+      expect(isLatinCorrect('avidus, -a, -um', 'avidus, -a, -um')).toBe(true);
+      expect(isLatinCorrect('avidus -a -um', 'avidus, -a, -um')).toBe(true);
+    });
+
+    it('still rejects wrong or missing endings', () => {
+      expect(isLatinCorrect('avidus, a', 'avidus, -a, -um')).toBe(false);
+      expect(isLatinCorrect('avidus, -ae, -um', 'avidus, -a, -um')).toBe(false);
+      expect(isLatinCorrect('avidus', 'avidus, -a, -um')).toBe(false);
+    });
+  });
 });

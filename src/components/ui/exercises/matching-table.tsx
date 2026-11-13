@@ -17,6 +17,7 @@ import type {
   RuntimeMode,
 } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
+import { hasVisibleFeedbackContent, revealsHintOrAnswer } from '@/src/utils/feedbackVisibility';
 
 interface MatchingItem {
   id: string;
@@ -86,17 +87,28 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
     reset,
     shouldResetExercise,
     willResetOnNextIncorrect,
+    nextIncorrectLevel,
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   const resetRequired = mode === 'practice' && shouldResetExercise;
   const incorrectFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance, resetIndex } =
-    useExerciseProgression({
-      totalItems: 1,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    });
+  const {
+    isAwaitingConfirmation,
+    autoAdvanceIfEnabled,
+    awaitConfirmation,
+    confirmAdvance,
+    cancelPendingAdvance,
+    resetIndex,
+  } = useExerciseProgression({
+    totalItems: 1,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
+  // A miss held for Got it, or the Continue after the last match, is the only way on until it is pressed.
+  const locked = resetRequired || isAwaitingConfirmation;
+  const correctAnswerFor = (left: MatchingItem | null) =>
+    left ? rightColumn.find(item => item.id === finalAnswer[left.id])?.value : undefined;
 
   const clearIncorrectFlashTimeout = () => {
     if (incorrectFlashTimeoutRef.current) {
@@ -150,6 +162,7 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
       return;
     previousSource.current = { leftColumn, rightColumn, finalAnswer, restoredMatches, restoredRound, restoredRounds };
     clearIncorrectFlashTimeout();
+    cancelPendingAdvance();
     setShuffledLeftColumn(leftColumn);
     setShuffledRightColumn(rightColumn);
     setSelectedLeft(null);
@@ -160,10 +173,26 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
     setCurrentRound(restoredRound);
     setTestRounds(restoredRounds);
     reset();
-  }, [leftColumn, rightColumn, finalAnswer, reset, restoredMatches, restoredRound, restoredRounds]);
+  }, [
+    leftColumn,
+    rightColumn,
+    finalAnswer,
+    reset,
+    cancelPendingAdvance,
+    restoredMatches,
+    restoredRound,
+    restoredRounds,
+  ]);
+
+  const clearMiss = () => {
+    setSelectedLeft(null);
+    setSelectedRight(null);
+    setShowIncorrectFlash(false);
+    clearFeedback();
+  };
 
   const handleLeftSelect = (item: string, index?: number) => {
-    if (resetRequired) return;
+    if (locked) return;
 
     const matchingItem = shuffledLeftColumn[index!];
     if (matchedLeftIds.has(matchingItem?.id)) {
@@ -179,7 +208,7 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
   };
 
   const handleRightSelect = (item: string, index?: number) => {
-    if (resetRequired) return;
+    if (locked) return;
 
     const matchingItem = shuffledRightColumn[index!];
     if (selectedRight?.id === matchingItem?.id) {
@@ -256,6 +285,11 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
         }
       } else {
         const reachesResetThreshold = willResetOnNextIncorrect;
+        const revealsOnMiss = revealsHintOrAnswer(
+          nextIncorrectLevel,
+          exercise.data.hint,
+          correctAnswerFor(selectedLeft)
+        );
         handleIncorrect();
 
         setShowIncorrectFlash(true);
@@ -263,15 +297,13 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
         clearIncorrectFlashTimeout();
         if (reachesResetThreshold) {
           cancelPendingAdvance();
-        }
-
-        if (!reachesResetThreshold) {
+        } else if (revealsOnMiss) {
+          // A shown hint or answer stays, with the wrong pair, until the student acknowledges it.
+          awaitConfirmation(clearMiss);
+        } else {
           incorrectFlashTimeoutRef.current = setTimeout(() => {
             incorrectFlashTimeoutRef.current = null;
-            setSelectedLeft(null);
-            setSelectedRight(null);
-            setShowIncorrectFlash(false);
-            clearFeedback();
+            clearMiss();
           }, 1000);
         }
       }
@@ -288,7 +320,7 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
   };
 
   const handleShuffle = () => {
-    if (resetRequired) return;
+    if (locked) return;
     setShuffledLeftColumn(shuffleArray(leftColumn));
     setShuffledRightColumn(shuffleArray(rightColumn));
     setSelectedLeft(null);
@@ -296,16 +328,14 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
   };
 
   const clearSelection = () => {
-    if (resetRequired) return;
+    if (locked) return;
     setSelectedLeft(null);
     setSelectedRight(null);
   };
 
   const matchingTotal = totalMatches * totalRounds;
   const matchingCompleted = (currentRound - 1) * totalMatches + Object.keys(matches).length;
-  const selectedCorrectAnswer = selectedLeft
-    ? rightColumn.find(item => item.id === finalAnswer[selectedLeft.id])?.value
-    : undefined;
+  const selectedCorrectAnswer = correctAnswerFor(selectedLeft);
 
   return (
     <div className="space-y-6">
@@ -335,11 +365,11 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
         {/* Controls */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleShuffle} disabled={resetRequired}>
+            <Button variant="outline" size="sm" onClick={handleShuffle} disabled={locked}>
               <Shuffle className="h-4 w-4 mr-2" />
               Shuffle
             </Button>
-            <Button variant="outline" size="sm" onClick={clearSelection} disabled={resetRequired}>
+            <Button variant="outline" size="sm" onClick={clearSelection} disabled={locked}>
               <X className="h-4 w-4 mr-2" />
               Clear Selection
             </Button>
@@ -370,7 +400,8 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
                 )
               }
               showIncorrect={showIncorrectFlash}
-              disabled={resetRequired}
+              pulseIncorrect={!isAwaitingConfirmation}
+              disabled={locked}
             />
           </div>
 
@@ -387,7 +418,8 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
               label=""
               matchedIndices={new Set()}
               showIncorrect={showIncorrectFlash}
-              disabled={resetRequired}
+              pulseIncorrect={!isAwaitingConfirmation}
+              disabled={locked}
             />
           </div>
         </div>
@@ -400,8 +432,13 @@ const MatchingTable: React.FC<MatchingTableProps> = ({
             level={level}
             hint={exercise.data.hint}
             showExplanation={showExplanation}
-            correctAnswer={selectedCorrectAnswer ? <SimpleRichDisplay content={selectedCorrectAnswer} /> : undefined}
+            correctAnswer={
+              selectedCorrectAnswer && hasVisibleFeedbackContent(selectedCorrectAnswer) ? (
+                <SimpleRichDisplay content={selectedCorrectAnswer} />
+              ) : undefined
+            }
             onContinue={isAwaitingConfirmation ? confirmAdvance : undefined}
+            allowContinueOnIncorrect
             onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}

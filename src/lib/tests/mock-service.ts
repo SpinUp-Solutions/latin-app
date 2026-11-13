@@ -64,6 +64,9 @@ import {
   type UpdateTestVersionInput,
 } from './schemas';
 
+/** A live mock a student can take, with its version's total points. */
+export type LiveMock = { mock: MockTest; totalPoints: number };
+
 export class MockTestService {
   private readonly attempts: Pick<TestAttemptService, 'loadAttemptSummaries' | 'getActiveAttempt'>;
 
@@ -353,36 +356,51 @@ export class MockTestService {
     return mocks.map(mock => ({ ...mock, totalPoints: totals.get(mock.versionId)! }));
   }
 
-  /** Pass `attemptSummaries` when the caller has already loaded them, so they are not read twice. */
-  async listStudentLiveMocks(
-    studentId: string,
-    attemptSummaries?: StudentAttemptSummaries
-  ): Promise<StudentMockTestSummary[]> {
-    const [snapshot, summaries] = await Promise.all([
-      this.mocks.where('status', '==', 'active').where('isLive', '==', true).orderBy('mockOrder', 'asc').get(),
-      attemptSummaries ?? this.attempts.loadAttemptSummaries(studentId),
-    ]);
+  /** Live mocks in student order, leaving out any that cannot be parsed or whose version is unavailable. */
+  async loadLiveMocks(): Promise<LiveMock[]> {
+    const snapshot = await this.mocks
+      .where('status', '==', 'active')
+      .where('isLive', '==', true)
+      .orderBy('mockOrder', 'asc')
+      .get();
 
     const mocks = snapshot.docs.flatMap(document => {
       try {
         return [parseMockSnapshot(document)];
       } catch (error) {
-        console.error(`Live mock ${document.id} could not be projected safely; skipping card`, error);
+        console.error(`Live mock ${document.id} could not be projected safely; skipping it`, error);
         return [];
       }
     });
 
-    // A single batched lookup validates every live card's version and reads
+    // A single batched lookup validates every live mock's version and reads
     // its total points, instead of one Firestore round trip per mock.
     const versionsById = await getVersionSummariesById(
       this.db,
       mocks.map(mock => mock.versionId)
     );
+    return mocks.flatMap(mock => {
+      const version = versionsById.get(mock.versionId);
+      return version ? [{ mock, totalPoints: version.totalPoints }] : [];
+    });
+  }
+
+  /**
+   * Pass `attemptSummaries` and `liveMocks` when the caller has already
+   * started loading them, so they are not read twice.
+   */
+  async listStudentLiveMocks(
+    studentId: string,
+    attemptSummaries?: StudentAttemptSummaries | Promise<StudentAttemptSummaries>,
+    liveMocks?: Promise<LiveMock[]>
+  ): Promise<StudentMockTestSummary[]> {
+    const [mocks, summaries] = await Promise.all([
+      liveMocks ?? this.loadLiveMocks(),
+      attemptSummaries ?? this.attempts.loadAttemptSummaries(studentId),
+    ]);
 
     const cards = await Promise.all(
-      mocks.map(async mock => {
-        const version = versionsById.get(mock.versionId);
-        if (!version) return null;
+      mocks.map(async ({ mock, totalPoints }) => {
         try {
           const origin = { kind: 'mock-test' as const, mockTestId: mock.id };
           const [attemptSummary, scoreTrend] = await Promise.all([
@@ -394,7 +412,7 @@ export class MockTestService {
             title: mock.title,
             description: mock.description,
             passingPercentage: mock.passingPercentage,
-            totalPoints: version.totalPoints,
+            totalPoints,
             attemptSummary,
             scoreTrend,
           };
@@ -495,33 +513,17 @@ export class MockTestService {
     });
   }
 
-  async getRelatedLiveMocks(testId: string): Promise<Array<Pick<MockTest, 'id' | 'title' | 'passingPercentage'>>> {
-    const snapshots = await this.mocks
-      .where('parent.testId', '==', testId)
-      .where('status', '==', 'active')
-      .where('isLive', '==', true)
-      .orderBy('mockOrder', 'asc')
-      .get();
-
-    const mocks = snapshots.docs.flatMap(document => {
-      try {
-        return [parseMockSnapshot(document)];
-      } catch (error) {
-        console.error(`Related live mock ${document.id} is unavailable; omitting nudge`, error);
-        return [];
-      }
-    });
-
-    // The versions are fetched only to keep unavailable mocks out of the
-    // nudge; one batched getAll validates them all without a round trip per mock.
-    const versionsById = await getVersionSummariesById(
-      this.db,
-      mocks.map(mock => mock.versionId)
-    );
-
-    return mocks
-      .filter(mock => versionsById.has(mock.versionId))
-      .map(mock => ({ id: mock.id, title: mock.title, passingPercentage: mock.passingPercentage }));
+  /**
+   * The live mocks attached to one test, offered to a student who did not pass
+   * it. Pass `liveMocks` when the caller has already started loading them.
+   */
+  async getRelatedLiveMocks(
+    testId: string,
+    liveMocks?: Promise<LiveMock[]>
+  ): Promise<Array<Pick<MockTest, 'id' | 'title' | 'passingPercentage'>>> {
+    return (await (liveMocks ?? this.loadLiveMocks()))
+      .filter(({ mock }) => mock.parent.kind === 'test' && mock.parent.testId === testId)
+      .map(({ mock }) => ({ id: mock.id, title: mock.title, passingPercentage: mock.passingPercentage }));
   }
 
   async getMock(mockId: string): Promise<MockTest> {
