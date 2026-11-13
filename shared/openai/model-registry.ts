@@ -128,9 +128,9 @@ export const TRANSLATION_GRADING_PROFILES = {
     maxOutputTokens: { lesson: 8000, test: 8000 },
     promptCacheKey: 'translation-grading-v3:candidate',
     promptCacheMode: 'explicit',
-    // Bumped with the tone instructions so cached evaluation results are regenerated.
-    profileVersion: 'translation-grading-v3:candidate:warm-tone-v1',
-    // GPT-6 Luna reads the shared "warm tutor" prompt more clinically than GPT-5.4 Mini.
+    // Bumped whenever the extra instructions change, so cached evaluation results regenerate.
+    profileVersion: 'translation-grading-v3:candidate:lesson-style-v2',
+    // GPT-6 Luna reads the shared prompt more clinically and segments more coarsely than GPT-5.4 Mini.
     extraInstructions: { lesson: WARM_LESSON_TONE_INSTRUCTIONS },
   }),
 } as const satisfies Record<string, TranslationGradingProfileDefinition>;
