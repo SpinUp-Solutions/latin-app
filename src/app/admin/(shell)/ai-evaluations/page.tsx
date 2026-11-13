@@ -5,12 +5,13 @@ import {
   BookOpen,
   Check,
   ChevronDown,
+  ChevronUp,
+  CopyPlus,
   Clock3,
   Database,
   DollarSign,
   Gauge,
   Loader2,
-  Pencil,
   Play,
   Plus,
   Save,
@@ -24,6 +25,7 @@ import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Textarea } from '@/src/components/ui/textarea';
 import { Badge } from '@/src/components/ui/badge';
+import { TranslationGradingFeedback } from '@/src/components/ui/exercises/translation-grading-feedback';
 import { Switch } from '@/src/components/ui/switch';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
@@ -81,6 +83,8 @@ const formatMeasuredCost = (value: number | undefined, status: string) => {
 const aggregateCostStatus = (anyUnknown: boolean, anyKnown: boolean) =>
   !anyUnknown ? 'measured' : anyKnown ? 'lower-bound' : 'unavailable';
 
+const EXPAND_BUTTON_CLASS =
+  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/[0.08] text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 const MODE_LABELS: Record<TranslationGradingMode, string> = { lesson: 'Lesson feedback', test: 'Test scoring' };
 const directionLabel = (direction: EvaluationCaseInput['direction']) =>
   direction === 'latin-to-english' ? 'Latin → English' : 'English → Latin';
@@ -225,78 +229,21 @@ function UsageBadges({ cell }: { cell: EvaluationCellResult }) {
   );
 }
 
-function BreakdownDetails({ cell }: { cell: EvaluationCellResult }) {
-  if (cell.gradingMode !== 'lesson' || !cell.output) return null;
-  return (
-    <div className="space-y-2 border-t border-border/60 pt-3">
-      <details className="group rounded-md border border-border/60 bg-white/70">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium">
-          <span>Segment breakdown</span>
-          <ChevronDown
-            className="h-3.5 w-3.5 text-roman-stone transition-transform group-open:rotate-180"
-            aria-hidden="true"
-          />
-        </summary>
-        <div className="overflow-x-auto border-t border-border/50">
-          <table className="w-full min-w-[520px] text-left text-xs">
-            <thead className="bg-roman-marble/60 text-[10px] uppercase tracking-wider text-roman-stone">
-              <tr>
-                <th className="px-3 py-2">Source segment</th>
-                <th className="px-3 py-2">Answer</th>
-                <th className="px-3 py-2">Feedback</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cell.output.breakdown.map((item, index) => (
-                <tr key={`${item.latinSegment}-${index}`} className="border-t border-border/40 align-top">
-                  <td className="px-3 py-2 font-serif italic">{item.latinSegment}</td>
-                  <td className="px-3 py-2 text-roman-stone">{item.yourTranslation}</td>
-                  <td className="px-3 py-2">
-                    <span className="mr-1 font-semibold text-primary">
-                      {item.type === '✓' ? <Check className="inline h-3 w-3" /> : '!'}
-                    </span>
-                    {item.feedback}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-      <details className="group rounded-md border border-border/60 bg-white/70">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium">
-          <span>Grammatical analysis</span>
-          <ChevronDown
-            className="h-3.5 w-3.5 text-roman-stone transition-transform group-open:rotate-180"
-            aria-hidden="true"
-          />
-        </summary>
-        <div className="space-y-2 border-t border-border/50 p-3">
-          {cell.output.grammaticalBreakdown.map((item, index) => (
-            <div key={`${item.latinSegment}-${index}`} className="rounded-md bg-roman-marble/45 p-2.5 text-xs">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="font-serif italic">{item.latinSegment}</span>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                  {item.syntacticalRole}
-                </span>
-              </div>
-              <p className="mt-1 text-foreground/80">{item.keyGrammaticalFeatures}</p>
-              {item.notes && <p className="mt-1 text-[11px] italic text-roman-stone">{item.notes}</p>}
-            </div>
-          ))}
-        </div>
-      </details>
-    </div>
-  );
-}
-
 const AGREEMENT_STYLES: Record<GradeAgreement, { label: string; className: string; bar: string }> = {
   same: { label: 'Same grade', className: 'border-emerald-200 bg-emerald-50 text-emerald-700', bar: 'bg-emerald-500' },
   close: { label: 'Close', className: 'border-amber-200 bg-amber-50 text-amber-700', bar: 'bg-amber-400' },
   different: { label: 'Different', className: 'border-red-200 bg-red-50 text-red-700', bar: 'bg-red-400' },
 };
 
-function ModelResult({ cell, showAdvanced }: { cell: EvaluationCellResult; showAdvanced: boolean }) {
+function ModelResult({
+  cell,
+  direction,
+  showAdvanced,
+}: {
+  cell: EvaluationCellResult;
+  direction: EvaluationCaseInput['direction'];
+  showAdvanced: boolean;
+}) {
   const header = (
     <div className="flex items-center gap-2">
       <ProfileDot profileId={cell.profileId} />
@@ -320,24 +267,29 @@ function ModelResult({ cell, showAdvanced }: { cell: EvaluationCellResult; showA
   const cost =
     cell.originalCostStatus === 'unavailable' || !cell.originalCost ? null : formatCost(cell.originalCost.totalCost);
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
-        {header}
-        <span className="shrink-0 rounded-md bg-primary/[0.08] px-2.5 py-1 font-serif text-base font-bold leading-tight text-primary">
-          {cell.gradingMode === 'lesson' ? cell.output?.feedbackLevel : `${cell.output?.score}/10`}
-        </span>
-      </div>
-      {cell.gradingMode === 'lesson' ? (
+    <div className="flex min-w-0 flex-col gap-4 rounded-lg border border-border/70 bg-white p-4">
+      {cell.gradingMode === 'lesson' && cell.output ? (
         <>
-          <p className="text-sm leading-relaxed text-foreground/85">{cell.output?.notes}</p>
-          <div className="rounded-md bg-roman-marble/50 px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-roman-stone">Suggested</p>
-            <p className="mt-0.5 font-serif text-sm italic leading-relaxed">{cell.output?.suggestedText}</p>
-          </div>
-          <BreakdownDetails cell={cell} />
+          {header}
+          {/* The same view students get in the translation exercise. */}
+          <TranslationGradingFeedback
+            data={cell.output}
+            sourceLanguage={direction === 'latin-to-english' ? 'Latin' : 'English'}
+            targetLanguage={direction === 'latin-to-english' ? 'English' : 'Latin'}
+          />
         </>
       ) : (
-        <p className="text-sm leading-relaxed text-foreground/85">{cell.output?.feedback}</p>
+        <>
+          <div className="flex items-start justify-between gap-3">
+            {header}
+            <span className="shrink-0 rounded-md bg-primary/[0.08] px-2.5 py-1 font-serif text-base font-bold leading-tight text-primary">
+              {cell.gradingMode === 'test' ? `${cell.output?.score}/10` : null}
+            </span>
+          </div>
+          <p className="text-sm leading-relaxed text-foreground/85">
+            {cell.gradingMode === 'test' ? cell.output?.feedback : null}
+          </p>
+        </>
       )}
       <p className="mt-auto flex items-center gap-3 text-xs tabular-nums text-roman-stone">
         <span className="inline-flex items-center gap-1">
@@ -358,11 +310,13 @@ function AnswerComparison({
   answer,
   index,
   cells,
+  direction,
   showAdvanced,
 }: {
   answer: EvaluationCaseInput['answers'][number];
   index: number;
   cells: EvaluationCellResult[];
+  direction: EvaluationCaseInput['direction'];
   showAdvanced: boolean;
 }) {
   const [first, second] = COMPARED_PROFILES.map(profileId => cells.find(cell => cell.profileId === profileId));
@@ -384,13 +338,14 @@ function AnswerComparison({
             </Badge>
           )}
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 xl:grid-cols-2">
           {[first, second].map(
             cell =>
               cell && (
                 <ModelResult
                   key={`${cell.answerId}-${cell.gradingMode}-${cell.profileId}`}
                   cell={cell}
+                  direction={direction}
                   showAdvanced={showAdvanced}
                 />
               )
@@ -401,9 +356,19 @@ function AnswerComparison({
   );
 }
 
-function SummaryCard({ title, headline, children }: { title: string; headline: ReactNode; children: ReactNode }) {
+function SummaryCard({
+  title,
+  headline,
+  className = '',
+  children,
+}: {
+  title: string;
+  headline: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex flex-col rounded-xl border border-border/70 bg-white p-4">
+    <div className={`flex flex-col rounded-xl border border-border/70 bg-white p-4 ${className}`}>
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">{title}</p>
       <p className="mt-1 font-serif text-xl leading-snug">{headline}</p>
       <div className="mt-3 flex-1 space-y-2">{children}</div>
@@ -458,9 +423,10 @@ function ComparisonSummary({ comparison }: { comparison: ProfileComparison }) {
     );
 
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
       <SummaryCard
         title="Grading agreement"
+        className="sm:col-span-2 2xl:col-span-1"
         headline={
           <>
             {agreement.same} of {comparedCount} <span className="text-base text-roman-stone">same grade</span>
@@ -808,6 +774,7 @@ function Results({
             answer={answer}
             index={index}
             cells={modeCells.filter(cell => cell.answerId === answer.id)}
+            direction={evaluationCase.direction}
             showAdvanced={showAdvanced}
           />
         ))}
@@ -821,7 +788,7 @@ function AIEvaluationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<EvaluationCaseInput>(blankCase);
   const [savedForm, setSavedForm] = useState<EvaluationCaseInput | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [displayedRun, setDisplayedRun] = useState<DisplayedRun | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [forceRefresh, setForceRefresh] = useState(false);
@@ -846,7 +813,6 @@ function AIEvaluationsPage() {
     );
   }, [form, savedForm]);
   const valid = useMemo(() => isValidCase(form), [form]);
-  const showEditor = !selectedId || editing || dirty;
   const interactionLocked = running || saving || deleting || addingLessonCases;
   const missingLessonCases = LESSON_EVALUATION_CASES.filter(
     lessonCase => !cases.some(item => item.title === lessonCase.title)
@@ -901,7 +867,7 @@ function AIEvaluationsPage() {
     setSelectedId(evaluationCase.id);
     setForm(cloneCaseInput(evaluationCase));
     setSavedForm(cloneCaseInput(evaluationCase));
-    setEditing(false);
+    setCollapsed(false);
     setDisplayedRun(null);
   };
 
@@ -915,7 +881,7 @@ function AIEvaluationsPage() {
     setSelectedId(null);
     setForm(blankCase());
     setSavedForm(null);
-    setEditing(false);
+    setCollapsed(false);
     setDisplayedRun(null);
   };
 
@@ -924,14 +890,9 @@ function AIEvaluationsPage() {
     navigationGuard.requestNavigation(applyNewCase);
   };
 
-  const cancelEditing = () => {
-    if (interactionLocked) return;
-    if (savedForm) {
-      setForm(cloneCaseInput(savedForm));
-      setEditing(false);
-    } else if (cases.length > 0) {
-      navigationGuard.requestNavigation(() => applySelectedCase(cases[0]));
-    }
+  const discardChanges = () => {
+    if (interactionLocked || !savedForm) return;
+    setForm(cloneCaseInput(savedForm));
   };
 
   const saveCase = async () => {
@@ -993,6 +954,7 @@ function AIEvaluationsPage() {
     const caseIdAtStart = selectedId;
     const caseSnapshot = cloneCaseInput(form);
     const requestGeneration = ++runGenerationRef.current;
+    setCollapsed(true);
     setRunning(true);
     setDisplayedRun(null);
     try {
@@ -1038,9 +1000,21 @@ function AIEvaluationsPage() {
         <RomanCardContent className="space-y-5 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-serif text-xl">{selectedId ? 'Edit case' : 'New case'}</h2>
-            {dirty && (
-              <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">Unsaved changes</Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {dirty && (
+                <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">Unsaved changes</Badge>
+              )}
+              {displayedRun && !dirty && (
+                <button
+                  type="button"
+                  onClick={() => setCollapsed(true)}
+                  aria-label="Collapse case editor"
+                  aria-expanded
+                  className={EXPAND_BUTTON_CLASS}>
+                  <ChevronUp className="h-5 w-5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
@@ -1084,64 +1058,77 @@ function AIEvaluationsPage() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Student answers</Label>
-            {form.answers.map((answer, index) => (
-              <div key={answer.id} className="flex items-start gap-2">
-                <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/[0.09] text-xs font-semibold text-primary">
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1 overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
-                  <Input
-                    aria-label={`Answer ${index + 1} label`}
-                    value={answer.label}
-                    maxLength={80}
-                    placeholder={`Answer ${index + 1}`}
-                    onChange={event => updateAnswer(index, 'label', event.target.value)}
-                    className="h-8 rounded-none border-0 border-b border-border/60 bg-roman-marble/30 text-xs font-medium focus-visible:ring-0 focus-visible:ring-offset-0"
-                  />
-                  <Textarea
-                    aria-label={`Answer ${index + 1} text`}
-                    value={answer.text}
-                    maxLength={4_000}
-                    rows={2}
-                    placeholder="Student translation"
-                    onChange={event => updateAnswer(index, 'text', event.target.value)}
-                    className="min-h-[60px] rounded-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="mt-0.5"
-                  disabled={form.answers.length <= 1}
-                  aria-label={`Remove ${answer.label || `answer ${index + 1}`}`}
-                  onClick={() =>
-                    updateForm(previous => ({
-                      ...previous,
-                      answers: previous.answers.filter((_, answerIndex) => answerIndex !== index),
-                    }))
-                  }>
-                  <Trash2 className="h-4 w-4 text-roman-stone" aria-hidden="true" />
-                </Button>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <Label>Answers to test</Label>
+                <p className="mt-1 text-xs text-roman-stone">
+                  Keep alternatives labeled so differences are easy to scan.
+                </p>
               </div>
-            ))}
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="ml-6 text-primary"
-              disabled={form.answers.length >= 20}
-              onClick={() =>
-                updateForm(previous => ({
-                  ...previous,
-                  answers: [...previous.answers, newAnswer(previous.answers.length + 1)],
-                }))
-              }>
-              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              Add answer
-            </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={form.answers.length >= 20}
+                onClick={() =>
+                  updateForm(previous => ({
+                    ...previous,
+                    answers: [...previous.answers, newAnswer(previous.answers.length + 1)],
+                  }))
+                }>
+                <CopyPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+                Add answer
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {form.answers.map((answer, index) => (
+                <div key={answer.id} className="rounded-lg border border-border/70 bg-roman-marble/35 p-3">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-primary shadow-sm">
+                      {index + 1}
+                    </span>
+                    <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[160px_minmax(0,1fr)]">
+                      <div className="space-y-2">
+                        <Label htmlFor={`answer-label-${answer.id}`}>Label</Label>
+                        <Input
+                          id={`answer-label-${answer.id}`}
+                          value={answer.label}
+                          maxLength={80}
+                          placeholder={`Answer ${index + 1}`}
+                          onChange={event => updateAnswer(index, 'label', event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`answer-text-${answer.id}`}>Student answer</Label>
+                        <Textarea
+                          id={`answer-text-${answer.id}`}
+                          value={answer.text}
+                          maxLength={4_000}
+                          rows={2}
+                          placeholder="Enter a candidate student translation..."
+                          onChange={event => updateAnswer(index, 'text', event.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      disabled={form.answers.length <= 1}
+                      aria-label={`Remove ${answer.label || `answer ${index + 1}`}`}
+                      onClick={() =>
+                        updateForm(previous => ({
+                          ...previous,
+                          answers: previous.answers.filter((_, answerIndex) => answerIndex !== index),
+                        }))
+                      }>
+                      <Trash2 className="h-4 w-4 text-roman-stone" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1189,20 +1176,44 @@ function AIEvaluationsPage() {
                 </Button>
               )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {(savedForm || cases.length > 0) && (
-                <Button type="button" variant="outline" onClick={cancelEditing}>
-                  Cancel
-                </Button>
-              )}
-              <Button type="button" disabled={!valid || !dirty} onClick={() => void saveCase()}>
-                {saving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" aria-hidden="true" />
+            <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {showAdvanced && (
+                  <label className="mr-1 flex cursor-pointer items-center gap-2 text-xs text-roman-stone">
+                    <Switch
+                      checked={forceRefresh}
+                      onCheckedChange={setForceRefresh}
+                      disabled={interactionLocked}
+                      aria-label="Skip cache"
+                    />
+                    Skip cache
+                  </label>
                 )}
-                {saving ? 'Saving…' : 'Save case'}
-              </Button>
+                {savedForm && dirty && (
+                  <Button type="button" variant="ghost" onClick={discardChanges}>
+                    Discard changes
+                  </Button>
+                )}
+                <Button type="button" variant="outline" disabled={!valid || !dirty} onClick={() => void saveCase()}>
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" aria-hidden="true" />
+                  )}
+                  {saving ? 'Saving…' : 'Save case'}
+                </Button>
+                <Button type="button" disabled={!selectedId || dirty || !valid} onClick={() => void runEvaluation()}>
+                  {running ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Play className="mr-2 h-4 w-4" aria-hidden="true" />
+                  )}
+                  {running ? 'Running…' : 'Run comparison'}
+                </Button>
+              </div>
+              {(dirty || !selectedId) && (
+                <p className="text-[11px] text-roman-stone">Save the case to run a comparison.</p>
+              )}
             </div>
           </div>
         </RomanCardContent>
@@ -1210,76 +1221,25 @@ function AIEvaluationsPage() {
     </fieldset>
   );
 
-  const caseSummary = (
+  const caseBanner = (
     <RomanCard>
-      <RomanCardContent className="space-y-4 p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="font-serif text-xl">{form.title}</h2>
-            <p className="mt-1 text-xs text-roman-stone">
-              {directionLabel(form.direction)} · {form.answers.length}{' '}
-              {form.answers.length === 1 ? 'answer' : 'answers'} ·{' '}
-              {form.modes.map(mode => MODE_LABELS[mode]).join(' + ')}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={interactionLocked}
-            onClick={() => setEditing(true)}>
-            <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            Edit
-          </Button>
-        </div>
-        <p className="whitespace-pre-wrap rounded-lg bg-roman-marble/50 px-4 py-3 font-serif italic leading-relaxed">
-          {form.sourceText}
-        </p>
-        {!displayedRun && (
-          <ol className="space-y-1.5 text-sm" aria-label="Student answers">
-            {form.answers.map((answer, index) => (
-              <li key={answer.id} className="flex gap-2.5">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/[0.09] text-[11px] font-semibold text-primary">
-                  {index + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className="font-medium">{answer.label}</span>
-                  <span className="text-roman-stone"> — {answer.text}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-        <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-roman-stone">
-            <ProfileDot profileId={COMPARED_PROFILES[0]} />
-            {profileLabel(COMPARED_PROFILES[0])}
-            <span className="text-xs">vs</span>
-            <ProfileDot profileId={COMPARED_PROFILES[1]} />
-            {profileLabel(COMPARED_PROFILES[1])}
+      <RomanCardContent className="flex items-center gap-3 px-4 py-3 sm:px-5">
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-serif text-lg">{form.title}</h2>
+          <p className="truncate text-xs text-roman-stone">
+            {directionLabel(form.direction)} · {form.answers.length} {form.answers.length === 1 ? 'answer' : 'answers'}{' '}
+            · {profileLabel(COMPARED_PROFILES[0])} vs {profileLabel(COMPARED_PROFILES[1])}
           </p>
-          <div className="flex flex-wrap items-center gap-3">
-            {showAdvanced && (
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-roman-stone">
-                <Switch
-                  checked={forceRefresh}
-                  onCheckedChange={setForceRefresh}
-                  disabled={interactionLocked}
-                  aria-label="Skip cache"
-                />
-                Skip cache
-              </label>
-            )}
-            <Button type="button" disabled={!valid || interactionLocked} onClick={() => void runEvaluation()}>
-              {running ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Play className="mr-2 h-4 w-4" aria-hidden="true" />
-              )}
-              {running ? 'Running…' : 'Run comparison'}
-            </Button>
-          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          disabled={interactionLocked}
+          aria-label="Expand case editor"
+          aria-expanded={false}
+          className={EXPAND_BUTTON_CLASS}>
+          <ChevronDown className="h-5 w-5" aria-hidden="true" />
+        </button>
       </RomanCardContent>
     </RomanCard>
   );
@@ -1305,8 +1265,8 @@ function AIEvaluationsPage() {
 
       {loadError && <AdminErrorState message={loadError} onRetry={retryLoadCases} className="mb-6" />}
 
-      <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside aria-label="Saved evaluation cases" className="space-y-3 lg:sticky lg:top-6 lg:self-start">
+      <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
+        <aside aria-label="Saved evaluation cases" className="space-y-3 xl:sticky xl:top-6 xl:self-start">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">Cases</p>
             <span className="text-xs tabular-nums text-roman-stone">{cases.length}</span>
@@ -1316,7 +1276,7 @@ function AIEvaluationsPage() {
               No cases yet. Write one, or add the ready-made lesson cases.
             </p>
           ) : (
-            <div className="max-h-64 space-y-1 overflow-y-auto pr-1 lg:max-h-[calc(100vh-16rem)]">
+            <div className="max-h-64 space-y-1 overflow-y-auto pr-1 xl:max-h-[calc(100vh-16rem)]">
               {cases.map(evaluationCase => (
                 <button
                   type="button"
@@ -1357,7 +1317,7 @@ function AIEvaluationsPage() {
         </aside>
 
         <div className="min-w-0 space-y-6">
-          {showEditor ? editor : caseSummary}
+          {collapsed ? caseBanner : editor}
 
           {running && (
             <div

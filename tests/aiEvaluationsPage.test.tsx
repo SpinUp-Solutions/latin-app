@@ -74,7 +74,7 @@ describe('AI evaluation admin workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave without saving' }));
 
     await waitFor(() => expect(mockedListEvaluationCasesInFirebase).toHaveBeenCalledTimes(2));
-    expect(await screen.findByRole('heading', { name: 'Loaded case' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Case title')).toHaveValue('Loaded case');
   });
 
   it('adds only the lesson cases that are not saved yet and keeps them in lesson order', async () => {
@@ -246,10 +246,10 @@ describe('AI evaluation admin workspace', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save case' })).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText('Case title'), { target: { value: savedCase.title } });
     fireEvent.change(screen.getByLabelText('Source text'), { target: { value: savedCase.sourceText } });
-    fireEvent.change(screen.getByLabelText('Answer 1 label'), { target: { value: 'Student A' } });
-    fireEvent.change(screen.getByLabelText('Answer 1 text'), { target: { value: savedCase.answers[0].text } });
+    fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'Student A' } });
+    fireEvent.change(screen.getByLabelText('Student answer'), { target: { value: savedCase.answers[0].text } });
 
-    expect(screen.queryByRole('button', { name: 'Run comparison' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run comparison' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Save case' }));
     await waitFor(() =>
       expect(mockedSaveEvaluationCaseInFirebase).toHaveBeenCalledWith(
@@ -270,7 +270,7 @@ describe('AI evaluation admin workspace', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument());
     expect(screen.getAllByText('GPT-5.4 Mini · Low').length).toBeGreaterThan(0);
     expect(screen.getAllByText('GPT-6 Luna · Low').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Good work.')).toHaveLength(2);
+    expect(screen.getAllByText('“Good work.”')).toHaveLength(2);
     // Excellent vs Very good is one level apart.
     expect(screen.getByText('Close')).toBeInTheDocument();
     expect(screen.getByText(/0 same · 1 close · 0 different/)).toBeInTheDocument();
@@ -287,7 +287,9 @@ describe('AI evaluation admin workspace', () => {
     expect(screen.getByRole('heading', { name: 'Advanced details' })).toBeInTheDocument();
     expect(screen.getByText('Cache and run behavior')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    // Running collapses the editor into a banner; its expand button brings the editor back.
+    expect(screen.queryByLabelText('Source text')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand case editor' }));
     fireEvent.change(screen.getByLabelText('Source text'), { target: { value: 'Changed after the run.' } });
     expect(screen.queryByRole('heading', { name: 'Results' })).not.toBeInTheDocument();
   });
@@ -313,8 +315,7 @@ describe('AI evaluation admin workspace', () => {
     mockedSaveEvaluationCaseInFirebase.mockReturnValue(deferredSave);
 
     render(<AIEvaluationsPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
-    const title = screen.getByLabelText('Case title');
+    const title = await screen.findByLabelText('Case title');
     expect(screen.getByRole('button', { name: 'Lesson feedback' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Test scoring' })).toBeEnabled();
     fireEvent.change(title, { target: { value: 'Updated case' } });
@@ -325,7 +326,7 @@ describe('AI evaluation admin workspace', () => {
     expect(screen.getByRole('button', { name: /Saved case/ })).toBeDisabled();
 
     resolveSave?.({ ...savedCase, title: 'Updated case' } as EvaluationCase);
-    expect(await screen.findByRole('heading', { name: 'Updated case' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Case title')).toHaveValue('Updated case'));
     await waitFor(() => expect(screen.getByRole('button', { name: 'New case' })).toBeEnabled());
   });
 
@@ -378,7 +379,7 @@ describe('AI evaluation admin workspace', () => {
     render(<AIEvaluationsPage />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Run comparison' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Run comparison' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /Running/ })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Expand case editor' })).toBeDisabled());
 
     // A response for a different saved case represents a deferred navigation
     // race. The response must not be applied to the current editor.
