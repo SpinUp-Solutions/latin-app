@@ -5,7 +5,6 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
-  ClipboardCopy,
   Clock3,
   CopyPlus,
   Database,
@@ -14,6 +13,7 @@ import {
   Play,
   Plus,
   Save,
+  Search,
   Trash2,
   X,
 } from 'lucide-react';
@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { AdminErrorState, AdminLoadingState, AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
 import { Button } from '@/src/components/ui/button';
+import { CopyMarkdownButton } from '@/src/components/admin/CopyMarkdownButton';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Badge } from '@/src/components/ui/badge';
@@ -51,6 +52,7 @@ import { STARTER_VOCABULARY_EVALUATION_CASES } from '@/src/lib/vocabulary-autoco
 import {
   compareEntryForms,
   differingSpan,
+  formMatchesQuery,
   PROSE_FIELDS,
   summarizeVocabularyRun,
   type FormAgreement,
@@ -385,6 +387,7 @@ function FormsTable({ rows }: { rows: FormRow[] }) {
 
 function FormsComparison({ cells }: { cells: [VocabularyEvaluationCell, VocabularyEvaluationCell] }) {
   const [showAll, setShowAll] = useState(false);
+  const [query, setQuery] = useState('');
   const [first, second] = cells;
   if (!first.output || !second.output) {
     const failed = cells.filter(cell => !cell.output).map(cell => modelName(cell.profileId));
@@ -399,6 +402,9 @@ function FormsComparison({ cells }: { cells: [VocabularyEvaluationCell, Vocabula
   if (counts.total === 0) {
     return <p className="text-sm text-roman-stone">This word has no inflected forms to compare.</p>;
   }
+  // A search looks through every form, not only the differences on show.
+  const searching = query.trim() !== '';
+  const matches = searching ? rows.filter(row => formMatchesQuery(row, query)) : [];
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -414,13 +420,34 @@ function FormsComparison({ cells }: { cells: [VocabularyEvaluationCell, Vocabula
             ) : null
           )}
         </div>
-        {differences.length > 0 && (
+        {differences.length > 0 && !searching && (
           <Button type="button" size="sm" variant="ghost" onClick={() => setShowAll(value => !value)}>
             {showAll ? 'Show differences only' : `Show all ${counts.total} forms`}
           </Button>
         )}
       </div>
-      {differences.length === 0 && !showAll ? (
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-roman-stone"
+          aria-hidden="true"
+        />
+        <Input
+          type="search"
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder="Search forms, e.g. subj perf pl, abl sg or amaver"
+          aria-label={`Search ${first.word} forms`}
+          className="h-9 pl-8 text-sm"
+        />
+      </div>
+      {searching ? (
+        <>
+          <p className="text-xs text-roman-stone" aria-live="polite">
+            {matches.length} of {counts.total} forms match
+          </p>
+          {matches.length > 0 && <FormsTable rows={matches} />}
+        </>
+      ) : differences.length === 0 && !showAll ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm text-emerald-800">
           Every form matches.
           <Button type="button" size="sm" variant="ghost" onClick={() => setShowAll(true)}>
@@ -641,14 +668,6 @@ function Results({
   const summary = summarizeVocabularyRun(result.cells, PROFILES);
   const failed = result.cells.filter(cell => !cell.output).length;
   const costThisRun = result.cells.reduce((sum, cell) => sum + (cell.costThisRun?.totalCost ?? 0), 0);
-  const copyAsMarkdown = async () => {
-    try {
-      await navigator.clipboard.writeText(vocabularyRunToMarkdown(result, evaluationCase, PROFILES));
-      toast.success('Results copied as Markdown');
-    } catch {
-      toast.error('Unable to copy the results. Check the browser allows clipboard access.');
-    }
-  };
   return (
     <section aria-labelledby="vocabulary-results-heading" className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -663,10 +682,10 @@ function Results({
             {result.forceRefresh && ' · cache skipped'}
           </p>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={() => void copyAsMarkdown()}>
-          <ClipboardCopy className="h-4 w-4" />
-          Copy as Markdown
-        </Button>
+        <CopyMarkdownButton
+          label="Copy results as Markdown"
+          getMarkdown={() => vocabularyRunToMarkdown(result, evaluationCase, PROFILES)}
+        />
       </div>
       <RunSummary summary={summary} />
       <div

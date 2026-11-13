@@ -161,6 +161,19 @@ describe('vocab autocomplete evaluation admin page', () => {
     expect(macronMarks).toEqual(['ō', 'o', 'ō', 'o']);
     expect(within(amoCard).getByText('to love, like')).toBeInTheDocument();
 
+    // Searching looks through every form, including ones that match, ignoring macrons.
+    const search = within(amoCard).getByRole('searchbox', { name: 'Search amō forms' });
+    fireEvent.change(search, { target: { value: 'pres sing third' } });
+    expect(within(amoCard).getByText('1 of 4 forms match')).toBeInTheDocument();
+    expect(
+      Array.from(amoCard.querySelectorAll('tr[data-agreement]'), row => row.getAttribute('data-agreement'))
+    ).toEqual(['same']);
+    fireEvent.change(search, { target: { value: 'amaris' } });
+    expect(within(amoCard).getByText('1 of 4 forms match')).toBeInTheDocument();
+    expect(amoCard.querySelector('tr[data-agreement="different"]')).not.toBeNull();
+    fireEvent.change(search, { target: { value: '' } });
+    expect(amoCard.querySelectorAll('tr[data-agreement]')).toHaveLength(3);
+
     expect(screen.getByText('Ran out of output tokens')).toBeInTheDocument();
     expect(screen.getByText('1 ran out of tokens')).toBeInTheDocument();
     expect(screen.getByText(/Forms not compared: GPT-6.1 Terra returned no entry/)).toBeInTheDocument();
@@ -169,7 +182,7 @@ describe('vocab autocomplete evaluation admin page', () => {
 
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
-    fireEvent.click(screen.getByRole('button', { name: 'Copy as Markdown' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy results as Markdown' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     const markdown: string = writeText.mock.calls[0][0];
     expect(markdown).toContain('# Vocab autocomplete evaluation: Verbs');
@@ -190,6 +203,6 @@ describe('vocab autocomplete evaluation admin page', () => {
       '| GPT-6.1 Terra · Medium | failed: token-budget — OpenAI started the vocabulary JSON but did not finish it. |'
     );
     expect(markdown).toContain('Forms not compared: GPT-6.1 Terra · Medium returned no entry.');
-    expect(toast.success).toHaveBeenCalledWith('Results copied as Markdown');
+    expect(toast.success).toHaveBeenCalledWith('Copied as Markdown');
   });
 });

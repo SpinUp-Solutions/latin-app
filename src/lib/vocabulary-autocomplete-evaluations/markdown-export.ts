@@ -8,6 +8,7 @@ import type {
   VocabularyEvaluationCell,
   VocabularyEvaluationRunResult,
 } from './contracts';
+import { markdownTable as table } from '../markdown/table';
 
 type ProfilePair = readonly [VocabularyAutocompleteProfileId, VocabularyAutocompleteProfileId];
 
@@ -17,16 +18,6 @@ const AGREEMENT_WORDS: Record<Exclude<FormAgreement, 'same'>, string> = {
   missing: 'only one model filled it',
 };
 const DIFFERENCE_ORDER: FormAgreement[] = ['different', 'missing', 'macrons'];
-
-/** Keeps a value on one table row: pipes would split the cell and newlines end the row. */
-const cell = (text: string) =>
-  text
-    .replace(/\|/g, '\\|')
-    .replace(/\s*\n\s*/g, ' ')
-    .trim() || '—';
-const row = (cells: string[]) => `| ${cells.map(cell).join(' | ')} |`;
-const table = (header: string[], rows: string[][]) =>
-  [row(header), `|${header.map(() => ' --- ').join('|')}|`, ...rows.map(row)].join('\n');
 
 const count = (value: number) => new Intl.NumberFormat('en-US').format(Math.round(value));
 const seconds = (milliseconds: number) => `${(milliseconds / 1_000).toFixed(1)} s`;

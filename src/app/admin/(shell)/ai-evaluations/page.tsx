@@ -21,6 +21,8 @@ import {
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { AdminErrorState, AdminLoadingState, AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
 import { Button } from '@/src/components/ui/button';
+import { CopyMarkdownButton } from '@/src/components/admin/CopyMarkdownButton';
+import { evaluationRunToMarkdown } from '@/src/lib/ai-evaluations/markdown-export';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Textarea } from '@/src/components/ui/textarea';
@@ -751,22 +753,28 @@ function Results({
             {result.forceRefresh && ' · fresh run, cache skipped'}
           </p>
         </div>
-        {evaluationCase.modes.length > 1 && (
-          <div className="inline-flex rounded-lg bg-roman-marble p-1" role="group" aria-label="Results grading mode">
-            {evaluationCase.modes.map(item => (
-              <button
-                key={item}
-                type="button"
-                aria-pressed={item === mode}
-                onClick={() => setSelectedMode(item)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  item === mode ? 'bg-white text-foreground shadow-sm' : 'text-roman-stone hover:text-foreground'
-                }`}>
-                {MODE_LABELS[item]}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {evaluationCase.modes.length > 1 && (
+            <div className="inline-flex rounded-lg bg-roman-marble p-1" role="group" aria-label="Results grading mode">
+              {evaluationCase.modes.map(item => (
+                <button
+                  key={item}
+                  type="button"
+                  aria-pressed={item === mode}
+                  onClick={() => setSelectedMode(item)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    item === mode ? 'bg-white text-foreground shadow-sm' : 'text-roman-stone hover:text-foreground'
+                  }`}>
+                  {MODE_LABELS[item]}
+                </button>
+              ))}
+            </div>
+          )}
+          <CopyMarkdownButton
+            label="Copy results as Markdown"
+            getMarkdown={() => evaluationRunToMarkdown(result, evaluationCase, COMPARED_PROFILES)}
+          />
+        </div>
       </div>
       <h3 className="sr-only">{MODE_LABELS[mode]}</h3>
       <ComparisonSummary comparison={comparison} />

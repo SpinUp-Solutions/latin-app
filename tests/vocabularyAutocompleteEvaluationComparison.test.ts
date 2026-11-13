@@ -1,6 +1,7 @@
 import {
   compareEntryForms,
   differingSpan,
+  formMatchesQuery,
   formAgreement,
   summarizeVocabularyRun,
 } from '@/src/lib/vocabulary-autocomplete-evaluations/comparison';
@@ -56,6 +57,29 @@ describe('vocabulary autocomplete form comparison', () => {
       field: 'is_deponent',
       values: [['false'], []],
     });
+  });
+});
+
+describe('form search', () => {
+  const row = (path: string[], values: [string[], string[]]) => ({
+    key: ['conjugation_table', ...path].join('.'),
+    field: 'conjugation_table',
+    path,
+    values,
+    agreement: 'same' as const,
+  });
+  const perfect = row(['subjunctive', 'active', 'perfect', 'plural', 'second'], [['amāverītis'], ['amāveritis']]);
+  const imperfect = row(['subjunctive', 'active', 'imperfect', 'plural', 'second'], [['amārētis'], ['amārētis']]);
+  const pluperfect = row(['indicative', 'active', 'pluperfect', 'plural', 'second'], [['amāverātis'], ['amāverātis']]);
+
+  it('matches the start of words in the path or values, ignoring case and macrons', () => {
+    const rows = [perfect, imperfect, pluperfect];
+    const find = (query: string) => rows.filter(item => formMatchesQuery(item, query));
+    expect(find('subj perf pl')).toEqual([perfect]);
+    expect(find('AMAVER')).toEqual([perfect, pluperfect]);
+    expect(find('conjugation table imperf')).toEqual([imperfect]);
+    expect(find('  ')).toEqual(rows);
+    expect(find('locative')).toEqual([]);
   });
 });
 
