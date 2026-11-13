@@ -9,6 +9,31 @@ import {
   RomanTableCell,
 } from '../core/roman-table';
 
+/** Models sometimes mark emphasis with markdown asterisks; show it as emphasis, not literal stars. */
+function FeedbackText({ text, inItalic = false }: { text: string; inItalic?: boolean }) {
+  return (
+    <>
+      {text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g).map((part, index) =>
+        /^\*.+\*$/.test(part) ? (
+          <em key={index} className={inItalic ? 'not-italic' : undefined}>
+            {part.replace(/^\*+|\*+$/g, '')}
+          </em>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
+/** The notes sit inside double quotes, so quotations within them become single quotes. */
+const nestQuotes = (text: string) =>
+  text
+    .replace(/“/g, '‘')
+    .replace(/”/g, '’')
+    .replace(/(^|[\s([{—–-])"/g, '$1‘')
+    .replace(/"/g, '’');
+
 const getRoleColor = (role: string) => {
   const r = role.toLowerCase();
   if (r.includes('protasis') || r.includes('condition')) return 'border-blue-400 bg-blue-50 text-blue-700';
@@ -47,7 +72,11 @@ export function TranslationGradingFeedback({ data, sourceLanguage, targetLanguag
               <span className="w-2 h-px bg-roman-red/30" />
               Overall Feedback
             </h4>
-            <p className="text-sm text-gray-700 leading-relaxed italic">&ldquo;{data.notes}&rdquo;</p>
+            <p className="text-sm text-gray-700 leading-relaxed italic">
+              &ldquo;
+              <FeedbackText text={nestQuotes(data.notes)} inItalic />
+              &rdquo;
+            </p>
           </div>
         </div>
 
@@ -57,7 +86,9 @@ export function TranslationGradingFeedback({ data, sourceLanguage, targetLanguag
             Suggested Translation
           </h4>
           <div className="p-3 bg-white/50 rounded-lg border border-roman-red/10">
-            <p className="text-md font-serif italic text-gray-800 leading-relaxed">{data.suggestedText}</p>
+            <p className="text-md font-serif italic text-gray-800 leading-relaxed">
+              <FeedbackText text={data.suggestedText} inItalic />
+            </p>
           </div>
         </div>
       </div>
@@ -102,7 +133,9 @@ export function TranslationGradingFeedback({ data, sourceLanguage, targetLanguag
                           <Lightbulb className="h-3.5 w-3.5 text-roman-red stroke-[2.5]" />
                         )}
                       </span>
-                      <span className="text-gray-700 leading-relaxed">{row.feedback}</span>
+                      <span className="text-gray-700 leading-relaxed">
+                        <FeedbackText text={row.feedback} />
+                      </span>
                     </div>
                   </RomanTableCell>
                 </RomanTableRow>
@@ -148,9 +181,13 @@ export function TranslationGradingFeedback({ data, sourceLanguage, targetLanguag
                     </RomanTableCell>
                     <RomanTableCell className="py-2.5 font-sans text-xs">
                       <div className="space-y-1">
-                        <p className="text-gray-700 leading-relaxed">{item.keyGrammaticalFeatures}</p>
+                        <p className="text-gray-700 leading-relaxed">
+                          <FeedbackText text={item.keyGrammaticalFeatures} />
+                        </p>
                         {item.notes && (
-                          <p className="text-[10px] text-roman-red/60 italic leading-snug">Note: {item.notes}</p>
+                          <p className="text-[10px] text-roman-red/60 italic leading-snug">
+                            Note: <FeedbackText text={item.notes} inItalic />
+                          </p>
                         )}
                       </div>
                     </RomanTableCell>
