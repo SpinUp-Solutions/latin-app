@@ -25,6 +25,21 @@ import {
   updateEvaluationCase,
 } from '../../src/lib/ai-evaluations/persistence';
 import { AIEvaluationThrottleError, consumeEvaluationRunQuota } from '../../src/lib/ai-evaluations/throttle';
+import {
+  vocabularyEvaluationDeleteRequestSchema,
+  vocabularyEvaluationRunRequestSchema,
+  vocabularyEvaluationSaveRequestSchema,
+} from '../../src/lib/vocabulary-autocomplete-evaluations/contracts';
+import {
+  countVocabularyEvaluationCells,
+  runVocabularyEvaluationCase,
+} from '../../src/lib/vocabulary-autocomplete-evaluations/execution';
+import {
+  deleteVocabularyEvaluationCase,
+  getVocabularyEvaluationCase,
+  listVocabularyEvaluationCases,
+  saveVocabularyEvaluationCase,
+} from '../../src/lib/vocabulary-autocomplete-evaluations/persistence';
 
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
 const adminApp = getApps()[0] ?? initializeApp();
@@ -197,6 +212,67 @@ export const runAiEvaluationFn = onCall(
       await consumeEvaluationRunQuota(actorId, input.forceRefresh, requestedCells, functionsDb);
 
       return await runEvaluationCase(evaluationCase, input.forceRefresh, functionsDb);
+    } catch (error) {
+      return throwEvaluationHttpsError(error);
+    }
+  }
+);
+
+export const listVocabAutocompleteEvalCasesFn = onCall(evaluationCrudOptions, async request => {
+  try {
+    await requireAdmin(request.auth);
+    return { cases: await listVocabularyEvaluationCases(functionsDb) };
+  } catch (error) {
+    return throwEvaluationHttpsError(error);
+  }
+});
+
+export const saveVocabAutocompleteEvalCaseFn = onCall(evaluationCrudOptions, async request => {
+  try {
+    const actorId = await requireAdmin(request.auth);
+    const input = vocabularyEvaluationSaveRequestSchema.parse(request.data);
+    return { case: await saveVocabularyEvaluationCase(input.caseId, input.input, actorId, functionsDb) };
+  } catch (error) {
+    return throwEvaluationHttpsError(error);
+  }
+});
+
+export const deleteVocabAutocompleteEvalCaseFn = onCall(evaluationCrudOptions, async request => {
+  try {
+    await requireAdmin(request.auth);
+    const input = vocabularyEvaluationDeleteRequestSchema.parse(request.data);
+    await deleteVocabularyEvaluationCase(input.caseId, functionsDb);
+    return { success: true };
+  } catch (error) {
+    return throwEvaluationHttpsError(error);
+  }
+});
+
+/**
+ * Autocompletes every word in a case with both profiles. It shares the
+ * per-admin run quota with the translation evaluation suite.
+ */
+export const runVocabAutocompleteEvalFn = onCall(
+  {
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    region: 'us-central1',
+    concurrency: 2,
+    maxInstances: 2,
+    secrets: [openaiApiKey],
+  },
+  async request => {
+    try {
+      const actorId = await requireAdmin(request.auth);
+      const input = vocabularyEvaluationRunRequestSchema.parse(request.data);
+      const evaluationCase = await getVocabularyEvaluationCase(input.caseId, functionsDb);
+      await consumeEvaluationRunQuota(
+        actorId,
+        input.forceRefresh,
+        countVocabularyEvaluationCells(evaluationCase),
+        functionsDb
+      );
+      return await runVocabularyEvaluationCase(evaluationCase, input.forceRefresh, functionsDb);
     } catch (error) {
       return throwEvaluationHttpsError(error);
     }

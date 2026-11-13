@@ -1,16 +1,16 @@
 /**
- * Versioned OpenAI model metadata used by both production grading and the
- * admin evaluation suite. Prices are standard, short-context USD per 1M
- * tokens and were verified against OpenAI's pricing documentation on
- * 2026-11-06: https://developers.openai.com/api/docs/pricing
+ * Versioned OpenAI model metadata used by production grading, vocabulary
+ * autocomplete and the admin evaluation suites. Prices are standard,
+ * short-context USD per 1M tokens and were verified against OpenAI's pricing
+ * documentation on 2026-11-13: https://developers.openai.com/api/docs/pricing
  */
 
 import type { CostBreakdown, TokenUsage, TranslationGradingMode } from './types';
 import { WARM_LESSON_TONE_INSTRUCTIONS } from './translation-grading-tone';
 
-const OPENAI_PRICING_VERSION = '2026-11-06';
+const OPENAI_PRICING_VERSION = '2026-11-13';
 const OPENAI_PRICING_SOURCE = 'https://developers.openai.com/api/docs/pricing';
-type OpenAIReasoningEffort = 'low' | 'high';
+export type OpenAIReasoningEffort = 'low' | 'medium' | 'high';
 
 interface OpenAIModelPricing {
   inputPerMillion: number;
@@ -34,12 +34,20 @@ const BASELINE_PRICING: OpenAIModelPricing = {
   outputPerMillion: 4.5,
 };
 
-const CANDIDATE_PRICING: OpenAIModelPricing = {
+const LUNA_PRICING: OpenAIModelPricing = {
   inputPerMillion: 0.1,
   cachedInputPerMillion: 0.01,
   // The 30-minute cache-write rate, matching the candidate's explicit cache TTL.
   cacheWritePerMillion: 0.125,
   outputPerMillion: 0.5,
+};
+
+const TERRA_PRICING: OpenAIModelPricing = {
+  inputPerMillion: 1,
+  cachedInputPerMillion: 0.05,
+  // The 30-minute cache-write rate; the 12-hour rate is $2.50.
+  cacheWritePerMillion: 1.25,
+  outputPerMillion: 5,
 };
 
 export const OPENAI_MODEL_CATALOG = {
@@ -51,7 +59,12 @@ export const OPENAI_MODEL_CATALOG = {
   gpt6Luna: {
     model: 'gpt-6-luna',
     label: 'GPT-6 Luna',
-    pricing: CANDIDATE_PRICING,
+    pricing: LUNA_PRICING,
+  },
+  gpt61Terra: {
+    model: 'gpt-6.1-terra',
+    label: 'GPT-6.1 Terra',
+    pricing: TERRA_PRICING,
   },
 } as const satisfies Record<string, OpenAIModelDefinition>;
 
@@ -66,7 +79,7 @@ interface TranslationGradingProfileDefinition {
   modelId: OpenAIModelId;
   model: string;
   label: string;
-  reasoningEffort: OpenAIReasoningEffort;
+  reasoningEffort: Exclude<OpenAIReasoningEffort, 'medium'>;
   maxOutputTokens: Record<TranslationGradingMode, number>;
   promptCacheKey: string;
   promptCacheMode: 'automatic' | 'explicit';
@@ -149,6 +162,59 @@ export const EVALUATION_TRANSLATION_PROFILE_IDS = [
   'baseline',
   'candidate',
 ] as const satisfies readonly TranslationGradingProfileId[];
+
+interface VocabularyAutocompleteProfileDefinition {
+  key: string;
+  model: string;
+  label: string;
+  reasoningEffort: OpenAIReasoningEffort;
+  /** Verbs need the most: full conjugation and participle tables. */
+  maxOutputTokens: number;
+  /** Bump when a profile change should invalidate cached evaluation results. */
+  profileVersion: string;
+  pricing: OpenAIModelPricing;
+}
+
+const defineVocabularyAutocompleteProfile = <const K extends string>(
+  key: K,
+  modelId: OpenAIModelId,
+  options: Pick<VocabularyAutocompleteProfileDefinition, 'reasoningEffort' | 'maxOutputTokens' | 'profileVersion'>
+) => {
+  const model = OPENAI_MODEL_CATALOG[modelId];
+  const effort = options.reasoningEffort;
+  return {
+    key,
+    model: model.model,
+    label: `${model.label} · ${effort[0].toUpperCase()}${effort.slice(1)}`,
+    pricing: model.pricing,
+    ...options,
+  } satisfies VocabularyAutocompleteProfileDefinition;
+};
+
+export const VOCABULARY_AUTOCOMPLETE_PROFILES = {
+  baseline: defineVocabularyAutocompleteProfile('baseline', 'gpt54Mini', {
+    reasoningEffort: 'low',
+    maxOutputTokens: 32_000,
+    profileVersion: 'vocabulary-autocomplete-v1:baseline',
+  }),
+  // The same output cap as the baseline, so token exhaustion is compared fairly.
+  candidate: defineVocabularyAutocompleteProfile('candidate', 'gpt61Terra', {
+    reasoningEffort: 'medium',
+    maxOutputTokens: 32_000,
+    profileVersion: 'vocabulary-autocomplete-v1:candidate',
+  }),
+} as const;
+
+export type VocabularyAutocompleteProfileId = keyof typeof VOCABULARY_AUTOCOMPLETE_PROFILES;
+export type VocabularyAutocompleteProfile = (typeof VOCABULARY_AUTOCOMPLETE_PROFILES)[VocabularyAutocompleteProfileId];
+
+/** The profile the admin vocabulary editor's autocomplete uses. */
+export const PRODUCTION_VOCABULARY_AUTOCOMPLETE_PROFILE: VocabularyAutocompleteProfileId = 'baseline';
+
+export const EVALUATION_VOCABULARY_AUTOCOMPLETE_PROFILE_IDS = [
+  'baseline',
+  'candidate',
+] as const satisfies readonly VocabularyAutocompleteProfileId[];
 
 interface RawUsage {
   input_tokens?: unknown;

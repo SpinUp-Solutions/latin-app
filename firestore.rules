@@ -94,6 +94,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /vocabularyAutocompleteEvaluationCases/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /vocabularyAutocompleteEvaluationResultCache/{document=**} {
+      allow read, write: if false;
+    }
+
     // Feedback reports and their private admin activity are accessible only
     // through authenticated server routes.
     match /studentFeedback/{document=**} {
@@ -181,6 +189,8 @@ service cloud.firestore {
         && collection != 'aiEvaluationCases'
         && collection != 'aiEvaluationResultCache'
         && collection != 'aiEvaluationRunThrottles'
+        && collection != 'vocabularyAutocompleteEvaluationCases'
+        && collection != 'vocabularyAutocompleteEvaluationResultCache'
         && collection != 'studentFeedback'
         && collection != 'vocabulary_pools'
         && collection != 'vocabulary_words_v5'

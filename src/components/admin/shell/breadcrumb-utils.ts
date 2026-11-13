@@ -87,6 +87,7 @@ export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
   },
   { template: 'practice-categories', crumbs: ['Practice Categories'] },
   { template: 'ai-evaluations', crumbs: ['AI Evaluations'] },
+  { template: 'vocab-autocomplete-evaluations', crumbs: ['Vocab Autocomplete Evaluation'] },
   { template: 'diagramming-attempts', crumbs: ['Diagramming Attempts'] },
 ];
 
@@ -105,6 +106,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'vocabulary-pools': 'Vocabulary Pools',
   'practice-categories': 'Practice Categories',
   'ai-evaluations': 'AI Evaluations',
+  'vocab-autocomplete-evaluations': 'Vocab Autocomplete Evaluation',
   'diagramming-attempts': 'Diagramming Attempts',
   versions: 'Versions',
   pending: 'Pending Review',
