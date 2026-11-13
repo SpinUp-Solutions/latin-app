@@ -251,7 +251,7 @@ describe('sanitized test delivery rendering', () => {
     expect(onComplete).toHaveBeenCalledWith(0);
   });
 
-  it('emits a raw-only sentence-diagram audit event in test mode', () => {
+  it('records every sentence-diagram change in test mode without Check, completion or the answer key', () => {
     const data = createEmptySentenceDiagramDocument('amat', 'he loves');
     const span = {
       startTokenIndex: 0,
@@ -287,25 +287,30 @@ describe('sanitized test delivery rendering', () => {
       />
     );
 
+    expect(screen.queryByRole('button', { name: 'Check' })).not.toBeInTheDocument();
+    expect(onAnswer).not.toHaveBeenCalled();
+
     const token = screen.getByText('amat').closest('[data-diagram-token-index]');
     expect(token).not.toBeNull();
     fireEvent.mouseUp(token as Element);
     fireEvent.click(screen.getByRole('button', { name: 'Finite Verb' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
 
-    expect(onDiagrammingAttempt).toHaveBeenCalledTimes(1);
-    const auditPayload = onDiagrammingAttempt.mock.calls[0][0];
-    expect(Object.keys(auditPayload)).toEqual(['studentAnnotations']);
-    expect(auditPayload.studentAnnotations).toEqual([{ id: createAnnotationId('verb', span), kind: 'verb', span }]);
-    expect(auditPayload).not.toHaveProperty('solutionAnnotations');
-    expect(auditPayload).not.toHaveProperty('comparison');
-    expect(auditPayload).not.toHaveProperty('tokens');
-    expect(onAnswer).toHaveBeenCalledWith(
-      expect.objectContaining({
-        exerciseId: 'diagram',
-        answer: { type: 'sentence-diagramming', annotations: auditPayload.studentAnnotations },
-      })
+    expect(onAnswer).toHaveBeenLastCalledWith({
+      exerciseId: 'diagram',
+      answer: {
+        type: 'sentence-diagramming',
+        annotations: [{ id: createAnnotationId('verb', span), kind: 'verb', span }],
+      },
+      pageIndex: undefined,
+      itemIndex: undefined,
+    });
+    expect(screen.getByRole('button', { name: 'Finite Verb' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Clear All/ }));
+    expect(onAnswer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ answer: { type: 'sentence-diagramming', annotations: [] } })
     );
-    expect(onComplete).toHaveBeenCalledWith(0);
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(onDiagrammingAttempt).not.toHaveBeenCalled();
   });
 });
