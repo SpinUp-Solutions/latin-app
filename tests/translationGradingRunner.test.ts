@@ -54,7 +54,7 @@ describe('translation grading runner', () => {
     createResponse.mockResolvedValue(responseFor());
   });
 
-  it('reuses the production schema/prompt runner for the high-reasoning candidate profile', async () => {
+  it('reuses the production schema/prompt runner for the low-reasoning candidate profile', async () => {
     const result = await translationGrader.grade('lesson', request, 'candidate');
 
     expect(result.success).toBe(true);
@@ -69,7 +69,7 @@ describe('translation grading runner', () => {
     expect(call).toEqual(
       expect.objectContaining({
         model: 'gpt-6-luna',
-        reasoning: { effort: 'high' },
+        reasoning: { effort: 'low' },
         prompt_cache_key: expect.stringMatching(/^translation-grading-v3:candidate:shard-[0-3]$/),
         prompt_cache_options: { mode: 'explicit', ttl: '30m' },
         service_tier: 'default',

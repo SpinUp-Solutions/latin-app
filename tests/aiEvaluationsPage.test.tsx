@@ -132,7 +132,7 @@ describe('AI evaluation admin workspace', () => {
       profileId,
       requestedModel: model,
       actualModel: model,
-      reasoningEffort: profileId === 'baseline' ? 'low' : 'high',
+      reasoningEffort: 'low',
       output: {
         feedbackLevel,
         isPassing: true,
@@ -171,7 +171,7 @@ describe('AI evaluation admin workspace', () => {
       profileId,
       requestedModel: model,
       actualModel: model,
-      reasoningEffort: profileId === 'baseline' ? 'low' : 'high',
+      reasoningEffort: 'low',
       output: { score: 8.5, feedback: 'Accurate overall; check the final tense.' },
       latencyMs: 120,
       generationLatencyMs: 120,
@@ -269,7 +269,7 @@ describe('AI evaluation admin workspace', () => {
     );
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument());
     expect(screen.getAllByText('GPT-5.4 Mini · Low').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('GPT-6 Luna · High').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('GPT-6 Luna · Low').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Good work.')).toHaveLength(2);
     // Excellent vs Very good is one level apart.
     expect(screen.getByText('Close')).toBeInTheDocument();
