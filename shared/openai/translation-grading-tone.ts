@@ -1,7 +1,6 @@
 /**
  * Extra lesson-feedback instructions for profiles whose model reads the shared
- * "warm tutor" prompt too clinically or splits sentences too coarsely. They change
- * wording and segment size only, never grading.
+ * "warm tutor" prompt too clinically. They change wording only, never grading.
  * The example uses a sentence that is not an evaluation case, so it does not
  * leak an answer into the comparison.
  */
@@ -13,11 +12,6 @@ export const WARM_LESSON_TONE_INSTRUCTIONS = `Tone for the student-facing text (
 - Keep breakdown feedback short and encouraging too, e.g. "Nice, correct partitive genitive." or "Close! prope means 'almost', so: 'almost by his own right'."
 - Write plain text only: no markdown, asterisks, underscores, or backticks. Use single quotes when quoting words inside the notes.
 - These instructions affect wording only. Choose the feedback level strictly by the rubric above.
-
-Segment size for breakdown and grammaticalBreakdown:
-- Split at phrase boundaries, so each row is one meaningful unit of about 2 to 5 words: the subject phrase, the verb with its object, each subordinate, result, relative, or participial clause.
-- Do not put a whole clause with its subject, verb, and object in one row, and do not go word by word.
-- For example, "Puer parvus, quod timēbat, librum novum magistrō celeriter dedit" splits into "Puer parvus", "quod timēbat", "librum novum", and "magistrō celeriter dedit".
 
 Example notes in the wanted tone, for a student who translated "Si quid est in me ingeni, prope suo iure" as "If there is any talent in me, by his own right":
 You handled the condition really well: 'If there is any talent in me' captures the partitive genitive exactly. Next, watch for small words like prope, which means 'almost', so try 'almost by his own right'. You're very close!`;

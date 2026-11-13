@@ -121,7 +121,6 @@ describe('translation grading runner', () => {
     );
     expect(candidateLesson).toContain('You are a warm, encouraging Latin tutor');
     expect(candidateLesson).toContain('Tone for the student-facing text');
-    expect(candidateLesson).toContain('Segment size for breakdown and grammaticalBreakdown');
     expect(candidateLesson).toContain('Choose the feedback level strictly by the rubric above.');
     expect(baselineLesson).toContain('You are a warm, encouraging Latin tutor');
     expect(baselineLesson).not.toContain('Tone for the student-facing text');
