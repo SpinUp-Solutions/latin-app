@@ -2,46 +2,39 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  BarChart3,
   BookOpen,
   Check,
   ChevronDown,
   Clock3,
-  CopyPlus,
   Database,
   DollarSign,
-  FileText,
-  FlaskConical,
   Gauge,
   Loader2,
+  Pencil,
+  Play,
   Plus,
-  RefreshCw,
   Save,
-  Sparkles,
   Trash2,
   X,
-  Zap,
 } from 'lucide-react';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
-import {
-  AdminEmptyState,
-  AdminErrorState,
-  AdminLoadingState,
-  AdminPage,
-  AdminPageHeader,
-} from '@/src/components/admin/shell';
+import { AdminErrorState, AdminLoadingState, AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Textarea } from '@/src/components/ui/textarea';
 import { Badge } from '@/src/components/ui/badge';
 import { Switch } from '@/src/components/ui/switch';
-import { RomanCard, RomanCardContent, RomanCardHeader } from '@/src/components/ui/core/roman-card';
+import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { toast } from 'sonner';
-import { TRANSLATION_GRADING_MODES } from '@/shared/openai/types';
-import { EVALUATION_TRANSLATION_PROFILE_IDS, TRANSLATION_GRADING_PROFILES } from '@/shared/openai/model-registry';
+import { TRANSLATION_GRADING_MODES, type TranslationGradingMode } from '@/shared/openai/types';
+import {
+  EVALUATION_TRANSLATION_PROFILE_IDS,
+  TRANSLATION_GRADING_PROFILES,
+  type TranslationGradingProfileId,
+} from '@/shared/openai/model-registry';
 import type {
   EvaluationAggregate,
   EvaluationCase,
@@ -56,6 +49,12 @@ import {
   saveEvaluationCaseInFirebase,
 } from '@/src/lib/ai-evaluations/firebase-client';
 import { LESSON_EVALUATION_CASES } from '@/src/lib/ai-evaluations/lesson-cases';
+import {
+  compareProfiles,
+  gradeAgreement,
+  type GradeAgreement,
+  type ProfileComparison,
+} from '@/src/lib/ai-evaluations/comparison';
 
 const newAnswer = (index: number) => ({ id: `answer-${Date.now()}-${index}`, label: `Answer ${index}`, text: '' });
 
@@ -73,6 +72,7 @@ const formatDuration = (milliseconds: number) => {
   return `${(milliseconds / 1_000).toFixed(2)} s`;
 };
 const formatCost = (value: number) => (value === 0 ? '$0.000000' : `$${value.toFixed(6)}`);
+const formatDollars = (value: number) => `$${value.toFixed(value >= 0.1 ? 2 : 3)}`;
 const formatMeasuredCost = (value: number | undefined, status: string) => {
   if (status === 'unavailable' || value === undefined) return 'Unavailable';
   if (status === 'not-incurred-app-cache' || status === 'not-incurred-coalesced') return 'No API call';
@@ -80,6 +80,21 @@ const formatMeasuredCost = (value: number | undefined, status: string) => {
 };
 const aggregateCostStatus = (anyUnknown: boolean, anyKnown: boolean) =>
   !anyUnknown ? 'measured' : anyKnown ? 'lower-bound' : 'unavailable';
+
+const MODE_LABELS: Record<TranslationGradingMode, string> = { lesson: 'Lesson feedback', test: 'Test scoring' };
+const directionLabel = (direction: EvaluationCaseInput['direction']) =>
+  direction === 'latin-to-english' ? 'Latin → English' : 'English → Latin';
+const COMPARED_PROFILES = [EVALUATION_TRANSLATION_PROFILE_IDS[0], EVALUATION_TRANSLATION_PROFILE_IDS[1]] as const;
+const profileLabel = (profileId: TranslationGradingProfileId) => TRANSLATION_GRADING_PROFILES[profileId].label;
+
+function ProfileDot({ profileId }: { profileId: TranslationGradingProfileId }) {
+  return (
+    <span
+      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${profileId === COMPARED_PROFILES[0] ? 'bg-roman-stone' : 'bg-primary'}`}
+      aria-hidden="true"
+    />
+  );
+}
 
 type DisplayedRun = {
   result: EvaluationRunResult;
@@ -275,62 +290,233 @@ function BreakdownDetails({ cell }: { cell: EvaluationCellResult }) {
   );
 }
 
-function ResultCell({ cell }: { cell: EvaluationCellResult }) {
-  const profile = TRANSLATION_GRADING_PROFILES[cell.profileId];
+const AGREEMENT_STYLES: Record<GradeAgreement, { label: string; className: string; bar: string }> = {
+  same: { label: 'Same grade', className: 'border-emerald-200 bg-emerald-50 text-emerald-700', bar: 'bg-emerald-500' },
+  close: { label: 'Close', className: 'border-amber-200 bg-amber-50 text-amber-700', bar: 'bg-amber-400' },
+  different: { label: 'Different', className: 'border-red-200 bg-red-50 text-red-700', bar: 'bg-red-400' },
+};
+
+function ModelResult({ cell, showAdvanced }: { cell: EvaluationCellResult; showAdvanced: boolean }) {
+  const header = (
+    <div className="flex items-center gap-2">
+      <ProfileDot profileId={cell.profileId} />
+      <p className="text-sm font-medium">{profileLabel(cell.profileId)}</p>
+    </div>
+  );
+
   if (cell.error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50/70 p-4" role="alert">
-        <div className="flex items-center gap-2 text-sm font-semibold text-red-800">
-          <X className="h-4 w-4" aria-hidden="true" />
-          {profile.label}
-        </div>
-        <p className="mt-1 text-[11px] text-red-600">{cell.requestedModel}</p>
-        <p className="mt-2 text-sm leading-relaxed text-red-700">{cell.error}</p>
-        <div className="mt-3">
-          <UsageBadges cell={cell} />
-        </div>
-        <p className="mt-2 text-[11px] text-red-600">
-          This cell failed independently; the other model result is still available. Any measured usage is still
-          included in the cost totals.
+      <div className="space-y-2 rounded-lg border border-red-200 bg-red-50/70 p-4" role="alert">
+        {header}
+        <p className="flex items-start gap-1.5 text-sm leading-relaxed text-red-700">
+          <X className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          {cell.error}
         </p>
+        {showAdvanced && <UsageBadges cell={cell} />}
       </div>
     );
   }
 
+  const cost =
+    cell.originalCostStatus === 'unavailable' || !cell.originalCost ? null : formatCost(cell.originalCost.totalCost);
   return (
-    <div className="rounded-xl border border-border/80 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-medium">{profile.label}</p>
-          <p className="mt-0.5 text-[11px] text-roman-stone">{cell.actualModel || cell.requestedModel}</p>
-        </div>
-        <div className="rounded-lg border border-primary/20 bg-primary/[0.06] px-3 py-1.5 text-center">
-          <p className="text-lg font-serif font-bold leading-tight text-primary">
-            {cell.gradingMode === 'lesson' ? cell.output?.feedbackLevel : `${cell.output?.score}/10`}
-          </p>
-          <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-primary">
-            {cell.gradingMode === 'lesson' ? 'Feedback' : 'Score'}
-          </p>
-        </div>
+    <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        {header}
+        <span className="shrink-0 rounded-md bg-primary/[0.08] px-2.5 py-1 font-serif text-base font-bold leading-tight text-primary">
+          {cell.gradingMode === 'lesson' ? cell.output?.feedbackLevel : `${cell.output?.score}/10`}
+        </span>
       </div>
-      <UsageBadges cell={cell} />
       {cell.gradingMode === 'lesson' ? (
-        <div className="mt-4 space-y-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-roman-stone">Overall feedback</p>
-            <p className="mt-1 text-sm leading-relaxed text-foreground/80">{cell.output?.notes}</p>
-          </div>
-          <div className="rounded-md border border-primary/10 bg-roman-marble/50 p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary/80">
-              Suggested translation
-            </p>
-            <p className="mt-1 font-serif text-sm italic leading-relaxed">{cell.output?.suggestedText}</p>
+        <>
+          <p className="text-sm leading-relaxed text-foreground/85">{cell.output?.notes}</p>
+          <div className="rounded-md bg-roman-marble/50 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-roman-stone">Suggested</p>
+            <p className="mt-0.5 font-serif text-sm italic leading-relaxed">{cell.output?.suggestedText}</p>
           </div>
           <BreakdownDetails cell={cell} />
-        </div>
+        </>
       ) : (
-        <p className="mt-4 text-sm leading-relaxed text-foreground/80">{cell.output?.feedback}</p>
+        <p className="text-sm leading-relaxed text-foreground/85">{cell.output?.feedback}</p>
       )}
+      <p className="mt-auto flex items-center gap-3 text-xs tabular-nums text-roman-stone">
+        <span className="inline-flex items-center gap-1">
+          <Clock3 className="h-3 w-3" aria-hidden="true" />
+          {formatDuration(cell.generationLatencyMs ?? cell.latencyMs)}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <DollarSign className="h-3 w-3" aria-hidden="true" />
+          {cost ?? 'Cost unavailable'}
+        </span>
+      </p>
+      {showAdvanced && <UsageBadges cell={cell} />}
+    </div>
+  );
+}
+
+function AnswerComparison({
+  answer,
+  index,
+  cells,
+  showAdvanced,
+}: {
+  answer: EvaluationCaseInput['answers'][number];
+  index: number;
+  cells: EvaluationCellResult[];
+  showAdvanced: boolean;
+}) {
+  const [first, second] = COMPARED_PROFILES.map(profileId => cells.find(cell => cell.profileId === profileId));
+  const agreement = first && second ? gradeAgreement(first, second) : null;
+  return (
+    <RomanCard>
+      <RomanCardContent className="space-y-4 p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/[0.09] text-xs font-semibold text-primary">
+            {index + 1}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-sm font-medium">{answer.label}</h4>
+            <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-roman-stone">{answer.text}</p>
+          </div>
+          {agreement && (
+            <Badge variant="outline" className={`shrink-0 ${AGREEMENT_STYLES[agreement].className}`}>
+              {AGREEMENT_STYLES[agreement].label}
+            </Badge>
+          )}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {[first, second].map(
+            cell =>
+              cell && (
+                <ModelResult
+                  key={`${cell.answerId}-${cell.gradingMode}-${cell.profileId}`}
+                  cell={cell}
+                  showAdvanced={showAdvanced}
+                />
+              )
+          )}
+        </div>
+      </RomanCardContent>
+    </RomanCard>
+  );
+}
+
+function SummaryCard({ title, headline, children }: { title: string; headline: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex flex-col rounded-xl border border-border/70 bg-white p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">{title}</p>
+      <p className="mt-1 font-serif text-xl leading-snug">{headline}</p>
+      <div className="mt-3 flex-1 space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function FigureRow({
+  profileId,
+  leader,
+  value,
+  detail,
+}: {
+  profileId: TranslationGradingProfileId;
+  leader: boolean;
+  value: string;
+  detail?: string;
+}) {
+  return (
+    <div className="text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className={`flex min-w-0 items-center gap-2 ${leader ? 'font-medium' : 'text-roman-stone'}`}>
+          <ProfileDot profileId={profileId} />
+          <span className="truncate">{profileLabel(profileId)}</span>
+        </span>
+        <span className={`shrink-0 tabular-nums ${leader ? 'font-semibold' : ''}`}>{value}</span>
+      </div>
+      {detail && <p className="pl-[18px] text-[11px] tabular-nums text-roman-stone">{detail}</p>}
+    </div>
+  );
+}
+
+function ComparisonSummary({ comparison }: { comparison: ProfileComparison }) {
+  const { agreement, comparedCount, answerCount, costComparedCount, figures, faster, cheaper } = comparison;
+  if (comparedCount === 0) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50/70 p-4 text-sm text-red-700" role="alert">
+        No answer could be compared: a model failed on every one. The errors are shown below.
+      </div>
+    );
+  }
+  const leadHeadline = (lead: typeof faster, word: string, tie: string) =>
+    lead ? (
+      <>
+        {TRANSLATION_GRADING_PROFILES[lead.profileId].label.split(' · ')[0]}{' '}
+        <span className="text-primary">
+          {Math.round(lead.percent)}% {word}
+        </span>
+      </>
+    ) : (
+      tie
+    );
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-3">
+      <SummaryCard
+        title="Grading agreement"
+        headline={
+          <>
+            {agreement.same} of {comparedCount} <span className="text-base text-roman-stone">same grade</span>
+          </>
+        }>
+        <div className="flex h-2 overflow-hidden rounded-full bg-roman-marble" aria-hidden="true">
+          {(Object.keys(AGREEMENT_STYLES) as GradeAgreement[]).map(level =>
+            agreement[level] > 0 ? (
+              <span
+                key={level}
+                className={AGREEMENT_STYLES[level].bar}
+                style={{ width: `${(agreement[level] / comparedCount) * 100}%` }}
+              />
+            ) : null
+          )}
+        </div>
+        <p className="text-xs text-roman-stone">
+          {agreement.same} same · {agreement.close} close · {agreement.different} different
+        </p>
+        {comparedCount < answerCount && (
+          <p className="text-xs text-red-700">
+            {answerCount - comparedCount} of {answerCount} answers not compared because a model failed.
+          </p>
+        )}
+      </SummaryCard>
+      <SummaryCard
+        title="Cost"
+        headline={leadHeadline(cheaper, 'cheaper', costComparedCount ? 'Same cost' : 'Unavailable')}>
+        {costComparedCount > 0 &&
+          figures.map(item => (
+            <FigureRow
+              key={item.profileId}
+              profileId={item.profileId}
+              leader={cheaper?.profileId === item.profileId}
+              value={formatCost(item.averageCost)}
+              detail={`${formatCost(item.totalCost)} for this case · ≈ ${formatDollars(item.averageCost * 1_000)} per 1,000`}
+            />
+          ))}
+        <p className="text-[11px] text-roman-stone">Average cost to grade one answer.</p>
+        {costComparedCount < comparedCount && (
+          <p className="text-xs text-amber-700">
+            Based on {costComparedCount} of {comparedCount} answers; the other costs are unavailable.
+          </p>
+        )}
+      </SummaryCard>
+      <SummaryCard title="Speed" headline={leadHeadline(faster, 'faster', 'Same speed')}>
+        {figures.map(item => (
+          <FigureRow
+            key={item.profileId}
+            profileId={item.profileId}
+            leader={faster?.profileId === item.profileId}
+            value={formatDuration(item.averageMs)}
+          />
+        ))}
+        <p className="text-[11px] text-roman-stone">Average time to generate one grade.</p>
+      </SummaryCard>
     </div>
   );
 }
@@ -535,9 +721,53 @@ function AggregateDetails({ aggregate }: { aggregate: EvaluationAggregate }) {
   );
 }
 
-function Results({ result, evaluationCase }: { result: EvaluationRunResult; evaluationCase: EvaluationCaseInput }) {
-  const sourceLanguage = evaluationCase.direction === 'latin-to-english' ? 'Latin' : 'English';
-  const targetLanguage = evaluationCase.direction === 'latin-to-english' ? 'English' : 'Latin';
+function AdvancedDetails({
+  aggregate,
+  mode,
+  modeCells,
+}: {
+  aggregate: EvaluationAggregate;
+  mode: TranslationGradingMode;
+  modeCells: EvaluationCellResult[];
+}) {
+  return (
+    <section
+      aria-labelledby="evaluation-advanced-heading"
+      className="space-y-4 rounded-xl border border-dashed border-border bg-roman-marble/30 p-4">
+      <div>
+        <h3 id="evaluation-advanced-heading" className="font-serif text-lg">
+          Advanced details
+        </h3>
+        <p className="mt-1 text-xs leading-relaxed text-roman-stone">
+          Totals cover the whole run. “API cost this run” is what this run spent; reusing a cached result costs nothing.
+          Successful results are cached for 30 days by mode, profile, prompt version, direction, source and answer.
+        </p>
+      </div>
+      <AggregateSummary aggregate={aggregate} />
+      <AggregateDetails aggregate={aggregate} />
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">
+        {MODE_LABELS[mode]} by model
+      </p>
+      <ModelComparisonCards cells={modeCells} />
+    </section>
+  );
+}
+
+function Results({
+  result,
+  evaluationCase,
+  showAdvanced,
+}: {
+  result: EvaluationRunResult;
+  evaluationCase: EvaluationCaseInput;
+  showAdvanced: boolean;
+}) {
+  const [selectedMode, setSelectedMode] = useState<TranslationGradingMode>(evaluationCase.modes[0]);
+  const mode = evaluationCase.modes.includes(selectedMode) ? selectedMode : evaluationCase.modes[0];
+  const modeCells = useMemo(() => result.cells.filter(cell => cell.gradingMode === mode), [result, mode]);
+  const comparison = useMemo(() => compareProfiles(modeCells, COMPARED_PROFILES), [modeCells]);
+  const { evaluatedCellCount, cellCount, failedCellCount } = result.aggregate;
+
   return (
     <section aria-labelledby="evaluation-results-heading" className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -545,78 +775,43 @@ function Results({ result, evaluationCase }: { result: EvaluationRunResult; eval
           <h2 id="evaluation-results-heading" className="font-serif text-xl">
             Results
           </h2>
-          <p className="mt-1 text-sm text-roman-stone">
-            {result.forceRefresh ? 'Fresh API run completed.' : 'Successful cells reuse the app cache when available.'}{' '}
-            Compare configured profiles for each selected grading mode below.
+          <p className="mt-1 text-xs text-roman-stone">
+            {evaluatedCellCount} of {cellCount} gradings completed
+            {failedCellCount > 0 && <span className="text-red-700"> · {failedCellCount} failed</span>}
+            {result.forceRefresh && ' · fresh run, cache skipped'}
           </p>
         </div>
-        <Badge variant="outline" className="gap-1.5 py-1">
-          <Zap className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-          {result.aggregate.appCacheHits} app cache {result.aggregate.appCacheHits === 1 ? 'hit' : 'hits'}
-        </Badge>
+        {evaluationCase.modes.length > 1 && (
+          <div className="inline-flex rounded-lg bg-roman-marble p-1" role="group" aria-label="Results grading mode">
+            {evaluationCase.modes.map(item => (
+              <button
+                key={item}
+                type="button"
+                aria-pressed={item === mode}
+                onClick={() => setSelectedMode(item)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  item === mode ? 'bg-white text-foreground shadow-sm' : 'text-roman-stone hover:text-foreground'
+                }`}>
+                {MODE_LABELS[item]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      <div className="rounded-lg border border-border/70 bg-roman-marble/45 px-4 py-3 text-sm">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-roman-stone">
-          <span>
-            {sourceLanguage} → {targetLanguage}
-          </span>
-          <span aria-hidden="true">·</span>
-          <span>Immutable run snapshot</span>
-        </div>
-        <p className="mt-1 whitespace-pre-wrap font-serif italic leading-relaxed text-foreground/85">
-          {evaluationCase.sourceText}
-        </p>
+      <h3 className="sr-only">{MODE_LABELS[mode]}</h3>
+      <ComparisonSummary comparison={comparison} />
+      {showAdvanced && <AdvancedDetails aggregate={result.aggregate} mode={mode} modeCells={modeCells} />}
+      <div className="space-y-3">
+        {evaluationCase.answers.map((answer, index) => (
+          <AnswerComparison
+            key={`${mode}-${answer.id}`}
+            answer={answer}
+            index={index}
+            cells={modeCells.filter(cell => cell.answerId === answer.id)}
+            showAdvanced={showAdvanced}
+          />
+        ))}
       </div>
-      <AggregateSummary aggregate={result.aggregate} />
-      <AggregateDetails aggregate={result.aggregate} />
-      {evaluationCase.modes.map(mode => {
-        const modeCells = result.cells.filter(cell => cell.gradingMode === mode);
-        return (
-          <section key={mode} className="space-y-4" aria-labelledby={`evaluation-${mode}-results-heading`}>
-            <div className="flex items-baseline justify-between gap-3 border-t border-border/60 pt-5">
-              <div>
-                <h3 id={`evaluation-${mode}-results-heading`} className="font-serif text-lg">
-                  {mode === 'lesson' ? 'Lesson feedback' : 'Test scoring'}
-                </h3>
-                <p className="mt-1 text-xs text-roman-stone">
-                  {mode === 'lesson'
-                    ? 'Detailed qualitative feedback using the normal lesson grader.'
-                    : 'Compact /10 assessment scores and student-facing feedback.'}
-                </p>
-              </div>
-              <Badge variant="outline">{modeCells.length} cells</Badge>
-            </div>
-            <ModelComparisonCards cells={modeCells} />
-            <div className="space-y-4">
-              {evaluationCase.answers.map(answer => {
-                const cells = modeCells.filter(cell => cell.answerId === answer.id);
-                return (
-                  <RomanCard key={`${mode}-${answer.id}`}>
-                    <RomanCardHeader className="border-b border-border/60 px-4 py-3 sm:px-5">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/[0.09] text-xs font-semibold text-primary">
-                          {evaluationCase.answers.indexOf(answer) + 1}
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="font-medium">{answer.label}</h4>
-                          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-roman-stone">
-                            {answer.text}
-                          </p>
-                        </div>
-                      </div>
-                    </RomanCardHeader>
-                    <RomanCardContent className="grid gap-4 p-4 xl:grid-cols-2 sm:p-5">
-                      {cells.map(cell => (
-                        <ResultCell key={`${cell.answerId}-${cell.gradingMode}-${cell.profileId}`} cell={cell} />
-                      ))}
-                    </RomanCardContent>
-                  </RomanCard>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
     </section>
   );
 }
@@ -626,7 +821,9 @@ function AIEvaluationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<EvaluationCaseInput>(blankCase);
   const [savedForm, setSavedForm] = useState<EvaluationCaseInput | null>(null);
+  const [editing, setEditing] = useState(false);
   const [displayedRun, setDisplayedRun] = useState<DisplayedRun | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [loadingCases, setLoadingCases] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -649,7 +846,7 @@ function AIEvaluationsPage() {
     );
   }, [form, savedForm]);
   const valid = useMemo(() => isValidCase(form), [form]);
-  const selectedCase = cases.find(item => item.id === selectedId) ?? null;
+  const showEditor = !selectedId || editing || dirty;
   const interactionLocked = running || saving || deleting || addingLessonCases;
   const missingLessonCases = LESSON_EVALUATION_CASES.filter(
     lessonCase => !cases.some(item => item.title === lessonCase.title)
@@ -681,13 +878,7 @@ function AIEvaluationsPage() {
     try {
       const nextCases = await listEvaluationCasesInFirebase();
       setCases(nextCases);
-      if (nextCases.length > 0) {
-        const first = nextCases[0];
-        setSelectedId(first.id);
-        setForm(cloneCaseInput(first));
-        setSavedForm(cloneCaseInput(first));
-        setDisplayedRun(null);
-      }
+      if (nextCases.length > 0) applySelectedCase(nextCases[0]);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Unable to load evaluation cases');
     } finally {
@@ -710,6 +901,7 @@ function AIEvaluationsPage() {
     setSelectedId(evaluationCase.id);
     setForm(cloneCaseInput(evaluationCase));
     setSavedForm(cloneCaseInput(evaluationCase));
+    setEditing(false);
     setDisplayedRun(null);
   };
 
@@ -723,12 +915,23 @@ function AIEvaluationsPage() {
     setSelectedId(null);
     setForm(blankCase());
     setSavedForm(null);
+    setEditing(false);
     setDisplayedRun(null);
   };
 
   const requestNewCase = () => {
     if (interactionLocked) return;
     navigationGuard.requestNavigation(applyNewCase);
+  };
+
+  const cancelEditing = () => {
+    if (interactionLocked) return;
+    if (savedForm) {
+      setForm(cloneCaseInput(savedForm));
+      setEditing(false);
+    } else if (cases.length > 0) {
+      navigationGuard.requestNavigation(() => applySelectedCase(cases[0]));
+    }
   };
 
   const saveCase = async () => {
@@ -767,6 +970,7 @@ function AIEvaluationsPage() {
       setAddingLessonCases(false);
     }
   };
+
   const deleteCase = async () => {
     if (!selectedId || interactionLocked) return;
     setDeleting(true);
@@ -792,7 +996,11 @@ function AIEvaluationsPage() {
     setRunning(true);
     setDisplayedRun(null);
     try {
-      const response = await runEvaluationInFirebase({ caseId: caseIdAtStart, forceRefresh });
+      // The skip-cache switch lives under Advanced, so it never applies while hidden.
+      const response = await runEvaluationInFirebase({
+        caseId: caseIdAtStart,
+        forceRefresh: showAdvanced && forceRefresh,
+      });
       if (requestGeneration !== runGenerationRef.current || response.caseId !== caseIdAtStart) {
         return;
       }
@@ -811,12 +1019,7 @@ function AIEvaluationsPage() {
     updateForm(previous => ({
       ...previous,
       answers: previous.answers.map((answer, answerIndex) =>
-        answerIndex === index
-          ? {
-              ...answer,
-              [field]: value,
-            }
-          : answer
+        answerIndex === index ? { ...answer, [field]: value } : answer
       ),
     }));
   };
@@ -829,26 +1032,270 @@ function AIEvaluationsPage() {
     );
   }
 
+  const editor = (
+    <fieldset disabled={interactionLocked} className="min-w-0 border-0 p-0">
+      <RomanCard>
+        <RomanCardContent className="space-y-5 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-serif text-xl">{selectedId ? 'Edit case' : 'New case'}</h2>
+            {dirty && (
+              <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">Unsaved changes</Badge>
+            )}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
+            <div className="space-y-1.5">
+              <Label htmlFor="evaluation-title">Case title</Label>
+              <Input
+                id="evaluation-title"
+                value={form.title}
+                maxLength={120}
+                placeholder="e.g. Cicero conditional sentence"
+                onChange={event => updateForm(previous => ({ ...previous, title: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="evaluation-direction">Direction</Label>
+              <select
+                id="evaluation-direction"
+                value={form.direction}
+                onChange={event =>
+                  updateForm(previous => ({
+                    ...previous,
+                    direction: event.target.value as EvaluationCaseInput['direction'],
+                  }))
+                }
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="latin-to-english">Latin → English</option>
+                <option value="english-to-latin">English → Latin</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="evaluation-source">Source text</Label>
+            <Textarea
+              id="evaluation-source"
+              value={form.sourceText}
+              maxLength={4_000}
+              rows={3}
+              placeholder="The sentence the student translates"
+              onChange={event => updateForm(previous => ({ ...previous, sourceText: event.target.value }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Student answers</Label>
+            {form.answers.map((answer, index) => (
+              <div key={answer.id} className="flex items-start gap-2">
+                <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/[0.09] text-xs font-semibold text-primary">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1 overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                  <Input
+                    aria-label={`Answer ${index + 1} label`}
+                    value={answer.label}
+                    maxLength={80}
+                    placeholder={`Answer ${index + 1}`}
+                    onChange={event => updateAnswer(index, 'label', event.target.value)}
+                    className="h-8 rounded-none border-0 border-b border-border/60 bg-roman-marble/30 text-xs font-medium focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                  <Textarea
+                    aria-label={`Answer ${index + 1} text`}
+                    value={answer.text}
+                    maxLength={4_000}
+                    rows={2}
+                    placeholder="Student translation"
+                    onChange={event => updateAnswer(index, 'text', event.target.value)}
+                    className="min-h-[60px] rounded-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="mt-0.5"
+                  disabled={form.answers.length <= 1}
+                  aria-label={`Remove ${answer.label || `answer ${index + 1}`}`}
+                  onClick={() =>
+                    updateForm(previous => ({
+                      ...previous,
+                      answers: previous.answers.filter((_, answerIndex) => answerIndex !== index),
+                    }))
+                  }>
+                  <Trash2 className="h-4 w-4 text-roman-stone" aria-hidden="true" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="ml-6 text-primary"
+              disabled={form.answers.length >= 20}
+              onClick={() =>
+                updateForm(previous => ({
+                  ...previous,
+                  answers: [...previous.answers, newAnswer(previous.answers.length + 1)],
+                }))
+              }>
+              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              Add answer
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-sm font-medium">Grade as</span>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Grading modes">
+              {TRANSLATION_GRADING_MODES.map(mode => {
+                const selected = form.modes.includes(mode);
+                return (
+                  <Button
+                    key={mode}
+                    type="button"
+                    size="sm"
+                    variant={selected ? 'default' : 'outline'}
+                    disabled={selected && form.modes.length === 1}
+                    aria-pressed={selected}
+                    onClick={() =>
+                      updateForm(previous => {
+                        const nextModes = selected
+                          ? previous.modes.filter(current => current !== mode)
+                          : [...previous.modes, mode];
+                        return {
+                          ...previous,
+                          modes: TRANSLATION_GRADING_MODES.filter(current => nextModes.includes(current)),
+                        };
+                      })
+                    }>
+                    {selected && <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />}
+                    {MODE_LABELS[mode]}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
+            <div>
+              {selectedId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => navigationGuard.requestNavigation(() => setDeleteOpen(true))}>
+                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(savedForm || cases.length > 0) && (
+                <Button type="button" variant="outline" onClick={cancelEditing}>
+                  Cancel
+                </Button>
+              )}
+              <Button type="button" disabled={!valid || !dirty} onClick={() => void saveCase()}>
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" aria-hidden="true" />
+                )}
+                {saving ? 'Saving…' : 'Save case'}
+              </Button>
+            </div>
+          </div>
+        </RomanCardContent>
+      </RomanCard>
+    </fieldset>
+  );
+
+  const caseSummary = (
+    <RomanCard>
+      <RomanCardContent className="space-y-4 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-serif text-xl">{form.title}</h2>
+            <p className="mt-1 text-xs text-roman-stone">
+              {directionLabel(form.direction)} · {form.answers.length}{' '}
+              {form.answers.length === 1 ? 'answer' : 'answers'} ·{' '}
+              {form.modes.map(mode => MODE_LABELS[mode]).join(' + ')}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={interactionLocked}
+            onClick={() => setEditing(true)}>
+            <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            Edit
+          </Button>
+        </div>
+        <p className="whitespace-pre-wrap rounded-lg bg-roman-marble/50 px-4 py-3 font-serif italic leading-relaxed">
+          {form.sourceText}
+        </p>
+        {!displayedRun && (
+          <ol className="space-y-1.5 text-sm" aria-label="Student answers">
+            {form.answers.map((answer, index) => (
+              <li key={answer.id} className="flex gap-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/[0.09] text-[11px] font-semibold text-primary">
+                  {index + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="font-medium">{answer.label}</span>
+                  <span className="text-roman-stone"> — {answer.text}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+        <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-roman-stone">
+            <ProfileDot profileId={COMPARED_PROFILES[0]} />
+            {profileLabel(COMPARED_PROFILES[0])}
+            <span className="text-xs">vs</span>
+            <ProfileDot profileId={COMPARED_PROFILES[1]} />
+            {profileLabel(COMPARED_PROFILES[1])}
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {showAdvanced && (
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-roman-stone">
+                <Switch
+                  checked={forceRefresh}
+                  onCheckedChange={setForceRefresh}
+                  disabled={interactionLocked}
+                  aria-label="Skip cache"
+                />
+                Skip cache
+              </label>
+            )}
+            <Button type="button" disabled={!valid || interactionLocked} onClick={() => void runEvaluation()}>
+              {running ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Play className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              {running ? 'Running…' : 'Run comparison'}
+            </Button>
+          </div>
+        </div>
+      </RomanCardContent>
+    </RomanCard>
+  );
+
   return (
     <AdminPage>
       <AdminPageHeader
         title="AI Model Evaluations"
-        description="Compare configured translation-grading profiles across lesson feedback and test scoring."
+        description="See how two grading models mark the same student answers, and what each one costs."
         actions={
           <>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void addLessonCases()}
-              disabled={interactionLocked || Boolean(loadError) || missingLessonCases.length === 0}>
-              {addingLessonCases ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <BookOpen className="mr-2 h-4 w-4" aria-hidden="true" />
-              )}
-              {addingLessonCases ? 'Adding…' : 'Add lesson cases'}
-            </Button>
-            <Button type="button" variant="outline" onClick={requestNewCase} disabled={interactionLocked}>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-roman-stone">
+              <Switch checked={showAdvanced} onCheckedChange={setShowAdvanced} aria-label="Show advanced details" />
+              Advanced
+            </label>
+            <Button type="button" onClick={requestNewCase} disabled={interactionLocked}>
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
               New case
             </Button>
@@ -858,18 +1305,18 @@ function AIEvaluationsPage() {
 
       {loadError && <AdminErrorState message={loadError} onRetry={retryLoadCases} className="mb-6" />}
 
-      <div className="grid gap-6 2xl:grid-cols-[250px_minmax(0,1fr)]">
-        <aside aria-label="Saved evaluation cases" className="space-y-3">
+      <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside aria-label="Saved evaluation cases" className="space-y-3 lg:sticky lg:top-6 lg:self-start">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">Saved cases</p>
-            <Badge variant="outline">{cases.length}</Badge>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">Cases</p>
+            <span className="text-xs tabular-nums text-roman-stone">{cases.length}</span>
           </div>
           {cases.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-white/60 p-4 text-sm text-roman-stone">
-              Create your first case, or add the lesson cases, to begin a comparison.
-            </div>
+            <p className="rounded-xl border border-dashed border-border bg-white/60 p-4 text-sm text-roman-stone">
+              No cases yet. Write one, or add the ready-made lesson cases.
+            </p>
           ) : (
-            <div className="space-y-2">
+            <div className="max-h-64 space-y-1 overflow-y-auto pr-1 lg:max-h-[calc(100vh-16rem)]">
               {cases.map(evaluationCase => (
                 <button
                   type="button"
@@ -877,290 +1324,40 @@ function AIEvaluationsPage() {
                   onClick={() => selectCase(evaluationCase)}
                   disabled={interactionLocked}
                   aria-pressed={selectedId === evaluationCase.id}
-                  className={`w-full rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`w-full rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
                     selectedId === evaluationCase.id
-                      ? 'border-primary/40 bg-primary/[0.07] shadow-sm'
-                      : 'border-border/70 bg-white hover:border-primary/25 hover:bg-roman-marble/50'
+                      ? 'border-primary/40 bg-primary/[0.07]'
+                      : 'border-transparent hover:bg-roman-marble/60'
                   }`}>
-                  <p className="truncate text-sm font-medium">{evaluationCase.title}</p>
-                  <p className="mt-1 text-[11px] text-roman-stone">
-                    {evaluationCase.direction === 'latin-to-english' ? 'Latin → English' : 'English → Latin'} ·{' '}
-                    {evaluationCase.answers.length} answers · {evaluationCase.modes.join(' + ')}
+                  <p className="line-clamp-2 text-sm font-medium">{evaluationCase.title}</p>
+                  <p className="mt-0.5 text-[11px] text-roman-stone">
+                    {directionLabel(evaluationCase.direction)} · {evaluationCase.answers.length}{' '}
+                    {evaluationCase.answers.length === 1 ? 'answer' : 'answers'}
                   </p>
                 </button>
               ))}
             </div>
           )}
-          <div className="rounded-lg border border-border/60 bg-roman-marble/45 p-3 text-xs leading-relaxed text-roman-stone">
-            <Sparkles className="mb-1 h-4 w-4 text-primary" aria-hidden="true" />
-            API runs use the same task, profile, and schema as production. Successful cells are cached by mode, profile,
-            prompt version, direction, source, and answer.
-          </div>
+          {missingLessonCases.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => void addLessonCases()}
+              disabled={interactionLocked || Boolean(loadError)}>
+              {addingLessonCases ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <BookOpen className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              {addingLessonCases ? 'Adding…' : 'Add lesson cases'}
+            </Button>
+          )}
         </aside>
 
         <div className="min-w-0 space-y-6">
-          <fieldset disabled={interactionLocked} className="min-w-0 border-0 p-0">
-            <RomanCard>
-              <RomanCardHeader className="border-b border-border/60 px-5 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/[0.09] text-primary">
-                      <FlaskConical className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    <div>
-                      <h2 className="font-serif text-lg">Case editor</h2>
-                      <p className="mt-0.5 text-xs text-roman-stone">
-                        Build one translation prompt with several answers to compare.
-                      </p>
-                    </div>
-                  </div>
-                  {dirty && (
-                    <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">
-                      Unsaved changes
-                    </Badge>
-                  )}
-                </div>
-              </RomanCardHeader>
-              <RomanCardContent className="space-y-5 p-5">
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
-                  <div className="space-y-2">
-                    <Label htmlFor="evaluation-title">Case title</Label>
-                    <Input
-                      id="evaluation-title"
-                      value={form.title}
-                      maxLength={120}
-                      placeholder="e.g. Cicero conditional sentence"
-                      disabled={running}
-                      onChange={event => updateForm(previous => ({ ...previous, title: event.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="evaluation-direction">Direction</Label>
-                    <select
-                      id="evaluation-direction"
-                      value={form.direction}
-                      disabled={running}
-                      onChange={event =>
-                        updateForm(previous => ({
-                          ...previous,
-                          direction: event.target.value as EvaluationCaseInput['direction'],
-                        }))
-                      }
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      <option value="latin-to-english">Latin → English</option>
-                      <option value="english-to-latin">English → Latin</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="evaluation-source">Source text</Label>
-                  <Textarea
-                    id="evaluation-source"
-                    value={form.sourceText}
-                    maxLength={4_000}
-                    rows={4}
-                    placeholder="Enter the source sentence shown to both models..."
-                    disabled={running}
-                    onChange={event => updateForm(previous => ({ ...previous, sourceText: event.target.value }))}
-                  />
-                  <p className="text-right text-[11px] text-roman-stone">
-                    {form.sourceText.length.toLocaleString()} / 4,000
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Grading modes</Label>
-                  <p className="text-xs text-roman-stone">
-                    Choose the production behavior to compare. Both modes run every selected profile for each answer.
-                  </p>
-                  <div className="flex flex-wrap gap-2" role="group" aria-label="Grading modes">
-                    {TRANSLATION_GRADING_MODES.map(mode => {
-                      const selected = form.modes.includes(mode);
-                      return (
-                        <Button
-                          key={mode}
-                          type="button"
-                          size="sm"
-                          variant={selected ? 'default' : 'outline'}
-                          disabled={selected && form.modes.length === 1}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            updateForm(previous => {
-                              const nextModes = selected
-                                ? previous.modes.filter(current => current !== mode)
-                                : [...previous.modes, mode];
-                              return {
-                                ...previous,
-                                modes: TRANSLATION_GRADING_MODES.filter(current => nextModes.includes(current)),
-                              };
-                            })
-                          }>
-                          {mode === 'lesson' ? 'Lesson feedback' : 'Test scoring'}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <Label>Answers to test</Label>
-                      <p className="mt-1 text-xs text-roman-stone">
-                        Keep alternatives labeled so differences are easy to scan.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={running || form.answers.length >= 20}
-                      onClick={() =>
-                        updateForm(previous => ({
-                          ...previous,
-                          answers: [...previous.answers, newAnswer(previous.answers.length + 1)],
-                        }))
-                      }>
-                      <CopyPlus className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Add answer
-                    </Button>
-                  </div>
-                  <div className="space-y-3">
-                    {form.answers.map((answer, index) => (
-                      <div key={answer.id} className="rounded-lg border border-border/70 bg-roman-marble/35 p-3">
-                        <div className="flex items-start gap-3">
-                          <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-primary shadow-sm">
-                            {index + 1}
-                          </span>
-                          <div className="min-w-0 flex-1 space-y-3">
-                            <div className="grid gap-3 sm:grid-cols-[160px_minmax(0,1fr)]">
-                              <div className="space-y-2">
-                                <Label htmlFor={`answer-label-${answer.id}`}>Label</Label>
-                                <Input
-                                  id={`answer-label-${answer.id}`}
-                                  value={answer.label}
-                                  disabled={running}
-                                  maxLength={80}
-                                  placeholder={`Answer ${index + 1}`}
-                                  onChange={event => updateAnswer(index, 'label', event.target.value)}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor={`answer-text-${answer.id}`}>Student answer</Label>
-                                <Textarea
-                                  id={`answer-text-${answer.id}`}
-                                  value={answer.text}
-                                  disabled={running}
-                                  maxLength={4_000}
-                                  rows={2}
-                                  placeholder="Enter a candidate student translation..."
-                                  onChange={event => updateAnswer(index, 'text', event.target.value)}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            disabled={running || form.answers.length <= 1}
-                            aria-label={`Remove ${answer.label || `answer ${index + 1}`}`}
-                            onClick={() =>
-                              updateForm(previous => ({
-                                ...previous,
-                                answers: previous.answers.filter((_, answerIndex) => answerIndex !== index),
-                              }))
-                            }>
-                            <Trash2 className="h-4 w-4 text-roman-stone" aria-hidden="true" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
-                  <div className="flex items-center gap-2 text-xs text-roman-stone" role="status" aria-live="polite">
-                    <FileText className="h-4 w-4" aria-hidden="true" />
-                    {selectedCase ? `Saved ${new Date(selectedCase.updatedAt).toLocaleString()}` : 'Not saved yet'}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedId && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        disabled={running || deleting}
-                        onClick={() => navigationGuard.requestNavigation(() => setDeleteOpen(true))}>
-                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Delete
-                      </Button>
-                    )}
-                    <Button
-                      type="button"
-                      disabled={running || saving || !valid || !dirty}
-                      onClick={() => void saveCase()}>
-                      {saving ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Save className="mr-2 h-4 w-4" aria-hidden="true" />
-                      )}
-                      {saving ? 'Saving…' : 'Save case'}
-                    </Button>
-                  </div>
-                </div>
-              </RomanCardContent>
-            </RomanCard>
-          </fieldset>
-
-          <RomanCard>
-            <RomanCardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/[0.09] text-primary">
-                  <BarChart3 className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div>
-                  <h2 className="font-serif text-lg">Run side-by-side</h2>
-                  <p className="mt-1 max-w-xl text-sm leading-relaxed text-roman-stone">
-                    Every selected mode runs all configured profiles for each saved answer. Cached results avoid
-                    duplicate spend.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {EVALUATION_TRANSLATION_PROFILE_IDS.map(profileId => (
-                      <Badge key={profileId} variant="outline">
-                        {TRANSLATION_GRADING_PROFILES[profileId].label}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-col items-stretch gap-3 sm:items-end">
-                <label className="flex cursor-pointer items-center justify-end gap-2 text-xs text-roman-stone">
-                  <Switch
-                    checked={forceRefresh}
-                    onCheckedChange={setForceRefresh}
-                    disabled={interactionLocked}
-                    aria-label="Force fresh API run"
-                  />
-                  Force fresh API run
-                </label>
-                <Button
-                  type="button"
-                  size="lg"
-                  disabled={!selectedId || dirty || !valid || interactionLocked}
-                  onClick={() => void runEvaluation()}>
-                  {running ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
-                  )}
-                  {running ? 'Running models…' : 'Test models'}
-                </Button>
-                {dirty && <span className="text-[11px] text-amber-700">Save changes before running.</span>}
-                {!selectedId && <span className="text-[11px] text-roman-stone">Save this case before running.</span>}
-              </div>
-            </RomanCardContent>
-          </RomanCard>
+          {showEditor ? editor : caseSummary}
 
           {running && (
             <div
@@ -1168,21 +1365,15 @@ function AIEvaluationsPage() {
               role="status"
               aria-live="polite">
               <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-medium">Comparing selected grading modes…</p>
-                <p className="mt-0.5 text-xs text-roman-stone">
-                  Each answer/model cell is independent, so partial failures will remain visible.
-                </p>
-              </div>
+              <p className="text-sm font-medium">Both models are grading each answer…</p>
             </div>
           )}
 
-          {displayedRun && <Results result={displayedRun.result} evaluationCase={displayedRun.evaluationCase} />}
-          {!displayedRun && !running && !selectedId && (
-            <AdminEmptyState
-              icon={Gauge}
-              title="Your comparison will appear here"
-              description="Save a case, then compare the configured model profiles side by side."
+          {displayedRun && (
+            <Results
+              result={displayedRun.result}
+              evaluationCase={displayedRun.evaluationCase}
+              showAdvanced={showAdvanced}
             />
           )}
         </div>
