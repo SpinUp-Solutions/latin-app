@@ -111,6 +111,23 @@ describe('translation grading runner', () => {
     expect(String(call.input)).toContain("Student's translation (English): All Gaul is divided.");
   });
 
+  it('adds the warm-tone instructions to lesson grading for the candidate profile only', async () => {
+    await translationGrader.grade('lesson', request, 'candidate');
+    await translationGrader.grade('lesson', request, 'baseline');
+    await translationGrader.grade('test', request, 'candidate');
+
+    const [candidateLesson, baselineLesson, candidateTest] = createResponse.mock.calls.map(
+      ([call]) => call.instructions
+    );
+    expect(candidateLesson).toContain('You are a warm, encouraging Latin tutor');
+    expect(candidateLesson).toContain('Tone for the student-facing text');
+    expect(candidateLesson).toContain('Segment size for breakdown and grammaticalBreakdown');
+    expect(candidateLesson).toContain('Choose the feedback level strictly by the rubric above.');
+    expect(baselineLesson).toContain('You are a warm, encouraging Latin tutor');
+    expect(baselineLesson).not.toContain('Tone for the student-facing text');
+    expect(candidateTest).not.toContain('Tone for the student-facing text');
+  });
+
   it('uses a separate compact score-and-feedback prompt and schema for test grading', async () => {
     createResponse.mockResolvedValue(
       responseFor({
@@ -173,7 +190,9 @@ describe('translation grading runner', () => {
 
     expect(testTask.promptVersion).toBe('translation-grading-test-v2');
     expect(lessonTask.promptVersion).toBe('translation-grading-lesson-v3');
-    expect(lessonTask.systemPrompt).not.toContain('Deduct points only for actual mistakes in vocabulary and morphology');
+    expect(lessonTask.systemPrompt).not.toContain(
+      'Deduct points only for actual mistakes in vocabulary and morphology'
+    );
 
     expect(testTask.systemPrompt).toContain('intermediate student');
     expect(testTask.systemPrompt).toContain('Every word must be accounted for accurately.');

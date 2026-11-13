@@ -6,6 +6,7 @@
  */
 
 import type { CostBreakdown, TokenUsage, TranslationGradingMode } from './types';
+import { WARM_LESSON_TONE_INSTRUCTIONS } from './translation-grading-tone';
 
 const OPENAI_PRICING_VERSION = '2026-11-06';
 const OPENAI_PRICING_SOURCE = 'https://developers.openai.com/api/docs/pricing';
@@ -71,6 +72,18 @@ interface TranslationGradingProfileDefinition {
   promptCacheMode: 'automatic' | 'explicit';
   profileVersion: string;
   pricing: OpenAIModelPricing;
+  /** Appended to the shared task prompt for this profile only, e.g. to tune one model's tone. */
+  extraInstructions?: Partial<Record<TranslationGradingMode, string>>;
+}
+
+/** The shared task prompt plus any instructions this profile adds for the mode. */
+export function profileInstructions(
+  profile: TranslationGradingProfileDefinition,
+  mode: TranslationGradingMode,
+  sharedPrompt: string
+): string {
+  const extra = profile.extraInstructions?.[mode];
+  return extra ? `${sharedPrompt}\n\n${extra}` : sharedPrompt;
 }
 
 type TranslationGradingProfileOptions = Omit<
@@ -115,7 +128,10 @@ export const TRANSLATION_GRADING_PROFILES = {
     maxOutputTokens: { lesson: 8000, test: 8000 },
     promptCacheKey: 'translation-grading-v3:candidate',
     promptCacheMode: 'explicit',
-    profileVersion: 'translation-grading-v3:candidate',
+    // Bumped whenever the extra instructions change, so cached evaluation results regenerate.
+    profileVersion: 'translation-grading-v3:candidate:lesson-style-v2',
+    // GPT-6 Luna reads the shared prompt more clinically and segments more coarsely than GPT-5.4 Mini.
+    extraInstructions: { lesson: WARM_LESSON_TONE_INSTRUCTIONS },
   }),
 } as const satisfies Record<string, TranslationGradingProfileDefinition>;
 
