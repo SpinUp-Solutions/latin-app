@@ -153,7 +153,7 @@ describe('AI evaluation admin workspace', () => {
       originalCost: {
         inputCost: 0.00001,
         outputCost: 0.00002,
-        totalCost: 0.00003,
+        totalCost: profileId === 'baseline' ? 0.00347 : 0.000341,
         tokens: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
       },
       costIncurredThisRunStatus: 'measured',
@@ -274,7 +274,7 @@ describe('AI evaluation admin workspace', () => {
     // Excellent vs Very good is one level apart.
     expect(screen.getByText('Close')).toBeInTheDocument();
     expect(screen.getByText(/0 same · 1 close · 0 different/)).toBeInTheDocument();
-    expect(screen.getByText('Same cost')).toBeInTheDocument();
+    expect(screen.getByText('10× cheaper')).toBeInTheDocument();
     expect(screen.queryByText('Advanced details')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Test scoring', pressed: false }));

@@ -415,7 +415,11 @@ function ComparisonSummary({ comparison }: { comparison: ProfileComparison }) {
       <>
         {TRANSLATION_GRADING_PROFILES[lead.profileId].label.split(' · ')[0]}{' '}
         <span className="text-primary">
-          {Math.round(lead.percent)}% {word}
+          {word === 'cheaper'
+            ? lead.percent === 100
+              ? 'free'
+              : `${Number((Math.max(...figures.map(item => item.averageCost)) / Math.min(...figures.map(item => item.averageCost))).toPrecision(2))}× cheaper`
+            : `${Math.round(lead.percent)}% ${word}`}
         </span>
       </>
     ) : (
