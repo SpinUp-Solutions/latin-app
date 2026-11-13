@@ -1005,6 +1005,12 @@
       "indexes": []
     },
     {
+      "collectionGroup": "vocabularyAutocompleteEvaluationResultCache",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "testAttempts",
       "fieldPath": "answers",
       "indexes": []
