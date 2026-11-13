@@ -110,8 +110,8 @@ export const TRANSLATION_GRADING_PROFILES = {
     profileVersion: 'translation-grading-v3:baseline',
   }),
   candidate: defineTranslationGradingProfile('candidate', 'gpt6Luna', {
-    labelSuffix: 'High',
-    reasoningEffort: 'high',
+    labelSuffix: 'Low',
+    reasoningEffort: 'low',
     maxOutputTokens: { lesson: 8000, test: 8000 },
     promptCacheKey: 'translation-grading-v3:candidate',
     promptCacheMode: 'explicit',
