@@ -1,5 +1,6 @@
 import {
   compareEntryForms,
+  differingSpan,
   formAgreement,
   summarizeVocabularyRun,
 } from '@/src/lib/vocabulary-autocomplete-evaluations/comparison';
@@ -55,6 +56,14 @@ describe('vocabulary autocomplete form comparison', () => {
       field: 'is_deponent',
       values: [['false'], []],
     });
+  });
+});
+
+describe('differing span', () => {
+  it('isolates the letters that changed between two forms', () => {
+    expect(differingSpan('amāverītis', 'amāveritis')).toEqual(['amāver', 'ī', 'tis']);
+    expect(differingSpan('amāris / amāre', 'amāris')).toEqual(['amāris', ' / amāre', '']);
+    expect(differingSpan('amandum', 'amandum')).toEqual(['amandum', '', '']);
   });
 });
 

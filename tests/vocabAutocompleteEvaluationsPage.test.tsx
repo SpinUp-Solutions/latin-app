@@ -149,8 +149,15 @@ describe('vocab autocomplete evaluation admin page', () => {
       'macrons',
       'macrons',
     ]);
-    expect(within(amoCard).getByText('amās')).toBeInTheDocument();
-    expect(within(amoCard).getByText('amāris')).toBeInTheDocument();
+    const differentRow = amoCard.querySelector('tr[data-agreement="different"]')!;
+    expect(Array.from(differentRow.querySelectorAll('td'), cell => cell.textContent)).toEqual(['amās', 'amāris']);
+    // Only the changed letters are marked: "amā[ri]s" against "amās".
+    expect(Array.from(differentRow.querySelectorAll('mark'), mark => mark.textContent)).toEqual(['ri']);
+    const macronMarks = Array.from(
+      amoCard.querySelectorAll('tr[data-agreement="macrons"] mark'),
+      mark => mark.textContent
+    );
+    expect(macronMarks).toEqual(['ō', 'o', 'ō', 'o']);
     expect(within(amoCard).getByText('to love, like')).toBeInTheDocument();
 
     expect(screen.getByText('Ran out of output tokens')).toBeInTheDocument();

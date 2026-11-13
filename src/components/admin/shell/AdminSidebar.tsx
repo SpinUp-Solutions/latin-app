@@ -79,7 +79,7 @@ const navigationGroups: NavigationGroup[] = [
     label: 'System',
     items: [
       { href: '/admin/ai-evaluations', label: 'AI Evaluations', icon: Sparkles },
-      { href: '/admin/vocab-autocomplete-evaluations', label: 'Vocab Autocomplete Evaluation', icon: SpellCheck },
+      { href: '/admin/vocab-autocomplete-evaluations', label: 'Vocab Autocomplete', icon: SpellCheck },
       { href: '/admin/diagramming-attempts', label: 'Diagramming Attempts', icon: ClipboardList },
     ],
   },

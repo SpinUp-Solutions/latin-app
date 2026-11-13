@@ -49,6 +49,7 @@ import {
 import { STARTER_VOCABULARY_EVALUATION_CASES } from '@/src/lib/vocabulary-autocomplete-evaluations/starter-cases';
 import {
   compareEntryForms,
+  differingSpan,
   PROSE_FIELDS,
   summarizeVocabularyRun,
   type FormAgreement,
@@ -301,6 +302,25 @@ function ProseComparison({ cells }: { cells: [VocabularyEvaluationCell, Vocabula
 }
 
 const formValue = (values: string[]) => (values.length ? values.join(' / ') : '—');
+const MARK_STYLES: Partial<Record<FormAgreement, string>> = {
+  different: 'bg-red-200/80',
+  macrons: 'bg-sky-200/80',
+};
+
+/** A form's value with the letters that differ from the other model's value marked. */
+function FormValue({ row, index }: { row: FormRow; index: number }) {
+  const text = formValue(row.values[index]);
+  const markStyle = MARK_STYLES[row.agreement];
+  if (!markStyle) return <>{text}</>;
+  const [before, changed, after] = differingSpan(text, formValue(row.values[1 - index]));
+  return (
+    <>
+      {before}
+      {changed && <mark className={`rounded-sm px-px text-inherit ${markStyle}`}>{changed}</mark>}
+      {after}
+    </>
+  );
+}
 
 function FormsTable({ rows }: { rows: FormRow[] }) {
   return (
@@ -349,7 +369,7 @@ function FormsTable({ rows }: { rows: FormRow[] }) {
                   <td
                     key={PROFILES[index]}
                     className={`px-3 py-1.5 font-serif ${row.agreement === 'same' ? '' : 'font-semibold'} ${values.length ? '' : 'text-roman-stone'}`}>
-                    {formValue(values)}
+                    <FormValue row={row} index={index} />
                   </td>
                 ))}
               </tr>,
@@ -416,6 +436,7 @@ function entryVerdict(cells: [VocabularyEvaluationCell, VocabularyEvaluationCell
   const [first, second] = cells;
   if (!first.output || !second.output) return { label: 'Failed', className: AGREEMENT_STYLES.different.chip };
   const { counts } = compareEntryForms(first.output, second.output);
+  if (counts.total === 0) return { label: 'No inflected forms', className: 'border-border text-roman-stone' };
   const differences = counts.different + counts.missing;
   if (differences > 0) {
     return {

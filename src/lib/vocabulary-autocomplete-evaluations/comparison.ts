@@ -213,3 +213,22 @@ export function summarizeVocabularyRun(
     cheaper: costComparedCount ? leadOf(figures, item => item.averageCost) : null,
   };
 }
+
+/**
+ * Splits `text` into the part it shares with `other` at the start, the part
+ * that differs, and the part it shares at the end, so a table can mark only
+ * the letters that changed (amāverītis against amāveritis marks "ī").
+ */
+export function differingSpan(text: string, other: string): [string, string, string] {
+  let start = 0;
+  while (start < text.length && start < other.length && text[start] === other[start]) start += 1;
+  let end = 0;
+  while (
+    end < text.length - start &&
+    end < other.length - start &&
+    text[text.length - 1 - end] === other[other.length - 1 - end]
+  ) {
+    end += 1;
+  }
+  return [text.slice(0, start), text.slice(start, text.length - end), text.slice(text.length - end)];
+}
