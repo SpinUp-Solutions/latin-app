@@ -11,6 +11,8 @@ import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPane
 import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { AdminPillPicker } from '@/src/components/admin/shell';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
+import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import {
   useApproveVocabularyWordRequestMutation,
   useDismissVocabularyWordRequestMutation,
@@ -236,6 +238,11 @@ type PendingTab = 'new' | 'updates';
 
 function PendingVocabularyPage() {
   const [tab, setTab] = useState<PendingTab>('new');
+  const [proposalDirty, setProposalDirty] = useState(false);
+  const navigationGuard = useUnsavedNavigationGuard(
+    proposalDirty,
+    'You have unsaved edits to this proposal. Leave it without saving?'
+  );
   const { data: newWords } = useGetVocabularyWordRequestsQuery({ status: 'pending' });
   const { data: updates } = useGetVocabularyWordUpdateRequestsQuery({ status: 'pending' });
 
@@ -250,7 +257,7 @@ function PendingVocabularyPage() {
           <AdminPillPicker<PendingTab>
             label="Pending vocabulary"
             value={tab}
-            onValueChange={setTab}
+            onValueChange={next => navigationGuard.requestNavigation(() => setTab(next))}
             options={[
               { value: 'new', label: 'New words', count: newWords?.length },
               {
@@ -266,7 +273,21 @@ function PendingVocabularyPage() {
         </Button>
       </header>
 
-      {tab === 'new' ? <NewWordRequestsReview /> : <WordUpdateReview />}
+      {tab === 'new' ? (
+        <NewWordRequestsReview />
+      ) : (
+        <WordUpdateReview requestNavigation={navigationGuard.requestNavigation} onDirtyChange={setProposalDirty} />
+      )}
+
+      <ConfirmationDialog
+        isOpen={navigationGuard.isOpen}
+        onClose={navigationGuard.stayOnPage}
+        onConfirm={navigationGuard.leavePage}
+        title="Leave without saving?"
+        description={navigationGuard.message}
+        confirmText="Leave without saving"
+        confirmVariant="destructive"
+      />
     </div>
   );
 }

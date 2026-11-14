@@ -4,28 +4,24 @@ import { Input } from '@/src/components/ui/input';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { VocabularyFormValues } from './types';
 import { Plus, Trash2 } from 'lucide-react';
-import React, { useContext } from 'react';
-import { WordFormReadOnlyContext } from './readOnlyContext';
+import React from 'react';
 
 export const PrincipalPartsEditor = () => {
   const form = useFormContext<VocabularyFormValues>();
   const parts = useFieldArray({ control: form.control, name: 'principal_parts' });
-  const readOnly = useContext(WordFormReadOnlyContext);
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <FormLabel>Principal Parts</FormLabel>
-        {!readOnly && (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => parts.append({ full_form: '', shortened_form: '' })}
-            title="Add principal part">
-            <Plus className="h-4 w-4" />
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => parts.append({ full_form: '', shortened_form: '' })}
+          title="Add principal part">
+          <Plus className="h-4 w-4" />
+        </Button>
       </div>
       <div className="space-y-3">
         {parts.fields.map((field, index) => (
@@ -56,16 +52,14 @@ export const PrincipalPartsEditor = () => {
                 </FormItem>
               )}
             />
-            {!readOnly && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => parts.remove(index)}
-                title="Remove principal part">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => parts.remove(index)}
+              title="Remove principal part">
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         ))}
         {parts.fields.length === 0 && <div className="text-sm text-gray-500">No principal parts added.</div>}

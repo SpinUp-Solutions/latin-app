@@ -437,6 +437,12 @@ export function WordDiffPanel({
               <h2 className="truncate font-serif text-xl font-semibold text-roman-red">{asText(after.word)}</h2>
               <p className="mt-0.5 text-sm text-gray-500">
                 {asText(after.part_of_speech)} · {parts.length ? `${parts.join(' and ')} changed` : 'No changes'}
+                <span className="ml-3 whitespace-nowrap text-xs">
+                  <span className="mr-1 font-semibold text-red-500">−</span>
+                  {beforeLabel}
+                  <span className="ml-3 mr-1 font-semibold text-green-600">+</span>
+                  {afterLabel}
+                </span>
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -447,12 +453,6 @@ export function WordDiffPanel({
               {actions}
             </div>
           </div>
-          <p className="mt-2 text-xs text-gray-500">
-            <span className="mr-1 font-semibold text-red-500">−</span>
-            {beforeLabel}
-            <span className="ml-4 mr-1 font-semibold text-green-600">+</span>
-            {afterLabel}
-          </p>
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">

@@ -1,10 +1,21 @@
-import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle, Clock, XCircle } from 'lucide-react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { AlertTriangle, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { AdminPillPicker } from '@/src/components/admin/shell';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/src/components/ui/alert-dialog';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
+import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { Textarea } from '@/src/components/ui/textarea';
 import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
 import type {
   VocabularyWordUpdateRequestStatus,
@@ -19,18 +30,19 @@ import {
   useGetVocabularyWordUpdateRequestsQuery,
   useSaveVocabularyWordUpdateProposalMutation,
 } from '@/src/store/api/vocabularyWordUpdateRequestsApi';
+import { stripMacrons } from '@/src/utils/exercises/helpers';
 import { WordDiffPanel } from './WordDiffPanel';
 import { WordEditPanel } from './WordEditPanel';
 import { WordUpdateNotes } from './WordUpdateNotes';
 
 const EMPTY_REQUESTS: VocabularyWordUpdateRequestSummary[] = [];
+const DISMISS_REASON_MAX_LENGTH = 2000;
 
 const STATUS_LABELS: Record<VocabularyWordUpdateRequestStatus, string> = {
   pending: 'Pending',
   approved: 'Approved',
   dismissed: 'Dismissed',
 };
-const STATUS_ICONS = { pending: Clock, approved: CheckCircle, dismissed: XCircle };
 
 /** The editor's label for each field, so a list row names changes the way the editor does. */
 const FIELD_LABELS: Record<string, string> = {
@@ -63,13 +75,71 @@ export function describeChanges({ fields, tableCells }: WordChangeSummary): stri
 }
 
 const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '');
+const formatDay = (iso: string) => new Date(iso).toLocaleDateString();
 
-type View = 'current' | 'proposed' | 'changes';
+/** Lower case and without macrons, so "ardor" finds "ārdor". */
+const searchText = (text: string) => stripMacrons(text).toLowerCase();
 
-function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
+/** Runs a step that would drop unsaved edits; the page asks the reviewer first. */
+type RequestNavigation = (navigate: () => void) => void;
+const navigateNow: RequestNavigation = navigate => navigate();
+
+function DismissDialog({
+  word,
+  onClose,
+  onConfirm,
+}: {
+  word: string;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  return (
+    <AlertDialog open onOpenChange={open => !open && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Dismiss the update to {word}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            The word stays as it is. A dismissed update cannot be reopened; it would have to be staged again.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <Textarea
+          aria-label="Reason for dismissing (optional)"
+          value={reason}
+          onChange={event => setReason(event.target.value)}
+          maxLength={DISMISS_REASON_MAX_LENGTH}
+          rows={3}
+          placeholder="Reason (optional)"
+        />
+        <AlertDialogFooter>
+          <AlertDialogCancel asChild>
+            <Button variant="outline">Cancel</Button>
+          </AlertDialogCancel>
+          <AlertDialogAction asChild>
+            <Button variant="destructive" onClick={() => onConfirm(reason.trim())}>
+              Dismiss update
+            </Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function UpdateDetail({
+  id,
+  onClosed,
+  requestNavigation,
+  onDirtyChange,
+}: {
+  id: string;
+  onClosed: () => void;
+  requestNavigation: RequestNavigation;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const { data, isLoading, isFetching, error, refetch } = useGetVocabularyWordUpdateRequestQuery(id);
-  const [view, setView] = useState<View>('changes');
   const [editing, setEditing] = useState(false);
+  const [dismissOpen, setDismissOpen] = useState(false);
   const [saveProposal, { isLoading: saving }] = useSaveVocabularyWordUpdateProposalMutation();
   const [approve, { isLoading: approving }] = useApproveVocabularyWordUpdateMutation();
   const [dismiss, { isLoading: dismissing }] = useDismissVocabularyWordUpdateMutation();
@@ -90,7 +160,6 @@ function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
     request.baseWord) as VocabularyWord;
   const beforeWord = { ...before, id: request.wordId } as VocabularyWordWithId;
   const proposedWord = { ...request.proposedWord, id: request.wordId } as VocabularyWordWithId;
-  const beforeLabel = request.status === 'approved' ? 'Before' : 'Current';
 
   const handleError = (failure: unknown, fallback: string) => {
     toast.error(getApiErrorMessage(failure, fallback));
@@ -126,9 +195,9 @@ function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
     }
   };
 
-  const handleDismiss = async () => {
+  const handleDismiss = async (reason: string) => {
     try {
-      await dismiss({ id }).unwrap();
+      await dismiss({ id, reason: reason || undefined }).unwrap();
       toast.success('Update dismissed');
       onClosed();
     } catch (failure) {
@@ -136,7 +205,7 @@ function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
     }
   };
 
-  const panelKey = `${view}-${request.version}-${liveFingerprint ?? 'deleted'}`;
+  const panelKey = `${request.version}-${liveFingerprint ?? 'deleted'}`;
 
   return (
     <>
@@ -148,7 +217,8 @@ function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
               request.source,
               `Staged ${formatDate(request.createdAt)}`,
               request.status === 'approved' && `Approved ${formatDate(request.approvedAt)}`,
-              request.status === 'dismissed' && `Dismissed ${formatDate(request.updatedAt)}`,
+              request.status === 'dismissed' &&
+                `Dismissed ${formatDate(request.updatedAt)}${request.dismissedReason ? `: ${request.dismissedReason}` : ''}`,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -156,7 +226,7 @@ function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
         </div>
         {pending && (
           <div className="flex flex-shrink-0 items-center gap-2">
-            <Button variant="outline" onClick={handleDismiss} disabled={busy || editing}>
+            <Button variant="outline" onClick={() => setDismissOpen(true)} disabled={busy || editing}>
               {dismissing ? 'Dismissing...' : 'Dismiss'}
             </Button>
             <Button onClick={handleApprove} disabled={busy || editing || !liveWord}>
@@ -175,98 +245,130 @@ function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
       {editedSinceStaged && (
         <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          This word was edited after the update was staged. The views compare the word as it is now with the proposal,
+          This word was edited after the update was staged. The changes compare the word as it is now with the proposal,
           so approving replaces those edits too.
         </div>
       )}
 
-      <div className="border-b border-gray-200 px-6 py-2">
-        <AdminPillPicker<View>
-          label="Update view"
-          value={view}
-          onValueChange={setView}
-          // A proposal is edited in the Proposed view, which stays the only one available until it is saved.
-          options={[
-            { value: 'current', label: beforeLabel, disabled: editing },
-            { value: 'proposed', label: 'Proposed' },
-            { value: 'changes', label: 'Changes', disabled: editing },
-          ]}
-        />
-      </div>
-
       <div className="min-h-0 flex-1 overflow-hidden">
-        {view === 'current' && <WordEditPanel key={panelKey} word={beforeWord} readOnly />}
-        {view === 'proposed' &&
-          (editing ? (
-            <WordEditPanel
-              key={`${panelKey}-editing`}
-              word={proposedWord}
-              onSave={handleSave}
-              updating={saving}
-              saveLabel="Save proposal"
-              allowAIAutocomplete={false}
-              actions={
-                <Button type="button" variant="outline" onClick={() => setEditing(false)} disabled={saving}>
-                  Cancel
+        {editing ? (
+          <WordEditPanel
+            key={`${panelKey}-editing`}
+            word={proposedWord}
+            onSave={handleSave}
+            updating={saving}
+            saveLabel="Save proposal"
+            allowAIAutocomplete={false}
+            onDirtyChange={onDirtyChange}
+            actions={
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => requestNavigation(() => setEditing(false))}
+                disabled={saving}>
+                Cancel
+              </Button>
+            }
+          />
+        ) : (
+          <WordDiffPanel
+            key={panelKey}
+            before={beforeWord}
+            after={proposedWord}
+            beforeLabel={request.status === 'approved' ? 'Before' : 'Current'}
+            actions={
+              pending && liveWord ? (
+                <Button type="button" variant="outline" onClick={() => setEditing(true)} disabled={busy}>
+                  Edit proposal
                 </Button>
-              }
-            />
-          ) : (
-            <WordEditPanel
-              key={panelKey}
-              word={proposedWord}
-              readOnly
-              actions={
-                pending && liveWord ? (
-                  <Button type="button" variant="outline" onClick={() => setEditing(true)} disabled={busy}>
-                    Edit proposal
-                  </Button>
-                ) : null
-              }
-            />
-          ))}
-        {view === 'changes' && (
-          <WordDiffPanel key={panelKey} before={beforeWord} after={proposedWord} beforeLabel={beforeLabel} />
+              ) : null
+            }
+          />
         )}
       </div>
+
+      {dismissOpen && (
+        <DismissDialog word={request.word} onClose={() => setDismissOpen(false)} onConfirm={handleDismiss} />
+      )}
     </>
   );
 }
 
-/** The Updates tab of Pending Review: proposed changes to existing words, each with three views. */
-export function WordUpdateReview() {
+/**
+ * The Updates tab of Pending Review: proposed changes to existing words, each
+ * shown as its changes against the word. `requestNavigation` and
+ * `onDirtyChange` let the page ask before unsaved proposal edits are dropped.
+ */
+export function WordUpdateReview({
+  requestNavigation = navigateNow,
+  onDirtyChange,
+}: {
+  requestNavigation?: RequestNavigation;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const [status, setStatus] = useState<VocabularyWordUpdateRequestStatus>('pending');
+  const [partOfSpeech, setPartOfSpeech] = useState('all');
+  const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Kept here so the notes stay open or closed while the reviewer moves between updates.
-  const [notesOpen, setNotesOpen] = useState(true);
+  const [notesOpen, setNotesOpen] = useState(false);
+  // While a proposal has unsaved edits the filters are locked, so narrowing the list cannot swap the update away.
+  const [dirty, setDirty] = useState(false);
+  const reportDirty = useCallback(
+    (value: boolean) => {
+      setDirty(value);
+      onDirtyChange?.(value);
+    },
+    [onDirtyChange]
+  );
   const { data, isLoading, isFetching, error } = useGetVocabularyWordUpdateRequestsQuery({ status });
   const requests = data?.requests ?? EMPTY_REQUESTS;
+
+  const partsOfSpeech = useMemo(() => [...new Set(requests.map(request => request.part_of_speech))].sort(), [requests]);
+  const shownPartOfSpeech = partsOfSpeech.some(part => part === partOfSpeech) ? partOfSpeech : 'all';
+  const visible = useMemo(() => {
+    const words = searchText(query).split(/\s+/).filter(Boolean);
+    return requests.filter(request => {
+      if (shownPartOfSpeech !== 'all' && request.part_of_speech !== shownPartOfSpeech) return false;
+      const haystack = searchText(`${request.word} ${request.translation} ${request.source ?? ''}`);
+      return words.every(word => haystack.includes(word));
+    });
+  }, [requests, query, shownPartOfSpeech]);
+  const filtering = visible.length !== requests.length;
+
   // Keep the chosen request while it is listed; otherwise show the first one.
-  const activeId = requests.some(request => request.id === selectedId) ? selectedId : (requests[0]?.id ?? null);
+  const activeId = visible.some(request => request.id === selectedId) ? selectedId : (visible[0]?.id ?? null);
 
   /** After an approval or dismissal, move on to the next request in the list. */
   const selectNext = () => {
-    const index = requests.findIndex(request => request.id === activeId);
-    const next = requests[index + 1] ?? requests[index - 1] ?? null;
+    const index = visible.findIndex(request => request.id === activeId);
+    const next = visible[index + 1] ?? visible[index - 1] ?? null;
     setSelectedId(next?.id ?? null);
   };
 
+  const total = `${requests.length}${data?.truncated ? '+' : ''}`;
   const countLabel = isFetching
     ? 'Loading...'
-    : `${requests.length}${data?.truncated ? '+' : ''} ${STATUS_LABELS[status]}`;
+    : filtering
+      ? `${visible.length} of ${total} shown`
+      : status === 'pending'
+        ? null
+        : `${total} ${STATUS_LABELS[status].toLowerCase()}`;
 
   return (
     <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,42%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[34%_66%] lg:grid-rows-none">
       <aside className="min-h-0 overflow-y-auto border-b border-gray-200 bg-white lg:border-b-0 lg:border-r">
-        <div className="sticky top-0 z-10 space-y-3 border-b border-gray-200 bg-white p-4">
-          <div className="flex items-center justify-between gap-3">
+        <div className="sticky top-0 z-10 space-y-2 border-b border-gray-200 bg-white p-4">
+          <div className="flex gap-2">
             <Select
               value={status}
-              onValueChange={value => {
-                setStatus(value as VocabularyWordUpdateRequestStatus);
-                setSelectedId(null);
-              }}>
-              <SelectTrigger className="h-9 w-44">
+              onValueChange={value =>
+                requestNavigation(() => {
+                  setStatus(value as VocabularyWordUpdateRequestStatus);
+                  setSelectedId(null);
+                })
+              }>
+              <SelectTrigger className="h-9 min-w-0 flex-1" aria-label="Status">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -275,8 +377,40 @@ export function WordUpdateReview() {
                 <SelectItem value="dismissed">Dismissed</SelectItem>
               </SelectContent>
             </Select>
-            <Badge variant="secondary">{countLabel}</Badge>
+            <Select value={shownPartOfSpeech} onValueChange={setPartOfSpeech} disabled={dirty}>
+              <SelectTrigger className="h-9 min-w-0 flex-1" aria-label="Part of speech">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All parts of speech</SelectItem>
+                {partsOfSpeech.map(part => (
+                  <SelectItem key={part} value={part}>
+                    {part}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+              aria-hidden="true"
+            />
+            <Input
+              type="search"
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="Search word, translation or source"
+              aria-label="Search updates"
+              disabled={dirty}
+              className="h-9 pl-8 text-sm"
+            />
+          </div>
+          {countLabel && (
+            <p className="text-xs text-gray-500" aria-live="polite">
+              {countLabel}
+            </p>
+          )}
         </div>
 
         {error ? (
@@ -285,28 +419,28 @@ export function WordUpdateReview() {
           <div className="p-6 text-sm text-gray-500">Loading updates...</div>
         ) : requests.length === 0 ? (
           <div className="p-6 text-sm text-gray-500">No {STATUS_LABELS[status].toLowerCase()} updates.</div>
+        ) : visible.length === 0 ? (
+          <div className="p-6 text-sm text-gray-500">No updates match.</div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {requests.map(request => {
-              const Icon = STATUS_ICONS[request.status];
+            {visible.map(request => {
               const isSelected = request.id === activeId;
               return (
                 <button
                   key={request.id}
                   type="button"
-                  onClick={() => setSelectedId(request.id)}
+                  aria-current={isSelected}
+                  onClick={() => request.id !== activeId && requestNavigation(() => setSelectedId(request.id))}
                   className={`w-full p-4 text-left transition-colors ${
                     isSelected
                       ? 'border-l-2 border-primary bg-primary/5'
                       : 'border-l-2 border-transparent hover:bg-roman-parchment/60'
                   }`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-gray-900">{request.word}</p>
-                      <p className="truncate text-sm text-gray-500">{request.translation}</p>
-                    </div>
-                    <Icon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500" />
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="truncate font-medium text-gray-900">{request.word}</p>
+                    <span className="flex-shrink-0 text-xs text-gray-400">{formatDay(request.createdAt)}</span>
                   </div>
+                  <p className="truncate text-sm text-gray-500">{request.translation}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{request.part_of_speech}</Badge>
                     <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-900">
@@ -323,11 +457,17 @@ export function WordUpdateReview() {
       <section className="flex min-h-0 flex-col overflow-hidden bg-white">
         {activeId ? (
           <>
-            <UpdateDetail key={activeId} id={activeId} onClosed={selectNext} />
+            <UpdateDetail
+              key={activeId}
+              id={activeId}
+              onClosed={selectNext}
+              requestNavigation={requestNavigation}
+              onDirtyChange={reportDirty}
+            />
             <WordUpdateNotes key={`notes-${activeId}`} id={activeId} open={notesOpen} onOpenChange={setNotesOpen} />
           </>
         ) : (
-          <WordEditPanel word={null} readOnly />
+          <div className="p-8 text-center text-sm text-gray-500">Select an update to review it.</div>
         )}
       </section>
     </main>
