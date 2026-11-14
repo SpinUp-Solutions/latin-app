@@ -31,6 +31,7 @@ export const APP_API_TAG_TYPES = [
   'VocabularyWordRequestList',
   'VocabularyWordUpdateRequest',
   'VocabularyWordUpdateRequestList',
+  'VocabularyWordUpdateNotes',
 ] as const;
 
 export const PRACTICE_CATEGORY_ASSIGNMENTS_TAG = {

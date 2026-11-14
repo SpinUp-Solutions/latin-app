@@ -1,11 +1,19 @@
 import { createHash } from 'node:crypto';
 import type { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import { VOCABULARY_WORD_UPDATE_REQUESTS_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import {
+  USERS_COLLECTION,
+  VOCABULARY_WORD_UPDATE_REQUEST_NOTES_SUBCOLLECTION,
+  VOCABULARY_WORD_UPDATE_REQUESTS_COLLECTION,
+  VOCABULARY_WORDS_COLLECTION,
+} from '@/shared/constants/firestore';
 import { VocabularyWordSchema, type VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { PartOfSpeechSchema } from '@/shared/types/vocabulary/schemas/enums';
 import {
+  VOCABULARY_WORD_UPDATE_NOTE_MAX_LENGTH,
   VOCABULARY_WORD_UPDATE_REQUEST_STATUSES,
+  type VocabularyWordUpdateNote,
+  type VocabularyWordUpdateNoteList,
   type VocabularyWordUpdateRequest,
   type VocabularyWordUpdateRequestDetail,
   type VocabularyWordUpdateRequestList,
@@ -23,6 +31,8 @@ import { changedWordFields, summarizeWordChanges } from '@/src/utils/vocabulary/
 
 /** The review list loads at most this many requests of one status. */
 export const WORD_UPDATE_REQUEST_LIST_LIMIT = 500;
+/** An update's notes load the newest this many. */
+export const WORD_UPDATE_NOTE_LIST_LIMIT = 200;
 /** A request holds up to three copies of a word (base, proposal, replaced), so it stays well below 1 MiB. */
 const MAX_REQUEST_BYTES = 900 * 1024;
 
@@ -425,4 +435,103 @@ export async function dismissWordUpdate(db: Firestore, actorUid: string, id: str
   });
 
   return getWordUpdateRequestDetail(db, id);
+}
+
+/*
+ * Notes live in a subcollection, not on the request: the request's update time
+ * is its version, and a note must not make another reviewer's open proposal stale.
+ */
+const notesOf = (db: Firestore, id: string) =>
+  updateRequests(db).doc(id).collection(VOCABULARY_WORD_UPDATE_REQUEST_NOTES_SUBCOLLECTION);
+
+const StoredNoteSchema = z.object({
+  text: z.string(),
+  createdBy: z.string(),
+  authorName: z.string(),
+  createdAt: z.string(),
+});
+
+/** The name a note is signed with, from the author's profile when it was written. */
+function authorNameOf(rawProfile: unknown): string {
+  const profile = rawProfile && typeof rawProfile === 'object' ? (rawProfile as Plain) : {};
+  const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+  const name =
+    [text(profile.firstName), text(profile.lastName)].filter(Boolean).join(' ') ||
+    text(profile.username) ||
+    text(profile.email);
+  return name.slice(0, 300) || 'Admin';
+}
+
+function serializeNote(snapshot: DocumentSnapshot, actorUid: string): VocabularyWordUpdateNote {
+  const parsed = StoredNoteSchema.safeParse(toJson(snapshot.data()));
+  if (!parsed.success) {
+    throw new RequestError(
+      409,
+      'INVALID_VOCABULARY_UPDATE_NOTE',
+      'A note on this update is stored in an invalid format'
+    );
+  }
+  const { text, authorName, createdAt, createdBy } = parsed.data;
+  return { id: snapshot.id, text, authorName, createdAt, mine: createdBy === actorUid };
+}
+
+/** An update's notes, oldest first. */
+export async function listWordUpdateNotes(
+  db: Firestore,
+  actorUid: string,
+  id: string
+): Promise<VocabularyWordUpdateNoteList> {
+  if (!(await updateRequests(db).doc(id).get()).exists) throw requestNotFound();
+  const snapshot = await notesOf(db, id)
+    .orderBy('createdAt', 'desc')
+    .limit(WORD_UPDATE_NOTE_LIST_LIMIT + 1)
+    .get();
+  const notes = snapshot.docs.slice(0, WORD_UPDATE_NOTE_LIST_LIMIT).map(doc => serializeNote(doc, actorUid));
+  return { notes: notes.reverse(), truncated: snapshot.docs.length > WORD_UPDATE_NOTE_LIST_LIMIT };
+}
+
+const NoteInputSchema = z.object({ text: z.string().trim().min(1).max(VOCABULARY_WORD_UPDATE_NOTE_MAX_LENGTH) });
+
+/** Adds a note to an update in any status; the update itself is not changed. */
+export async function addWordUpdateNote(
+  db: Firestore,
+  actorUid: string,
+  id: string,
+  input: unknown
+): Promise<VocabularyWordUpdateNote> {
+  const parsed = NoteInputSchema.parse(input);
+  const requestRef = updateRequests(db).doc(id);
+  const noteRef = notesOf(db, id).doc();
+
+  await db.runTransaction(async transaction => {
+    const [requestSnapshot, profileSnapshot] = await Promise.all([
+      transaction.get(requestRef),
+      transaction.get(db.collection(USERS_COLLECTION).doc(actorUid)),
+    ]);
+    if (!requestSnapshot.exists) throw requestNotFound();
+    transaction.create(noteRef, {
+      text: parsed.text,
+      createdBy: actorUid,
+      authorName: authorNameOf(profileSnapshot.data()),
+      createdAt: new Date(),
+    });
+  });
+
+  return serializeNote(await noteRef.get(), actorUid);
+}
+
+/** Deletes one of the admin's own notes. */
+export async function deleteWordUpdateNote(db: Firestore, actorUid: string, id: string, noteId: string) {
+  const noteRef = notesOf(db, id).doc(noteId);
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(noteRef);
+    if (!snapshot.exists) {
+      throw new RequestError(404, 'VOCABULARY_UPDATE_NOTE_NOT_FOUND', 'This note no longer exists');
+    }
+    if (!serializeNote(snapshot, actorUid).mine) {
+      throw new RequestError(403, 'VOCABULARY_UPDATE_NOTE_NOT_YOURS', 'You can only delete your own notes');
+    }
+    transaction.delete(noteRef);
+  });
+  return { id: noteId };
 }

@@ -17,19 +17,38 @@ import {
 } from '@/src/app/api/admin/vocabulary-word-update-requests/[id]/route';
 import { POST as approveRequest } from '@/src/app/api/admin/vocabulary-word-update-requests/[id]/approve/route';
 import { POST as dismissRequest } from '@/src/app/api/admin/vocabulary-word-update-requests/[id]/dismiss/route';
-import type { VocabularyWordUpdateRequestDetail } from '@/shared/types/vocabulary/update-requests';
+import {
+  GET as listNotes,
+  POST as addNoteRequest,
+} from '@/src/app/api/admin/vocabulary-word-update-requests/[id]/notes/route';
+import { DELETE as deleteNoteRequest } from '@/src/app/api/admin/vocabulary-word-update-requests/[id]/notes/[noteId]/route';
+import type {
+  VocabularyWordUpdateNote,
+  VocabularyWordUpdateNoteList,
+  VocabularyWordUpdateRequestDetail,
+} from '@/shared/types/vocabulary/update-requests';
 
 type Data = Record<string, unknown>;
 type Filter = [field: string, value: unknown];
-type FakeRef = { kind: 'doc'; collection: string; id: string; get: () => Promise<FakeSnapshot> };
+type Order = [field: string, direction: 'asc' | 'desc'];
+type FakeRef = {
+  kind: 'doc';
+  /** Path of the collection the document is in, such as `updates/1/notes`. */
+  parent: string;
+  id: string;
+  get: () => Promise<FakeSnapshot>;
+  collection: (name: string) => ReturnType<FakeFirestore['collection']>;
+};
 type FakeQuery = {
   kind: 'query';
   collection: string;
   filters: Filter[];
   limitValue: number;
+  order: Order | null;
   where: (field: string, operator: string, value: unknown) => FakeQuery;
   select: (...fields: string[]) => FakeQuery;
   limit: (value: number) => FakeQuery;
+  orderBy: (field: string, direction?: 'asc' | 'desc') => FakeQuery;
   get: () => Promise<{ docs: FakeSnapshot[]; empty: boolean }>;
 };
 type FakeSnapshot = {
@@ -78,26 +97,41 @@ class FakeFirestore {
   }
 
   private ref(collection: string, id: string): FakeRef {
-    return { kind: 'doc', collection, id, get: async () => this.snapshot(collection, id) };
+    return {
+      kind: 'doc',
+      parent: collection,
+      id,
+      get: async () => this.snapshot(collection, id),
+      collection: name => this.collection(`${collection}/${id}/${name}`),
+    };
   }
 
-  private query(collection: string, filters: Filter[] = [], limitValue = Infinity): FakeQuery {
+  private query(collection: string, filters: Filter[] = [], limitValue = Infinity, order: Order | null = null) {
     const query: FakeQuery = {
       kind: 'query',
       collection,
       filters,
       limitValue,
-      where: (field, _operator, value) => this.query(collection, [...filters, [field, value]], limitValue),
+      order,
+      where: (field, _operator, value) => this.query(collection, [...filters, [field, value]], limitValue, order),
       select: () => query,
-      limit: value => this.query(collection, filters, value),
+      limit: value => this.query(collection, filters, value, order),
+      orderBy: (field, direction = 'asc') => this.query(collection, filters, limitValue, [field, direction]),
       get: async () => this.run(query),
     };
     return query;
   }
 
   private run(query: FakeQuery) {
+    const sortValue = (data: Data) => {
+      const value = data[query.order![0]];
+      return value instanceof Date ? value.getTime() : (value as number);
+    };
     const docs = [...(this.docs.get(query.collection)?.entries() ?? [])]
       .filter(([, stored]) => query.filters.every(([field, value]) => stored.data[field] === value))
+      .sort(([, left], [, right]) =>
+        query.order ? (sortValue(left.data) - sortValue(right.data)) * (query.order[1] === 'desc' ? -1 : 1) : 0
+      )
       .slice(0, query.limitValue)
       .map(([id]) => this.snapshot(query.collection, id));
     return { docs, empty: docs.length === 0 };
@@ -107,6 +141,7 @@ class FakeFirestore {
     return {
       doc: (id?: string) => this.ref(collection, id ?? `auto-${++this.autoId}`),
       where: (field: string, operator: string, value: unknown) => this.query(collection).where(field, operator, value),
+      orderBy: (field: string, direction?: 'asc' | 'desc') => this.query(collection).orderBy(field, direction),
     };
   }
 
@@ -114,18 +149,19 @@ class FakeFirestore {
     const writes: Array<() => void> = [];
     const result = await callback({
       get: async (target: FakeRef | FakeQuery) =>
-        target.kind === 'query' ? this.run(target) : this.snapshot(target.collection, target.id),
+        target.kind === 'query' ? this.run(target) : this.snapshot(target.parent, target.id),
       create: (ref: FakeRef, data: Data) =>
         writes.push(() => {
-          if (this.read(ref.collection, ref.id)) throw new Error('already exists');
-          this.seed(ref.collection, ref.id, data);
+          if (this.read(ref.parent, ref.id)) throw new Error('already exists');
+          this.seed(ref.parent, ref.id, data);
         }),
       set: (ref: FakeRef, data: Data, options?: { merge?: boolean }) =>
         writes.push(() =>
-          this.seed(ref.collection, ref.id, { ...(options?.merge ? this.read(ref.collection, ref.id) : {}), ...data })
+          this.seed(ref.parent, ref.id, { ...(options?.merge ? this.read(ref.parent, ref.id) : {}), ...data })
         ),
       update: (ref: FakeRef, data: Data) =>
-        writes.push(() => this.seed(ref.collection, ref.id, { ...this.read(ref.collection, ref.id), ...data })),
+        writes.push(() => this.seed(ref.parent, ref.id, { ...this.read(ref.parent, ref.id), ...data })),
+      delete: (ref: FakeRef) => writes.push(() => this.docs.get(ref.parent)?.delete(ref.id)),
     });
     writes.forEach(write => write());
     return result;
@@ -178,6 +214,7 @@ const proposal = {
 
 const request = (url: string, body: unknown = {}) => ({ url, json: async () => body }) as never;
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
+const noteParams = (id: string, noteId: string) => ({ params: Promise.resolve({ id, noteId }) });
 type Response<T = Record<string, unknown>> = { status: number; body: T };
 
 async function stage(body: Data = {}) {
@@ -209,6 +246,27 @@ async function approve(id: string, body?: Data) {
     params(id)
   )) as unknown as Response<VocabularyWordUpdateRequestDetail & { code?: string }>;
 }
+
+async function notes(id: string) {
+  return (await listNotes(request(`http://localhost/x/${id}/notes`), params(id))) as unknown as Response<
+    VocabularyWordUpdateNoteList & { code?: string }
+  >;
+}
+
+async function addNote(id: string, text: unknown) {
+  return (await addNoteRequest(request(`http://localhost/x/${id}/notes`, { text }), params(id))) as unknown as Response<
+    VocabularyWordUpdateNote & { code?: string }
+  >;
+}
+
+async function deleteNote(id: string, noteId: string) {
+  return (await deleteNoteRequest(
+    request(`http://localhost/x/${id}/notes/${noteId}`),
+    noteParams(id, noteId)
+  )) as unknown as Response<{ id?: string; code?: string }>;
+}
+
+const asAdmin = (uid: string) => jest.mocked(verifyAdminAccess).mockResolvedValue({ uid } as never);
 
 beforeEach(() => {
   mockDb = new FakeFirestore();
@@ -439,6 +497,92 @@ describe('editing and dismissing a word update', () => {
   });
 });
 
+describe('notes on a word update', () => {
+  afterEach(() => jest.useRealTimers());
+
+  beforeEach(() => {
+    mockDb.seed('users', 'admin-1', { role: 'admin', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@x.invalid' });
+    mockDb.seed('users', 'admin-2', { role: 'admin', email: 'bo@x.invalid' });
+  });
+
+  it('signs each note with its author and lists them oldest first', async () => {
+    const { body } = await stage();
+    jest.useFakeTimers({ now: new Date('2026-11-14T10:00:00.000Z'), doNotFake: ['nextTick', 'setImmediate'] });
+
+    const added = await addNote(body.id, '  ārdor has a long a in Wiktionary.  ');
+    jest.setSystemTime(new Date('2026-11-14T10:05:00.000Z'));
+    asAdmin('admin-2');
+    await addNote(body.id, 'I think the genitive is wrong too.');
+    jest.useRealTimers();
+
+    expect(added).toMatchObject({ status: 201, body: { text: 'ārdor has a long a in Wiktionary.', mine: true } });
+    const listed = await notes(body.id);
+    expect(listed.body).toMatchObject({
+      truncated: false,
+      notes: [
+        { text: 'ārdor has a long a in Wiktionary.', authorName: 'Ada Lovelace', mine: false },
+        { text: 'I think the genitive is wrong too.', authorName: 'bo@x.invalid', mine: true },
+      ],
+    });
+  });
+
+  it('leaves an open proposal approvable, since a note does not change the update', async () => {
+    const { body } = await stage();
+    const opened = (await detail(body.id)).body;
+
+    await addNote(body.id, 'Looks right to me.');
+    const response = await approve(body.id, { version: opened.request.version });
+
+    expect(response.status).toBe(200);
+    expect(mockDb.read(WORDS, 'ardor')).toMatchObject({ word: 'ārdor' });
+  });
+
+  it('takes notes on updates that are no longer pending', async () => {
+    const { body } = await stage();
+    await approve(body.id);
+
+    expect((await addNote(body.id, 'Approved after checking Lewis & Short.')).status).toBe(201);
+  });
+
+  it('rejects an empty note and an update that does not exist', async () => {
+    const { body } = await stage();
+
+    expect(await addNote(body.id, '   ')).toMatchObject({ status: 400, body: { code: 'VALIDATION_ERROR' } });
+    expect(await addNote('missing', 'Wrong')).toMatchObject({
+      status: 404,
+      body: { code: 'VOCABULARY_UPDATE_REQUEST_NOT_FOUND' },
+    });
+    expect(await notes('missing')).toMatchObject({ status: 404 });
+    expect((await notes(body.id)).body.notes).toEqual([]);
+  });
+
+  it("deletes an admin's own note but not someone else's", async () => {
+    const { body } = await stage();
+    const mine = (await addNote(body.id, 'Typo in my note')).body;
+    asAdmin('admin-2');
+    const theirs = (await addNote(body.id, 'The plural is wrong')).body;
+    asAdmin('admin-1');
+
+    expect(await deleteNote(body.id, theirs.id)).toMatchObject({
+      status: 403,
+      body: { code: 'VOCABULARY_UPDATE_NOTE_NOT_YOURS' },
+    });
+    expect(await deleteNote(body.id, mine.id)).toMatchObject({ status: 200, body: { id: mine.id } });
+    expect(await deleteNote(body.id, mine.id)).toMatchObject({
+      status: 404,
+      body: { code: 'VOCABULARY_UPDATE_NOTE_NOT_FOUND' },
+    });
+    expect((await notes(body.id)).body.notes.map(note => note.text)).toEqual(['The plural is wrong']);
+  });
+
+  it('fails closed on a note stored in an invalid format', async () => {
+    const { body } = await stage();
+    mockDb.seed(`${UPDATES}/${body.id}/notes`, 'bad', { text: 42 });
+
+    expect(await notes(body.id)).toMatchObject({ status: 409, body: { code: 'INVALID_VOCABULARY_UPDATE_NOTE' } });
+  });
+});
+
 it('requires an admin for every route', async () => {
   jest.mocked(verifyAdminAccess).mockRejectedValue(new AdminAccessError('Admin access required', 403));
   const responses = (await Promise.all([
@@ -448,8 +592,11 @@ it('requires an admin for every route', async () => {
     saveProposal(request('http://localhost/x/1', { proposedWord: proposal, version: '1:0' }), params('1')),
     approveRequest(request('http://localhost/x/1', { version: '1:0', wordFingerprint: '1:0' }), params('1')),
     dismissRequest(request('http://localhost/x/1'), params('1')),
+    listNotes(request('http://localhost/x/1/notes'), params('1')),
+    addNoteRequest(request('http://localhost/x/1/notes', { text: 'Wrong' }), params('1')),
+    deleteNoteRequest(request('http://localhost/x/1/notes/2'), noteParams('1', '2')),
   ])) as unknown as Response[];
 
-  expect(responses.map(response => response.status)).toEqual([403, 403, 403, 403, 403, 403]);
+  expect(responses.map(response => response.status)).toEqual([403, 403, 403, 403, 403, 403, 403, 403, 403]);
   expect(mockDb.docs.get(UPDATES)).toBeUndefined();
 });

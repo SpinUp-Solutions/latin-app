@@ -5,6 +5,9 @@ export const VOCABULARY_WORD_UPDATE_REQUEST_STATUSES = ['pending', 'approved', '
 
 export type VocabularyWordUpdateRequestStatus = (typeof VOCABULARY_WORD_UPDATE_REQUEST_STATUSES)[number];
 
+/** Longest note an admin can leave on an update. */
+export const VOCABULARY_WORD_UPDATE_NOTE_MAX_LENGTH = 4000;
+
 export type WordChangeSummary = {
   /** Changed fields other than the inflection table, such as "translation". */
   fields: string[];
@@ -57,5 +60,22 @@ export type VocabularyWordUpdateRequestDetail = {
 export type VocabularyWordUpdateRequestList = {
   requests: VocabularyWordUpdateRequestSummary[];
   /** True when there are more requests with this status than the list returns. */
+  truncated: boolean;
+};
+
+/** An admin's note on an update, such as why the word is wrong. */
+export type VocabularyWordUpdateNote = {
+  id: string;
+  text: string;
+  authorName: string;
+  createdAt: string;
+  /** True for the signed-in admin's own notes, which they can delete. */
+  mine: boolean;
+};
+
+export type VocabularyWordUpdateNoteList = {
+  /** Oldest first. */
+  notes: VocabularyWordUpdateNote[];
+  /** True when there are older notes than the list returns. */
   truncated: boolean;
 };

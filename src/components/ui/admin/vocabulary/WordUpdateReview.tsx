@@ -21,6 +21,7 @@ import {
 } from '@/src/store/api/vocabularyWordUpdateRequestsApi';
 import { WordDiffPanel } from './WordDiffPanel';
 import { WordEditPanel } from './WordEditPanel';
+import { WordUpdateNotes } from './WordUpdateNotes';
 
 const EMPTY_REQUESTS: VocabularyWordUpdateRequestSummary[] = [];
 
@@ -236,6 +237,8 @@ function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
 export function WordUpdateReview() {
   const [status, setStatus] = useState<VocabularyWordUpdateRequestStatus>('pending');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Kept here so the notes stay open or closed while the reviewer moves between updates.
+  const [notesOpen, setNotesOpen] = useState(true);
   const { data, isLoading, isFetching, error } = useGetVocabularyWordUpdateRequestsQuery({ status });
   const requests = data?.requests ?? EMPTY_REQUESTS;
   // Keep the chosen request while it is listed; otherwise show the first one.
@@ -319,7 +322,10 @@ export function WordUpdateReview() {
 
       <section className="flex min-h-0 flex-col overflow-hidden bg-white">
         {activeId ? (
-          <UpdateDetail key={activeId} id={activeId} onClosed={selectNext} />
+          <>
+            <UpdateDetail key={activeId} id={activeId} onClosed={selectNext} />
+            <WordUpdateNotes key={`notes-${activeId}`} id={activeId} open={notesOpen} onOpenChange={setNotesOpen} />
+          </>
         ) : (
           <WordEditPanel word={null} readOnly />
         )}

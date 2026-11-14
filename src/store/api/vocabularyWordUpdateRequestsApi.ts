@@ -2,6 +2,8 @@ import { appApi, withSubscriptionDefaults } from './appApi';
 import { STUDENT_POOLS_TAG } from './tags';
 import type { VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import type {
+  VocabularyWordUpdateNote,
+  VocabularyWordUpdateNoteList,
   VocabularyWordUpdateRequestDetail,
   VocabularyWordUpdateRequestList,
   VocabularyWordUpdateRequestStatus,
@@ -64,6 +66,28 @@ export const vocabularyWordUpdateRequestsApi = appApi.injectEndpoints({
       }),
       invalidatesTags: (result, error, { id }) => detailTags(id),
     }),
+
+    getVocabularyWordUpdateNotes: builder.query<VocabularyWordUpdateNoteList, string>({
+      query: id => `/admin/vocabulary-word-update-requests/${id}/notes`,
+      providesTags: (result, error, id) => [{ type: 'VocabularyWordUpdateNotes', id }],
+    }),
+
+    addVocabularyWordUpdateNote: builder.mutation<VocabularyWordUpdateNote, { id: string; text: string }>({
+      query: ({ id, text }) => ({
+        url: `/admin/vocabulary-word-update-requests/${id}/notes`,
+        method: 'POST',
+        body: { text },
+      }),
+      invalidatesTags: (result, error, { id }) => [{ type: 'VocabularyWordUpdateNotes', id }],
+    }),
+
+    deleteVocabularyWordUpdateNote: builder.mutation<{ id: string }, { id: string; noteId: string }>({
+      query: ({ id, noteId }) => ({
+        url: `/admin/vocabulary-word-update-requests/${id}/notes/${noteId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (result, error, { id }) => [{ type: 'VocabularyWordUpdateNotes', id }],
+    }),
   }),
 });
 
@@ -82,8 +106,15 @@ export const useGetVocabularyWordUpdateRequestQuery = withSubscriptionDefaults(
   REVIEW_DEFAULTS
 );
 
+export const useGetVocabularyWordUpdateNotesQuery = withSubscriptionDefaults(
+  vocabularyWordUpdateRequestsApi.useGetVocabularyWordUpdateNotesQuery,
+  REVIEW_DEFAULTS
+);
+
 export const {
   useSaveVocabularyWordUpdateProposalMutation,
   useApproveVocabularyWordUpdateMutation,
   useDismissVocabularyWordUpdateMutation,
+  useAddVocabularyWordUpdateNoteMutation,
+  useDeleteVocabularyWordUpdateNoteMutation,
 } = vocabularyWordUpdateRequestsApi;
