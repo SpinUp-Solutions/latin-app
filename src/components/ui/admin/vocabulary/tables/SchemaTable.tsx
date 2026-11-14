@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { z } from 'zod';
-import type { TableGrid, NestedTableGrid } from '@/src/types/schema-introspection';
+import type { CellDef, TableGrid, NestedTableGrid } from '@/src/types/schema-introspection';
 import type { EditingCell } from '@/src/types/admin-vocabulary';
 import { introspectSchema } from '@/src/utils/schema-introspector';
 import { buildTableGrid } from '@/src/utils/table-builder';
@@ -21,6 +21,8 @@ interface SchemaTableProps {
   editingCell?: EditingCell | null;
   editingCellValue?: string;
   editCallbacks?: EditCallbacks;
+  renderCell?: (cell: CellDef) => React.ReactNode;
+  cellFilter?: (cell: CellDef) => boolean;
 }
 
 function isNestedGrid(grid: TableGrid | NestedTableGrid): grid is NestedTableGrid {
@@ -39,6 +41,8 @@ export const SchemaTable: React.FC<SchemaTableProps> = ({
   editingCell,
   editingCellValue = '',
   editCallbacks,
+  renderCell,
+  cellFilter,
 }) => {
   const schemaNode = useMemo(() => introspectSchema(schema), [schema]);
   const gridData = buildTableGrid(schemaNode, data);
@@ -56,6 +60,8 @@ export const SchemaTable: React.FC<SchemaTableProps> = ({
               editingCell={editingCell}
               editingCellValue={editingCellValue}
               editCallbacks={editCallbacks}
+              renderCell={renderCell}
+              cellFilter={cellFilter}
             />
           ) : (
             <GridTable
@@ -65,6 +71,8 @@ export const SchemaTable: React.FC<SchemaTableProps> = ({
               editingCell={editingCell}
               editingCellValue={editingCellValue}
               editCallbacks={editCallbacks}
+              renderCell={renderCell}
+              cellFilter={cellFilter}
             />
           )}
         </div>

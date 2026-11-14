@@ -7,7 +7,9 @@ import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import {
   useApproveVocabularyWordRequestMutation,
@@ -15,6 +17,7 @@ import {
   useGetVocabularyWordRequestsQuery,
   useUpdateVocabularyWordRequestMutation,
 } from '@/src/store/api/vocabularyWordRequestsApi';
+import { useGetVocabularyWordUpdateRequestsQuery } from '@/src/store/api/vocabularyWordUpdateRequestsApi';
 import type { VocabularyWordRequestStatus } from '@/shared/types/vocabulary/requests';
 import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
 
@@ -56,7 +59,8 @@ const getRequestErrorMessage = (error: unknown): string | null => {
   return 'Could not load vocabulary requests';
 };
 
-function PendingVocabularyPage() {
+/** AI-generated drafts of words that do not exist yet. */
+function NewWordRequestsReview() {
   const [status, setStatus] = useState<VocabularyWordRequestStatus>('pending');
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
@@ -137,106 +141,143 @@ function PendingVocabularyPage() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-roman-marble">
-      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <div>
-          <h1 className="text-xl font-serif tracking-wide">Pending Vocabulary</h1>
-          <p className="text-sm text-roman-stone">Review AI-generated vocabulary drafts</p>
+    <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,42%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[34%_66%] lg:grid-rows-none">
+      <aside className="min-h-0 overflow-y-auto border-b border-gray-200 bg-white lg:border-b-0 lg:border-r">
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <Select value={status} onValueChange={value => setStatus(value as VocabularyWordRequestStatus)}>
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="dismissed">Dismissed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Badge variant="secondary">
+              {isFetching ? 'Loading...' : `${requests.length} ${STATUS_LABELS[status]}`}
+            </Badge>
+          </div>
+        </div>
+
+        {requestErrorMessage ? (
+          <div className="p-6 text-sm text-red-700">Could not load requests: {requestErrorMessage}</div>
+        ) : isLoading ? (
+          <div className="p-6 text-sm text-gray-500">Loading requests...</div>
+        ) : requests.length === 0 ? (
+          <div className="p-6 text-sm text-gray-500">No {STATUS_LABELS[status].toLowerCase()} requests.</div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {requests.map(request => {
+              const Icon = statusIcon[request.status];
+              const isSelected = request.id === selectedRequestId;
+
+              return (
+                <button
+                  key={request.id}
+                  type="button"
+                  onClick={() => setSelectedRequestId(request.id)}
+                  className={`w-full p-4 text-left transition-colors ${
+                    isSelected
+                      ? 'border-l-2 border-primary bg-primary/5'
+                      : 'border-l-2 border-transparent hover:bg-roman-parchment/60'
+                  }`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{request.draftWord.word}</p>
+                      <p className="text-sm text-gray-500 truncate">{request.draftWord.translation}</p>
+                    </div>
+                    <Icon className="h-4 w-4 text-gray-500 mt-1 flex-shrink-0" />
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Badge variant="outline">{request.draftWord.part_of_speech}</Badge>
+                    <span className="text-xs text-gray-500">{new Date(request.updatedAt).toLocaleString()}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </aside>
+
+      <section className="min-h-0 flex flex-col overflow-hidden bg-white">
+        {selectedRequest && (
+          <div className="border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm text-gray-500 truncate">Source: {selectedRequest.sourceText}</p>
+              <p className="text-xs text-gray-400 truncate">
+                Candidate: {selectedRequest.selectedCandidate.word} ({selectedRequest.selectedCandidate.confidence})
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedRequest.status === 'pending' && (
+                <>
+                  <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>
+                    {dismissing ? 'Dismissing...' : 'Dismiss'}
+                  </Button>
+                  <Button onClick={handleApprove} disabled={approving || dismissing || updating}>
+                    {approving ? 'Approving...' : 'Approve'}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} />
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function TabCount({ count }: { count: string | null }) {
+  if (!count) return null;
+  return (
+    <span className="ml-2 rounded-full bg-roman-parchment px-1.5 text-xs leading-5 text-roman-stone">{count}</span>
+  );
+}
+
+function PendingVocabularyPage() {
+  const [tab, setTab] = useState<'new' | 'updates'>('new');
+  const { data: newWords } = useGetVocabularyWordRequestsQuery({ status: 'pending' });
+  const { data: updates } = useGetVocabularyWordUpdateRequestsQuery({ status: 'pending' });
+
+  return (
+    <Tabs
+      value={tab}
+      onValueChange={value => setTab(value as 'new' | 'updates')}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-roman-marble">
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between gap-4 flex-shrink-0">
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-xl font-serif tracking-wide">Pending Vocabulary</h1>
+            <p className="text-sm text-roman-stone">Review new words and changes to existing words</p>
+          </div>
+          <TabsList>
+            <TabsTrigger value="new">
+              New words
+              <TabCount count={newWords ? String(newWords.length) : null} />
+            </TabsTrigger>
+            <TabsTrigger value="updates">
+              Updates
+              <TabCount count={updates ? `${updates.requests.length}${updates.truncated ? '+' : ''}` : null} />
+            </TabsTrigger>
+          </TabsList>
         </div>
         <Button asChild size="sm" variant="outline">
           <Link href="/admin/vocabulary">View All Words</Link>
         </Button>
       </header>
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,42%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[34%_66%] lg:grid-rows-none">
-        <aside className="min-h-0 overflow-y-auto border-b border-gray-200 bg-white lg:border-b-0 lg:border-r">
-          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <Select value={status} onValueChange={value => setStatus(value as VocabularyWordRequestStatus)}>
-                <SelectTrigger className="h-9 w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="dismissed">Dismissed</SelectItem>
-                </SelectContent>
-              </Select>
-              <Badge variant="secondary">
-                {isFetching ? 'Loading...' : `${requests.length} ${STATUS_LABELS[status]}`}
-              </Badge>
-            </div>
-          </div>
-
-          {requestErrorMessage ? (
-            <div className="p-6 text-sm text-red-700">Could not load requests: {requestErrorMessage}</div>
-          ) : isLoading ? (
-            <div className="p-6 text-sm text-gray-500">Loading requests...</div>
-          ) : requests.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">No {STATUS_LABELS[status].toLowerCase()} requests.</div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {requests.map(request => {
-                const Icon = statusIcon[request.status];
-                const isSelected = request.id === selectedRequestId;
-
-                return (
-                  <button
-                    key={request.id}
-                    type="button"
-                    onClick={() => setSelectedRequestId(request.id)}
-                    className={`w-full p-4 text-left transition-colors ${
-                      isSelected
-                        ? 'border-l-2 border-primary bg-primary/5'
-                        : 'border-l-2 border-transparent hover:bg-roman-parchment/60'
-                    }`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{request.draftWord.word}</p>
-                        <p className="text-sm text-gray-500 truncate">{request.draftWord.translation}</p>
-                      </div>
-                      <Icon className="h-4 w-4 text-gray-500 mt-1 flex-shrink-0" />
-                    </div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <Badge variant="outline">{request.draftWord.part_of_speech}</Badge>
-                      <span className="text-xs text-gray-500">{new Date(request.updatedAt).toLocaleString()}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </aside>
-
-        <section className="min-h-0 flex flex-col overflow-hidden bg-white">
-          {selectedRequest && (
-            <div className="border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm text-gray-500 truncate">Source: {selectedRequest.sourceText}</p>
-                <p className="text-xs text-gray-400 truncate">
-                  Candidate: {selectedRequest.selectedCandidate.word} ({selectedRequest.selectedCandidate.confidence})
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {selectedRequest.status === 'pending' && (
-                  <>
-                    <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>
-                      {dismissing ? 'Dismissing...' : 'Dismiss'}
-                    </Button>
-                    <Button onClick={handleApprove} disabled={approving || dismissing || updating}>
-                      {approving ? 'Approving...' : 'Approve'}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} />
-          </div>
-        </section>
-      </main>
-    </div>
+      <TabsContent value="new" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <NewWordRequestsReview />
+      </TabsContent>
+      <TabsContent value="updates" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <WordUpdateReview />
+      </TabsContent>
+    </Tabs>
   );
 }
 

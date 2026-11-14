@@ -127,6 +127,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /vocabulary_word_update_requests/{document=**} {
+      allow read, write: if false;
+    }
+
     match /deleted_vocabulary_pools/{document=**} {
       allow read, write: if false;
     }
@@ -196,6 +200,7 @@ service cloud.firestore {
         && collection != 'vocabulary_words_v5'
         && collection != 'vocabulary_words_v4'
         && collection != 'vocabulary_word_requests'
+        && collection != 'vocabulary_word_update_requests'
         && collection != 'deleted_vocabulary_pools'
         && collection != 'vocabulary_pool_archives'
         && collection != 'vocabulary_pool_deletion_challenges'
