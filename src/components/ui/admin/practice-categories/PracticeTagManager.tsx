@@ -1,5 +1,7 @@
 'use client';
 
+import { AdminPillPicker } from '@/src/components/admin/shell/AdminPillPicker';
+
 import { useMemo, useState } from 'react';
 import { DndContext, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import {
@@ -363,36 +365,15 @@ export function PracticeTagManager({
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div
-            className="inline-flex w-fit gap-1 rounded-xl border border-border/80 bg-white/80 p-1.5 shadow-sm"
-            aria-label="Tag status">
-            <Button
-              type="button"
-              size="sm"
-              variant={view === 'active' ? 'default' : 'ghost'}
-              aria-pressed={view === 'active'}
-              className={
-                view === 'active'
-                  ? 'h-9 rounded-lg px-3.5 text-xs font-semibold shadow-[0_2px_6px_hsl(var(--primary)/0.22)]'
-                  : 'h-9 rounded-lg px-3.5 text-xs font-medium text-roman-stone hover:bg-roman-parchment hover:text-foreground'
-              }
-              onClick={() => setView('active')}>
-              Active <span className="ml-1 tabular-nums">{activeTags.length}</span>
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={view === 'archived' ? 'default' : 'ghost'}
-              aria-pressed={view === 'archived'}
-              className={
-                view === 'archived'
-                  ? 'h-9 rounded-lg px-3.5 text-xs font-semibold shadow-[0_2px_6px_hsl(var(--primary)/0.22)]'
-                  : 'h-9 rounded-lg px-3.5 text-xs font-medium text-roman-stone hover:bg-roman-parchment hover:text-foreground'
-              }
-              onClick={() => setView('archived')}>
-              Archived <span className="ml-1 tabular-nums">{archivedTags.length}</span>
-            </Button>
-          </div>
+          <AdminPillPicker
+            label="Tag status"
+            value={view}
+            onValueChange={setView}
+            options={[
+              { value: 'active', label: 'Active', count: activeTags.length },
+              { value: 'archived', label: 'Archived', count: archivedTags.length },
+            ]}
+          />
           <div className="relative min-w-0 flex-1 sm:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <Input

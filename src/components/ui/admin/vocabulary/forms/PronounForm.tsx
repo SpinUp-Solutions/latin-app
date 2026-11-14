@@ -1,3 +1,5 @@
+import { WORD_FIELDS } from '@/src/components/ui/admin/vocabulary/wordFields';
+import { WordFieldLayout } from './WordFieldLayout';
 import { useFormContext } from 'react-hook-form';
 import { VocabularyFormValues } from './types';
 import { pronounTypeOptions, pronounPersonOptions } from '@/src/utils/vocabulary/formOptions';
@@ -8,22 +10,20 @@ export const PronounForm = () => {
   const pronounType = form.watch('pronoun_type');
 
   return (
-    <div className="space-y-6">
-      <AIEnumSelect
-        name="pronoun_type"
-        label="Pronoun Type"
-        placeholder="Select pronoun type"
-        options={pronounTypeOptions}
-        onValueChange={value => {
-          if (value !== 'personal') {
-            form.setValue('person', null);
-          }
-        }}
-      />
-
-      {pronounType === 'personal' && (
-        <AIEnumSelect name="person" label="Person" placeholder="Select person" options={pronounPersonOptions} />
+    <WordFieldLayout
+      section="pronoun"
+      visible={name => name !== 'person' || pronounType === 'personal'}
+      renderField={name => (
+        <AIEnumSelect
+          name={name}
+          label={WORD_FIELDS[name].label}
+          placeholder={name === 'person' ? 'Select person' : 'Select pronoun type'}
+          options={name === 'person' ? pronounPersonOptions : pronounTypeOptions}
+          onValueChange={value => {
+            if (name === 'pronoun_type' && value !== 'personal') form.setValue('person', null);
+          }}
+        />
       )}
-    </div>
+    />
   );
 };

@@ -61,13 +61,13 @@ const SUMMARIES = [summary('u1', 'saepe', 'often'), summary('u2', 'diū', 'for a
 type Request = string | { url: string; method?: string; body?: unknown };
 
 /** Serves the update routes from memory. */
-function serveUpdates() {
+function serveUpdates(invalidCount = 0) {
   mockBaseQuery.mockImplementation(async (request: Request) => {
     const url = typeof request === 'string' ? request : request.url;
     const method = typeof request === 'string' ? 'GET' : (request.method ?? 'GET');
     const base = '/admin/vocabulary-word-update-requests';
     if (method === 'GET' && url === `${base}?status=pending`)
-      return { data: { requests: SUMMARIES, truncated: false } };
+      return { data: { requests: SUMMARIES, truncated: false, invalidCount } };
     if (method === 'GET' && url.endsWith('/notes')) return { data: { notes: [], truncated: false } };
     const found = SUMMARIES.find(item => url === `${base}/${item.id}` || url === `${base}/${item.id}/dismiss`);
     if (!found) return { error: { status: 404, data: null } };
@@ -83,7 +83,6 @@ function serveUpdates() {
           createdBy: 'admin',
           approvedBy: null,
           approvedAt: null,
-          appliedFromWord: null,
           dismissedBy: null,
           dismissedReason: null,
         },
@@ -170,4 +169,12 @@ it('reports unsaved proposal edits, locks the filters and asks before another up
   expect(requestNavigation).toHaveBeenCalledTimes(1);
   // Nothing moves until the page lets the navigation through.
   expect(screen.getByDisplayValue('often, frequently')).toBeInTheDocument();
+});
+
+it('reports malformed updates while keeping valid reviews available', async () => {
+  serveUpdates(1);
+  renderReview();
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('1 invalid update could not be loaded.');
+  expect(await screen.findByRole('button', { name: 'Edit proposal' })).toBeEnabled();
 });

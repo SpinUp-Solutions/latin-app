@@ -35,7 +35,7 @@ export type VocabularyWordUpdateRequestSummary = {
 
 export type VocabularyWordUpdateRequest = VocabularyWordUpdateRequestSummary & {
   proposedWord: VocabularyWord;
-  /** The live word when the update was staged. */
+  /** The word at staging, or the word replaced when approved. */
   baseWord: VocabularyWord;
   baseFingerprint: string;
   /** Version of this request; saving or approving requires the version the admin reviewed. */
@@ -43,8 +43,6 @@ export type VocabularyWordUpdateRequest = VocabularyWordUpdateRequestSummary & {
   createdBy: string;
   approvedBy: string | null;
   approvedAt: string | null;
-  /** The live word the approval replaced. */
-  appliedFromWord: VocabularyWord | null;
   dismissedBy: string | null;
   dismissedReason: string | null;
 };
@@ -61,6 +59,8 @@ export type VocabularyWordUpdateRequestList = {
   requests: VocabularyWordUpdateRequestSummary[];
   /** True when there are more requests with this status than the list returns. */
   truncated: boolean;
+  /** Malformed stored summaries excluded from this list. */
+  invalidCount: number;
 };
 
 /** An admin's note on an update, such as why the word is wrong. */

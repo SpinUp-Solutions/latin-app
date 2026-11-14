@@ -15,15 +15,17 @@ interface AdminPillPickerProps<T extends string> {
   options: AdminPillOption<T>[];
   label: string;
   className?: string;
+  role?: 'group' | 'tablist';
 }
 
-/** The pill picker of the Manage Tests filters. */
+/** Shared single-choice filters for admin pages. */
 export function AdminPillPicker<T extends string>({
   value,
   onValueChange,
   options,
   label,
   className,
+  role = 'group',
 }: AdminPillPickerProps<T>) {
   return (
     <div
@@ -31,16 +33,20 @@ export function AdminPillPicker<T extends string>({
         'flex w-fit max-w-full gap-1.5 overflow-x-auto rounded-xl border border-border/80 bg-white/80 p-1.5 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className
       )}
-      role="group"
+      role={role}
       aria-label={label}>
       {options.map(option => {
         const selected = option.value === value;
         return (
           <Button
+            type="button"
+            tabIndex={0}
             key={option.value}
             size="sm"
             variant={selected ? 'default' : 'ghost'}
-            aria-pressed={selected}
+            role={role === 'tablist' ? 'tab' : undefined}
+            aria-selected={role === 'tablist' ? selected : undefined}
+            aria-pressed={role === 'group' ? selected : undefined}
             disabled={option.disabled}
             className={
               selected

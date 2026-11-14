@@ -1,5 +1,7 @@
 'use client';
 
+import { AdminPillPicker } from '@/src/components/admin/shell/AdminPillPicker';
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DndContext, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -491,26 +493,17 @@ function PracticeCategoriesPage() {
                 tabIndex={-1}>
                 {practiceLessonTypeLabel(lessonType)} categories
               </h2>
-              <div
-                className="mt-3 inline-flex gap-1 rounded-xl border border-border/80 bg-white/80 p-1.5 shadow-sm"
-                role="group"
-                aria-label="Category status">
-                {(['active', 'archived'] as const).map(option => (
-                  <button
-                    key={option}
-                    type="button"
-                    aria-pressed={status === option}
-                    disabled={orderPending}
-                    onClick={() => guardContextChange(lessonType, option)}
-                    className={`h-9 rounded-lg border border-transparent px-3.5 text-xs font-medium transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
-                      status === option
-                        ? 'border-primary/20 bg-primary text-primary-foreground shadow-[0_2px_6px_hsl(var(--primary)/0.22)]'
-                        : 'text-roman-stone hover:bg-roman-parchment hover:text-foreground'
-                    }`}>
-                    {option === 'active' ? 'Active' : 'Archived'}
-                  </button>
-                ))}
-              </div>
+              <AdminPillPicker
+                label="Category status"
+                value={status}
+                onValueChange={option => guardContextChange(lessonType, option)}
+                className="mt-3"
+                options={(['active', 'archived'] as const).map(value => ({
+                  value,
+                  label: value === 'active' ? 'Active' : 'Archived',
+                  disabled: orderPending,
+                }))}
+              />
             </div>
 
             <div className="w-full max-w-md">

@@ -19,6 +19,7 @@ interface ConfirmationDialogProps {
   onConfirm: () => void;
   title: string;
   description: string;
+  children?: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
   confirmVariant?: ButtonProps['variant'];
@@ -33,6 +34,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   confirmVariant,
+  children,
 }) => {
   if (!isOpen) {
     return null;
@@ -45,6 +47,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {children}
         <AlertDialogFooter>
           <AlertDialogCancel asChild>
             <Button variant="outline" onClick={onClose}>

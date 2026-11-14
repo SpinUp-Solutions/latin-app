@@ -1,13 +1,15 @@
+import { WORD_FIELD_ROWS, WORD_FIELDS, type WordFieldName } from '@/src/components/ui/admin/vocabulary/wordFields';
+import { WordFieldLayout } from '@/src/components/ui/admin/vocabulary/forms/WordFieldLayout';
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { Label } from '@/src/components/ui/label';
 import { Switch } from '@/src/components/ui/switch';
 import { cn } from '@/src/lib/utils';
 import type { PronounPerson, PronounType } from '@/shared/types/vocabulary/schemas/enums';
-import { differingSpan } from '@/src/lib/vocabulary-autocomplete-evaluations/comparison';
 import { formatEnumLabel } from '@/src/utils/schema-helpers';
 import {
   changedTableCells,
   changedWordFields,
+  differingSpan,
   sameWordValue,
   summarizeWordChanges,
 } from '@/src/utils/vocabulary/word-diff';
@@ -173,13 +175,6 @@ function ScalarField({
   );
 }
 
-/** Two fields side by side, as in the editor; hidden when "changes only" leaves both out. */
-function Pair({ fields, children }: { fields: string[]; children: React.ReactNode }) {
-  const { before, after, changesOnly } = useContext(DiffContext);
-  if (changesOnly && fields.every(field => sameWordValue(before[field], after[field]))) return null;
-  return <div className="grid grid-cols-2 gap-4">{children}</div>;
-}
-
 /** A noun's nominative or genitive: full and shortened form side by side. */
 function WordFormField({ field, label }: { field: string; label: string }) {
   const { before, after, changed, hidden } = useFieldChange(field);
@@ -207,7 +202,7 @@ function DefinitionsField() {
   const length = Math.max(listOf(before).length, listOf(after).length);
   return (
     <div className="space-y-2">
-      <FieldLabel label="Definitions" changed={changed} />
+      <FieldLabel label={WORD_FIELDS.definitions.label} changed={changed} />
       <div className="space-y-2">
         {Array.from({ length }, (_, index) => (
           <DiffValue key={index} before={asText(listOf(before)[index])} after={asText(listOf(after)[index])} />
@@ -224,7 +219,7 @@ function PrincipalPartsField() {
   const length = Math.max(listOf(before).length, listOf(after).length);
   return (
     <div className="space-y-2">
-      <FieldLabel label="Principal Parts" changed={changed} />
+      <FieldLabel label={WORD_FIELDS.principal_parts.label} changed={changed} />
       <div className="space-y-3">
         {Array.from({ length }, (_, index) => (
           <div key={index} className="grid grid-cols-2 gap-2">
@@ -245,65 +240,30 @@ function PrincipalPartsField() {
   );
 }
 
-/** The editor's fields for each part of speech, in its order. */
-const PART_OF_SPEECH_FIELDS: Record<string, string[]> = {
-  noun: ['gender', 'declension', 'nominative_singular', 'genitive_singular', 'declension_table'],
-  pronoun: ['pronoun_type', 'person', 'declension_table'],
-  adjective: ['declension', 'degrees_table'],
-  verb: ['conjugation', 'is_deponent', 'principal_parts', 'conjugation_table'],
-  preposition: ['case'],
-};
-const BASE_FIELDS = [
-  'word',
-  'type',
-  'translation',
-  'definitions',
-  'etymology',
-  'pronunciation',
-  'alternate_form',
-  'dictionary_entry',
-  'part_of_speech',
-];
-
-function PartOfSpeechFields({ partOfSpeech }: { partOfSpeech: string }) {
-  switch (partOfSpeech) {
-    case 'noun':
-      return (
-        <>
-          <Pair fields={['gender', 'declension']}>
-            <ScalarField field="gender" label="Gender (optional)" format={enumText} />
-            <ScalarField field="declension" label="Declension" format={enumText} />
-          </Pair>
-          <Pair fields={['nominative_singular', 'genitive_singular']}>
-            <WordFormField field="nominative_singular" label="Nominative Singular" />
-            <WordFormField field="genitive_singular" label="Genitive Singular" />
-          </Pair>
-        </>
-      );
-    case 'pronoun':
-      return (
-        <>
-          <ScalarField field="pronoun_type" label="Pronoun Type" format={enumText} />
-          <ScalarField field="person" label="Person" format={enumText} />
-        </>
-      );
-    case 'adjective':
-      return <ScalarField field="declension" label="Declension" format={enumText} />;
-    case 'verb':
-      return (
-        <>
-          <Pair fields={['conjugation', 'is_deponent']}>
-            <ScalarField field="conjugation" label="Conjugation" />
-            <ScalarField field="is_deponent" label="Deponent" format={value => (value ? 'Yes' : 'No')} />
-          </Pair>
-          <PrincipalPartsField />
-        </>
-      );
-    case 'preposition':
-      return <ScalarField field="case" label="Case" format={labelFrom(CASE_LABELS)} />;
-    default:
-      return null;
-  }
+function ReviewFields({ section }: { section: string }) {
+  const { before, after, changesOnly } = useContext(DiffContext);
+  return (
+    <WordFieldLayout
+      section={section}
+      visible={field => !changesOnly || !sameWordValue(before[field], after[field])}
+      renderField={(field: WordFieldName) => {
+        const { label, ...options } = WORD_FIELDS[field];
+        if (field === 'definitions') return <DefinitionsField />;
+        if (field === 'principal_parts') return <PrincipalPartsField />;
+        if (field === 'nominative_singular' || field === 'genitive_singular')
+          return <WordFormField field={field} label={label} />;
+        const format =
+          field === 'type'
+            ? labelFrom(WORD_TYPE_LABELS)
+            : field === 'case'
+              ? labelFrom(CASE_LABELS)
+              : ['gender', 'declension', 'pronoun_type', 'person'].includes(field)
+                ? enumText
+                : asText;
+        return <ScalarField field={field} label={label} format={format} {...options} />;
+      }}
+    />
+  );
 }
 
 /** One table cell: the form as it is, or its old and new forms when they differ. */
@@ -394,7 +354,13 @@ function TableDiff() {
 /** Changed fields the editor does not show, so nothing changes unseen. */
 function OtherChanges() {
   const { before, after } = useContext(DiffContext);
-  const shown = new Set([...BASE_FIELDS, ...(PART_OF_SPEECH_FIELDS[String(after.part_of_speech)] ?? [])]);
+  const table = getEditableTable(after as { part_of_speech: string });
+  const shown = new Set<string>([
+    ...WORD_FIELD_ROWS.base.flat(),
+    ...(WORD_FIELD_ROWS[String(after.part_of_speech)] ?? []).flat(),
+    ...(table ? [table.field] : []),
+    'part_of_speech',
+  ]);
   const others = changedWordFields(before, after).filter(field => !shown.has(field));
   if (others.length === 0) return null;
   return (
@@ -457,17 +423,8 @@ export function WordDiffPanel({
 
         <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
           <div className="space-y-6">
-            <Pair fields={['word', 'type']}>
-              <ScalarField field="word" label="Word" />
-              <ScalarField field="type" label="Word Type" format={labelFrom(WORD_TYPE_LABELS)} />
-            </Pair>
-            <ScalarField field="translation" label="Translation" multiline />
-            <DefinitionsField />
-            <ScalarField field="etymology" label="Etymology" multiline />
-            <ScalarField field="pronunciation" label="Pronunciation" />
-            <ScalarField field="alternate_form" label="Alternate Form" />
-            <ScalarField field="dictionary_entry" label="Dictionary Entry" />
-            <PartOfSpeechFields partOfSpeech={String(after.part_of_speech)} />
+            <ReviewFields section="base" />
+            <ReviewFields section={String(after.part_of_speech)} />
             <OtherChanges />
             <TableDiff />
             {changesOnly && parts.length === 0 && <p className="text-sm text-gray-500">Nothing changes.</p>}

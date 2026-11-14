@@ -33,7 +33,7 @@ import { changedWordFields, summarizeWordChanges } from '@/src/utils/vocabulary/
 export const WORD_UPDATE_REQUEST_LIST_LIMIT = 500;
 /** An update's notes load the newest this many. */
 export const WORD_UPDATE_NOTE_LIST_LIMIT = 200;
-/** A request holds up to three copies of a word (base, proposal, replaced), so it stays well below 1 MiB. */
+/** A request holds a proposal and one before snapshot, with room below the Firestore limit. */
 const MAX_REQUEST_BYTES = 900 * 1024;
 
 type Plain = Record<string, unknown>;
@@ -144,14 +144,17 @@ const StoredRequestSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+// Validate without stripping unrecognized fields: the review must also show removed legacy forms.
+const StoredWordSchema = z.custom<VocabularyWord>(value => VocabularyWordSchema.safeParse(value).success);
 const StoredDetailSchema = StoredRequestSchema.extend({
-  proposedWord: z.record(z.string(), z.unknown()),
-  baseWord: z.record(z.string(), z.unknown()),
+  proposedWord: StoredWordSchema,
+  baseWord: StoredWordSchema,
   baseFingerprint: z.string(),
   createdBy: z.string(),
   approvedBy: NullableString,
   approvedAt: NullableString,
-  appliedFromWord: z.record(z.string(), z.unknown()).nullable().optional(),
+  // Legacy approved requests kept the replaced word separately.
+  appliedFromWord: StoredWordSchema.nullish(),
   dismissedBy: NullableString,
   dismissedReason: NullableString,
 });
@@ -178,14 +181,13 @@ function serializeRequest(snapshot: DocumentSnapshot): VocabularyWordUpdateReque
   const data = parsed.data;
   return {
     ...toSummary(snapshot.id, data),
-    proposedWord: data.proposedWord as VocabularyWord,
-    baseWord: data.baseWord as VocabularyWord,
+    proposedWord: data.proposedWord,
+    baseWord: data.status === 'approved' ? (data.appliedFromWord ?? data.baseWord) : data.baseWord,
     baseFingerprint: data.baseFingerprint,
     version: firestoreVersionFingerprint(snapshot.updateTime),
     createdBy: data.createdBy,
     approvedBy: data.approvedBy ?? null,
     approvedAt: data.approvedAt ?? null,
-    appliedFromWord: (data.appliedFromWord as VocabularyWord | null | undefined) ?? null,
     dismissedBy: data.dismissedBy ?? null,
     dismissedReason: data.dismissedReason ?? null,
   };
@@ -274,12 +276,10 @@ export async function stageWordUpdate(
       updatedAt: now,
       approvedBy: null,
       approvedAt: null,
-      appliedFromWord: null,
       dismissedBy: null,
       dismissedReason: null,
     };
-    // Approval adds a copy of the replaced word, so reserve room for it now.
-    assertRequestSize({ ...document, appliedFromWord: live.authored });
+    assertRequestSize(document);
     transaction.create(requestRef, document);
     return { id: requestRef.id, created: true };
   });
@@ -295,13 +295,17 @@ export async function listWordUpdateRequests(
     .select('status', 'wordId', 'summary', 'reason', 'source', 'createdAt', 'updatedAt')
     .limit(WORD_UPDATE_REQUEST_LIST_LIMIT + 1)
     .get();
-  const requests = snapshot.docs.slice(0, WORD_UPDATE_REQUEST_LIST_LIMIT).map(doc => {
+  let invalidCount = 0;
+  const requests = snapshot.docs.slice(0, WORD_UPDATE_REQUEST_LIST_LIMIT).flatMap(doc => {
     const parsed = StoredRequestSchema.safeParse(toJson(doc.data()));
-    if (!parsed.success) throw invalidStoredRequest();
-    return toSummary(doc.id, parsed.data);
+    if (!parsed.success) {
+      invalidCount += 1;
+      return [];
+    }
+    return [toSummary(doc.id, parsed.data)];
   });
   requests.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.word.localeCompare(right.word));
-  return { requests, truncated: snapshot.docs.length > WORD_UPDATE_REQUEST_LIST_LIMIT };
+  return { requests, truncated: snapshot.docs.length > WORD_UPDATE_REQUEST_LIST_LIMIT, invalidCount };
 }
 
 /** A request with the word as it is now, which is what approval replaces. */
@@ -340,13 +344,14 @@ export async function saveWordUpdateProposal(db: Firestore, actorUid: string, id
     const live = readLiveWord(await transaction.get(words(db).doc(stored.wordId)));
 
     const { proposedWord, changes } = validateProposal(parsed.proposedWord, live.authored);
-    assertRequestSize({ ...(requestSnapshot.data() as Plain), proposedWord, appliedFromWord: live.authored });
-    transaction.update(requestRef, {
+    const updates = {
       proposedWord,
       summary: summaryOf(proposedWord, changes),
       updatedBy: actorUid,
       updatedAt: new Date(),
-    });
+    };
+    assertRequestSize({ ...(requestSnapshot.data() as Plain), ...updates });
+    transaction.update(requestRef, updates);
   });
 
   return getWordUpdateRequestDetail(db, id);
@@ -399,14 +404,19 @@ export async function approveWordUpdate(db: Firestore, actorUid: string, id: str
         updatedAt: now,
       })
     );
-    transaction.update(requestRef, {
+    // Replace the old three-snapshot format as part of approval; notes live in a subcollection.
+    const { appliedFromWord: _legacySnapshot, ...requestData } = requestSnapshot.data() as Plain;
+    const approvedRequest = {
+      ...requestData,
       status: 'approved',
       approvedBy: actorUid,
       approvedAt: now,
-      appliedFromWord: live.authored,
+      baseWord: live.authored,
       updatedBy: actorUid,
       updatedAt: now,
-    });
+    };
+    assertRequestSize(approvedRequest);
+    transaction.set(requestRef, approvedRequest);
     applyContentRevision();
   });
 

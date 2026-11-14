@@ -1,6 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import {
+  VocabularyReviewLayout,
+  VocabularyReviewRow,
+} from '@/src/components/ui/admin/vocabulary/VocabularyReviewLayout';
+
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle, Clock, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { AdminPillPicker } from '@/src/components/admin/shell';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
@@ -35,32 +41,6 @@ const statusIcon = {
   dismissed: XCircle,
 };
 
-const getRequestErrorMessage = (error: unknown): string | null => {
-  if (!error) return null;
-
-  if (typeof error === 'object' && error !== null) {
-    if ('data' in error) {
-      const data = (error as { data?: unknown }).data;
-      if (typeof data === 'object' && data !== null && 'error' in data) {
-        const message = (data as { error?: unknown }).error;
-        if (typeof message === 'string') return message;
-      }
-      if (typeof data === 'string') return data;
-    }
-
-    if ('error' in error) {
-      const message = (error as { error?: unknown }).error;
-      if (typeof message === 'string') return message;
-    }
-
-    if ('status' in error) {
-      return `Request failed with status ${(error as { status: unknown }).status}`;
-    }
-  }
-
-  return 'Could not load vocabulary requests';
-};
-
 /** AI-generated drafts of words that do not exist yet. */
 function NewWordRequestsReview() {
   const [status, setStatus] = useState<VocabularyWordRequestStatus>('pending');
@@ -75,22 +55,10 @@ function NewWordRequestsReview() {
   const [updateRequest, { isLoading: updating }] = useUpdateVocabularyWordRequestMutation();
   const [approveRequest, { isLoading: approving }] = useApproveVocabularyWordRequestMutation();
   const [dismissRequest, { isLoading: dismissing }] = useDismissVocabularyWordRequestMutation();
-  const requestErrorMessage = useMemo(() => getRequestErrorMessage(requestError), [requestError]);
-
-  useEffect(() => {
-    setSelectedRequestId(null);
-  }, [status]);
-
-  useEffect(() => {
-    if (!selectedRequestId && requests.length > 0) {
-      setSelectedRequestId(requests[0].id);
-    }
-  }, [requests, selectedRequestId]);
-
-  const selectedRequest = useMemo(
-    () => requests.find(request => request.id === selectedRequestId) || null,
-    [requests, selectedRequestId]
-  );
+  const requestErrorMessage = requestError
+    ? getApiErrorMessage(requestError, 'Could not load vocabulary requests')
+    : null;
+  const selectedRequest = requests.find(request => request.id === selectedRequestId) ?? requests[0] ?? null;
 
   const editorWord: VocabularyWordWithId | null = selectedRequest
     ? ({ id: selectedRequest.id, ...selectedRequest.draftWord } as VocabularyWordWithId)
@@ -108,8 +76,7 @@ function NewWordRequestsReview() {
       return true;
     } catch (error) {
       console.error('Save pending draft error:', error);
-      const message = error instanceof Error ? error.message : 'Could not save pending draft';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Could not save pending draft'));
       return false;
     }
   };
@@ -123,8 +90,7 @@ function NewWordRequestsReview() {
       setSelectedRequestId(null);
     } catch (error) {
       console.error('Approve vocabulary request error:', error);
-      const message = error instanceof Error ? error.message : 'Could not approve request';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Could not approve request'));
     }
   };
 
@@ -137,100 +103,93 @@ function NewWordRequestsReview() {
       setSelectedRequestId(null);
     } catch (error) {
       console.error('Dismiss vocabulary request error:', error);
-      const message = error instanceof Error ? error.message : 'Could not dismiss request';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Could not dismiss request'));
     }
   };
 
   return (
-    <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,42%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[34%_66%] lg:grid-rows-none">
-      <aside className="min-h-0 overflow-y-auto border-b border-gray-200 bg-white lg:border-b-0 lg:border-r">
-        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <Select value={status} onValueChange={value => setStatus(value as VocabularyWordRequestStatus)}>
-              <SelectTrigger className="h-9 w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="dismissed">Dismissed</SelectItem>
-              </SelectContent>
-            </Select>
-            <Badge variant="secondary">
-              {isFetching ? 'Loading...' : `${requests.length} ${STATUS_LABELS[status]}`}
-            </Badge>
+    <VocabularyReviewLayout
+      list={
+        <>
+          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <Select value={status} onValueChange={value => setStatus(value as VocabularyWordRequestStatus)}>
+                <SelectTrigger className="h-9 w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="dismissed">Dismissed</SelectItem>
+                </SelectContent>
+              </Select>
+              <Badge variant="secondary">
+                {isFetching ? 'Loading...' : `${requests.length} ${STATUS_LABELS[status]}`}
+              </Badge>
+            </div>
           </div>
-        </div>
 
-        {requestErrorMessage ? (
-          <div className="p-6 text-sm text-red-700">Could not load requests: {requestErrorMessage}</div>
-        ) : isLoading ? (
-          <div className="p-6 text-sm text-gray-500">Loading requests...</div>
-        ) : requests.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">No {STATUS_LABELS[status].toLowerCase()} requests.</div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {requests.map(request => {
-              const Icon = statusIcon[request.status];
-              const isSelected = request.id === selectedRequestId;
+          {requestErrorMessage ? (
+            <div className="p-6 text-sm text-red-700">Could not load requests: {requestErrorMessage}</div>
+          ) : isLoading ? (
+            <div className="p-6 text-sm text-gray-500">Loading requests...</div>
+          ) : requests.length === 0 ? (
+            <div className="p-6 text-sm text-gray-500">No {STATUS_LABELS[status].toLowerCase()} requests.</div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {requests.map(request => {
+                const Icon = statusIcon[request.status];
+                const isSelected = request.id === selectedRequest?.id;
 
-              return (
-                <button
-                  key={request.id}
-                  type="button"
-                  onClick={() => setSelectedRequestId(request.id)}
-                  className={`w-full p-4 text-left transition-colors ${
-                    isSelected
-                      ? 'border-l-2 border-primary bg-primary/5'
-                      : 'border-l-2 border-transparent hover:bg-roman-parchment/60'
-                  }`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{request.draftWord.word}</p>
-                      <p className="text-sm text-gray-500 truncate">{request.draftWord.translation}</p>
+                return (
+                  <VocabularyReviewRow
+                    key={request.id}
+                    selected={isSelected}
+                    onSelect={() => setSelectedRequestId(request.id)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{request.draftWord.word}</p>
+                        <p className="text-sm text-gray-500 truncate">{request.draftWord.translation}</p>
+                      </div>
+                      <Icon className="h-4 w-4 text-gray-500 mt-1 flex-shrink-0" />
                     </div>
-                    <Icon className="h-4 w-4 text-gray-500 mt-1 flex-shrink-0" />
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <Badge variant="outline">{request.draftWord.part_of_speech}</Badge>
-                    <span className="text-xs text-gray-500">{new Date(request.updatedAt).toLocaleString()}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </aside>
-
-      <section className="min-h-0 flex flex-col overflow-hidden bg-white">
-        {selectedRequest && (
-          <div className="border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-sm text-gray-500 truncate">Source: {selectedRequest.sourceText}</p>
-              <p className="text-xs text-gray-400 truncate">
-                Candidate: {selectedRequest.selectedCandidate.word} ({selectedRequest.selectedCandidate.confidence})
-              </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Badge variant="outline">{request.draftWord.part_of_speech}</Badge>
+                      <span className="text-xs text-gray-500">{new Date(request.updatedAt).toLocaleString()}</span>
+                    </div>
+                  </VocabularyReviewRow>
+                );
+              })}
             </div>
-            <div className="flex items-center gap-2">
-              {selectedRequest.status === 'pending' && (
-                <>
-                  <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>
-                    {dismissing ? 'Dismissing...' : 'Dismiss'}
-                  </Button>
-                  <Button onClick={handleApprove} disabled={approving || dismissing || updating}>
-                    {approving ? 'Approving...' : 'Approve'}
-                  </Button>
-                </>
-              )}
-            </div>
+          )}
+        </>
+      }>
+      {selectedRequest && (
+        <div className="border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm text-gray-500 truncate">Source: {selectedRequest.sourceText}</p>
+            <p className="text-xs text-gray-400 truncate">
+              Candidate: {selectedRequest.selectedCandidate.word} ({selectedRequest.selectedCandidate.confidence})
+            </p>
           </div>
-        )}
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} />
+          <div className="flex items-center gap-2">
+            {selectedRequest.status === 'pending' && (
+              <>
+                <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>
+                  {dismissing ? 'Dismissing...' : 'Dismiss'}
+                </Button>
+                <Button onClick={handleApprove} disabled={approving || dismissing || updating}>
+                  {approving ? 'Approving...' : 'Approve'}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-      </section>
-    </main>
+      )}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} />
+      </div>
+    </VocabularyReviewLayout>
   );
 }
 

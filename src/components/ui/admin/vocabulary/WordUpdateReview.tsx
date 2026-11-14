@@ -1,19 +1,14 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { AlertTriangle, Search } from 'lucide-react';
-import { toast } from 'sonner';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/src/components/ui/alert-dialog';
+  VocabularyReviewLayout,
+  VocabularyReviewRow,
+} from '@/src/components/ui/admin/vocabulary/VocabularyReviewLayout';
+import React, { useCallback, useMemo, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
+import { AdminSearchInput } from '@/src/components/admin/shell';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Textarea } from '@/src/components/ui/textarea';
 import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
@@ -30,7 +25,8 @@ import {
   useGetVocabularyWordUpdateRequestsQuery,
   useSaveVocabularyWordUpdateProposalMutation,
 } from '@/src/store/api/vocabularyWordUpdateRequestsApi';
-import { stripMacrons } from '@/src/utils/exercises/helpers';
+import { normalizeWordSearch } from '@/src/utils/vocabulary/word-diff';
+import { wordFieldLabel } from '@/src/components/ui/admin/vocabulary/wordFields';
 import { WordDiffPanel } from './WordDiffPanel';
 import { WordEditPanel } from './WordEditPanel';
 import { WordUpdateNotes } from './WordUpdateNotes';
@@ -44,31 +40,9 @@ const STATUS_LABELS: Record<VocabularyWordUpdateRequestStatus, string> = {
   dismissed: 'Dismissed',
 };
 
-/** The editor's label for each field, so a list row names changes the way the editor does. */
-const FIELD_LABELS: Record<string, string> = {
-  word: 'Word',
-  type: 'Word type',
-  translation: 'Translation',
-  definitions: 'Definitions',
-  etymology: 'Etymology',
-  pronunciation: 'Pronunciation',
-  alternate_form: 'Alternate form',
-  dictionary_entry: 'Dictionary entry',
-  gender: 'Gender',
-  declension: 'Declension',
-  nominative_singular: 'Nominative',
-  genitive_singular: 'Genitive',
-  pronoun_type: 'Pronoun type',
-  person: 'Person',
-  conjugation: 'Conjugation',
-  is_deponent: 'Deponent',
-  principal_parts: 'Principal parts',
-  case: 'Case',
-};
-
 /** "Translation, Etymology · 12 forms" */
 export function describeChanges({ fields, tableCells }: WordChangeSummary): string {
-  const names = fields.map(field => FIELD_LABELS[field] ?? field.replace(/_/g, ' '));
+  const names = fields.map(wordFieldLabel);
   const shown = names.length > 2 ? [...names.slice(0, 2), `${names.length - 2} more`] : names;
   const forms = tableCells > 0 ? `${tableCells} form${tableCells === 1 ? '' : 's'}` : null;
   return [shown.join(', '), forms].filter(Boolean).join(' · ') || 'No changes';
@@ -76,9 +50,6 @@ export function describeChanges({ fields, tableCells }: WordChangeSummary): stri
 
 const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '');
 const formatDay = (iso: string) => new Date(iso).toLocaleDateString();
-
-/** Lower case and without macrons, so "ardor" finds "ārdor". */
-const searchText = (text: string) => stripMacrons(text).toLowerCase();
 
 /** Runs a step that would drop unsaved edits; the page asks the reviewer first. */
 type RequestNavigation = (navigate: () => void) => void;
@@ -95,34 +66,23 @@ function DismissDialog({
 }) {
   const [reason, setReason] = useState('');
   return (
-    <AlertDialog open onOpenChange={open => !open && onClose()}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Dismiss the update to {word}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            The word stays as it is. A dismissed update cannot be reopened; it would have to be staged again.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <Textarea
-          aria-label="Reason for dismissing (optional)"
-          value={reason}
-          onChange={event => setReason(event.target.value)}
-          maxLength={DISMISS_REASON_MAX_LENGTH}
-          rows={3}
-          placeholder="Reason (optional)"
-        />
-        <AlertDialogFooter>
-          <AlertDialogCancel asChild>
-            <Button variant="outline">Cancel</Button>
-          </AlertDialogCancel>
-          <AlertDialogAction asChild>
-            <Button variant="destructive" onClick={() => onConfirm(reason.trim())}>
-              Dismiss update
-            </Button>
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmationDialog
+      isOpen
+      onClose={onClose}
+      onConfirm={() => onConfirm(reason.trim())}
+      title={`Dismiss the update to ${word}?`}
+      description="The word stays as it is. A dismissed update cannot be reopened; it would have to be staged again."
+      confirmText="Dismiss update"
+      confirmVariant="destructive">
+      <Textarea
+        aria-label="Reason for dismissing (optional)"
+        value={reason}
+        onChange={event => setReason(event.target.value)}
+        maxLength={DISMISS_REASON_MAX_LENGTH}
+        rows={3}
+        placeholder="Reason (optional)"
+      />
+    </ConfirmationDialog>
   );
 }
 
@@ -156,8 +116,7 @@ function UpdateDetail({
   const busy = saving || approving || dismissing || isFetching;
   const editedSinceStaged = pending && liveWord !== null && liveFingerprint !== request.baseFingerprint;
   // An approved update is shown against the word it replaced; anything else against the word as it is now.
-  const before = ((request.status === 'approved' ? request.appliedFromWord : liveWord) ??
-    request.baseWord) as VocabularyWord;
+  const before = (request.status === 'approved' ? request.baseWord : (liveWord ?? request.baseWord)) as VocabularyWord;
   const beforeWord = { ...before, id: request.wordId } as VocabularyWordWithId;
   const proposedWord = { ...request.proposedWord, id: request.wordId } as VocabularyWordWithId;
 
@@ -327,10 +286,10 @@ export function WordUpdateReview({
   const partsOfSpeech = useMemo(() => [...new Set(requests.map(request => request.part_of_speech))].sort(), [requests]);
   const shownPartOfSpeech = partsOfSpeech.some(part => part === partOfSpeech) ? partOfSpeech : 'all';
   const visible = useMemo(() => {
-    const words = searchText(query).split(/\s+/).filter(Boolean);
+    const words = normalizeWordSearch(query).split(/\s+/).filter(Boolean);
     return requests.filter(request => {
       if (shownPartOfSpeech !== 'all' && request.part_of_speech !== shownPartOfSpeech) return false;
-      const haystack = searchText(`${request.word} ${request.translation} ${request.source ?? ''}`);
+      const haystack = normalizeWordSearch(`${request.word} ${request.translation} ${request.source ?? ''}`);
       return words.every(word => haystack.includes(word));
     });
   }, [requests, query, shownPartOfSpeech]);
@@ -356,120 +315,112 @@ export function WordUpdateReview({
         : `${total} ${STATUS_LABELS[status].toLowerCase()}`;
 
   return (
-    <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,42%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[34%_66%] lg:grid-rows-none">
-      <aside className="min-h-0 overflow-y-auto border-b border-gray-200 bg-white lg:border-b-0 lg:border-r">
-        <div className="sticky top-0 z-10 space-y-2 border-b border-gray-200 bg-white p-4">
-          <div className="flex gap-2">
-            <Select
-              value={status}
-              onValueChange={value =>
-                requestNavigation(() => {
-                  setStatus(value as VocabularyWordUpdateRequestStatus);
-                  setSelectedId(null);
-                })
-              }>
-              <SelectTrigger className="h-9 min-w-0 flex-1" aria-label="Status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="dismissed">Dismissed</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={shownPartOfSpeech} onValueChange={setPartOfSpeech} disabled={dirty}>
-              <SelectTrigger className="h-9 min-w-0 flex-1" aria-label="Part of speech">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All parts of speech</SelectItem>
-                {partsOfSpeech.map(part => (
-                  <SelectItem key={part} value={part}>
-                    {part}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-              aria-hidden="true"
-            />
-            <Input
+    <VocabularyReviewLayout
+      list={
+        <>
+          <div className="sticky top-0 z-10 space-y-2 border-b border-gray-200 bg-white p-4">
+            <div className="flex gap-2">
+              <Select
+                value={status}
+                onValueChange={value =>
+                  requestNavigation(() => {
+                    setStatus(value as VocabularyWordUpdateRequestStatus);
+                    setSelectedId(null);
+                  })
+                }>
+                <SelectTrigger className="h-9 min-w-0 flex-1" aria-label="Status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="dismissed">Dismissed</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={shownPartOfSpeech} onValueChange={setPartOfSpeech} disabled={dirty}>
+                <SelectTrigger className="h-9 min-w-0 flex-1" aria-label="Part of speech">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All parts of speech</SelectItem>
+                  {partsOfSpeech.map(part => (
+                    <SelectItem key={part} value={part}>
+                      {part}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <AdminSearchInput
               type="search"
               value={query}
-              onChange={event => setQuery(event.target.value)}
+              onValueChange={setQuery}
               placeholder="Search word, translation or source"
-              aria-label="Search updates"
+              label="Search updates"
               disabled={dirty}
-              className="h-9 pl-8 text-sm"
+              inputClassName="h-9 text-sm"
             />
+            {Boolean(data?.invalidCount) && (
+              <p role="alert" className="text-xs text-amber-900">
+                {data?.invalidCount} invalid update{data?.invalidCount === 1 ? '' : 's'} could not be loaded.
+              </p>
+            )}
+            {countLabel && (
+              <p className="text-xs text-gray-500" aria-live="polite">
+                {countLabel}
+              </p>
+            )}
           </div>
-          {countLabel && (
-            <p className="text-xs text-gray-500" aria-live="polite">
-              {countLabel}
-            </p>
+
+          {error ? (
+            <div className="p-6 text-sm text-red-700">{getApiErrorMessage(error, 'Could not load updates')}</div>
+          ) : isLoading ? (
+            <div className="p-6 text-sm text-gray-500">Loading updates...</div>
+          ) : requests.length === 0 ? (
+            <div className="p-6 text-sm text-gray-500">No {STATUS_LABELS[status].toLowerCase()} updates.</div>
+          ) : visible.length === 0 ? (
+            <div className="p-6 text-sm text-gray-500">No updates match.</div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {visible.map(request => {
+                const isSelected = request.id === activeId;
+                return (
+                  <VocabularyReviewRow
+                    key={request.id}
+                    selected={isSelected}
+                    onSelect={() => request.id !== activeId && requestNavigation(() => setSelectedId(request.id))}>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="truncate font-medium text-gray-900">{request.word}</p>
+                      <span className="flex-shrink-0 text-xs text-gray-400">{formatDay(request.createdAt)}</span>
+                    </div>
+                    <p className="truncate text-sm text-gray-500">{request.translation}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{request.part_of_speech}</Badge>
+                      <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-900">
+                        {describeChanges(request.changes)}
+                      </span>
+                    </div>
+                  </VocabularyReviewRow>
+                );
+              })}
+            </div>
           )}
-        </div>
-
-        {error ? (
-          <div className="p-6 text-sm text-red-700">{getApiErrorMessage(error, 'Could not load updates')}</div>
-        ) : isLoading ? (
-          <div className="p-6 text-sm text-gray-500">Loading updates...</div>
-        ) : requests.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">No {STATUS_LABELS[status].toLowerCase()} updates.</div>
-        ) : visible.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">No updates match.</div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {visible.map(request => {
-              const isSelected = request.id === activeId;
-              return (
-                <button
-                  key={request.id}
-                  type="button"
-                  aria-current={isSelected}
-                  onClick={() => request.id !== activeId && requestNavigation(() => setSelectedId(request.id))}
-                  className={`w-full p-4 text-left transition-colors ${
-                    isSelected
-                      ? 'border-l-2 border-primary bg-primary/5'
-                      : 'border-l-2 border-transparent hover:bg-roman-parchment/60'
-                  }`}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="truncate font-medium text-gray-900">{request.word}</p>
-                    <span className="flex-shrink-0 text-xs text-gray-400">{formatDay(request.createdAt)}</span>
-                  </div>
-                  <p className="truncate text-sm text-gray-500">{request.translation}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{request.part_of_speech}</Badge>
-                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-900">
-                      {describeChanges(request.changes)}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </aside>
-
-      <section className="flex min-h-0 flex-col overflow-hidden bg-white">
-        {activeId ? (
-          <>
-            <UpdateDetail
-              key={activeId}
-              id={activeId}
-              onClosed={selectNext}
-              requestNavigation={requestNavigation}
-              onDirtyChange={reportDirty}
-            />
-            <WordUpdateNotes key={`notes-${activeId}`} id={activeId} open={notesOpen} onOpenChange={setNotesOpen} />
-          </>
-        ) : (
-          <div className="p-8 text-center text-sm text-gray-500">Select an update to review it.</div>
-        )}
-      </section>
-    </main>
+        </>
+      }>
+      {activeId ? (
+        <>
+          <UpdateDetail
+            key={activeId}
+            id={activeId}
+            onClosed={selectNext}
+            requestNavigation={requestNavigation}
+            onDirtyChange={reportDirty}
+          />
+          <WordUpdateNotes key={`notes-${activeId}`} id={activeId} open={notesOpen} onOpenChange={setNotesOpen} />
+        </>
+      ) : (
+        <div className="p-8 text-center text-sm text-gray-500">Select an update to review it.</div>
+      )}
+    </VocabularyReviewLayout>
   );
 }

@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import {
-  BookOpen,
   ChevronDown,
   ChevronUp,
   Clock3,
@@ -13,13 +12,17 @@ import {
   Play,
   Plus,
   Save,
-  Search,
   Trash2,
   X,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
-import { AdminErrorState, AdminLoadingState, AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import {
+  AdminErrorState,
+  AdminLoadingState,
+  AdminPage,
+  AdminPageHeader,
+  AdminSearchInput,
+} from '@/src/components/admin/shell';
 import { Button } from '@/src/components/ui/button';
 import { CopyMarkdownButton } from '@/src/components/admin/CopyMarkdownButton';
 import { Input } from '@/src/components/ui/input';
@@ -28,7 +31,9 @@ import { Badge } from '@/src/components/ui/badge';
 import { Switch } from '@/src/components/ui/switch';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
-import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
+import { EvaluationCaseSidebar } from '@/src/components/admin/evaluations/EvaluationCaseSidebar';
+import { SummaryCard } from '@/src/components/admin/evaluations/SummaryCard';
+import { useEvaluationCases } from '@/src/hooks/useEvaluationCases';
 import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import {
   EVALUATION_VOCABULARY_AUTOCOMPLETE_PROFILE_IDS,
@@ -37,7 +42,6 @@ import {
 } from '@/shared/openai/model-registry';
 import {
   VOCABULARY_EVALUATION_MAX_ENTRIES,
-  type VocabularyEvaluationCase,
   type VocabularyEvaluationCaseInput,
   type VocabularyEvaluationCell,
   type VocabularyEvaluationRunResult,
@@ -50,16 +54,18 @@ import {
 } from '@/src/lib/vocabulary-autocomplete-evaluations/firebase-client';
 import { STARTER_VOCABULARY_EVALUATION_CASES } from '@/src/lib/vocabulary-autocomplete-evaluations/starter-cases';
 import {
+  summarizeVocabularyRun,
+  type VocabularyRunSummary,
+} from '@/src/lib/vocabulary-autocomplete-evaluations/comparison';
+import {
   compareEntryForms,
   differingSpan,
   formMatchesQuery,
   PROSE_FIELDS,
-  summarizeVocabularyRun,
   type FormAgreement,
   type FormCounts,
   type FormRow,
-  type VocabularyRunSummary,
-} from '@/src/lib/vocabulary-autocomplete-evaluations/comparison';
+} from '@/src/utils/vocabulary/word-diff';
 import { vocabularyRunToMarkdown } from '@/src/lib/vocabulary-autocomplete-evaluations/markdown-export';
 
 const PROFILES = [
@@ -426,20 +432,14 @@ function FormsComparison({ cells }: { cells: [VocabularyEvaluationCell, Vocabula
           </Button>
         )}
       </div>
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-roman-stone"
-          aria-hidden="true"
-        />
-        <Input
-          type="search"
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          placeholder="Search forms, e.g. subj perf pl, abl sg or amaver"
-          aria-label={`Search ${first.word} forms`}
-          className="h-9 pl-8 text-sm"
-        />
-      </div>
+      <AdminSearchInput
+        type="search"
+        value={query}
+        onValueChange={setQuery}
+        placeholder="Search forms, e.g. subj perf pl, abl sg or amaver"
+        label={`Search ${first.word} forms`}
+        inputClassName="h-9 text-sm"
+      />
       {searching ? (
         <>
           <p className="text-xs text-roman-stone" aria-live="polite">
@@ -509,16 +509,6 @@ function EntryComparison({
         <FormsComparison cells={cells} />
       </RomanCardContent>
     </RomanCard>
-  );
-}
-
-function SummaryCard({ title, headline, children }: { title: string; headline: ReactNode; children: ReactNode }) {
-  return (
-    <div className="flex flex-col rounded-xl border border-border/70 bg-white p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">{title}</p>
-      <p className="mt-1 font-serif text-xl leading-snug">{headline}</p>
-      <div className="mt-3 flex-1 space-y-2">{children}</div>
-    </div>
   );
 }
 
@@ -712,8 +702,6 @@ function Results({
   );
 }
 
-type DisplayedRun = { result: VocabularyEvaluationRunResult; evaluationCase: VocabularyEvaluationCaseInput };
-
 const EXPAND_BUTTON_CLASS =
   'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/[0.08] text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -723,168 +711,61 @@ const caseSubtitle = (value: VocabularyEvaluationCaseInput) =>
   ].join(', ')}`;
 
 function VocabAutocompleteEvaluationsPage() {
-  const [cases, setCases] = useState<VocabularyEvaluationCase[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [form, setForm] = useState<VocabularyEvaluationCaseInput>(blankCase);
-  const [savedForm, setSavedForm] = useState<VocabularyEvaluationCaseInput | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
-  const [displayedRun, setDisplayedRun] = useState<DisplayedRun | null>(null);
   const [forceRefresh, setForceRefresh] = useState(false);
-  const [loadingCases, setLoadingCases] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [addingStarterCases, setAddingStarterCases] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const runGenerationRef = useRef(0);
-
-  const dirty = savedForm
-    ? JSON.stringify(form) !== JSON.stringify(savedForm)
-    : Boolean(
+  const {
+    cases,
+    selectedId,
+    form,
+    savedForm,
+    collapsed,
+    setCollapsed,
+    displayedRun,
+    loadingCases,
+    saving,
+    running,
+    addingStarterCases,
+    deleteOpen,
+    setDeleteOpen,
+    loadError,
+    dirty,
+    valid,
+    interactionLocked,
+    missingStarterCases,
+    navigationGuard,
+    applyNewCase,
+    loadCases,
+    updateForm,
+    selectCase,
+    saveCase,
+    addStarterCases,
+    deleteCase,
+    runEvaluation,
+    discardChanges,
+  } = useEvaluationCases({
+    blankCase,
+    cloneCase,
+    isValidCase,
+    hasDraft: form =>
+      Boolean(
         form.title.trim() ||
           form.entries.length !== 1 ||
           form.entries[0]?.word.trim() ||
           form.entries[0]?.partOfSpeech !== 'noun'
-      );
-  const valid = isValidCase(form);
-  const interactionLocked = running || saving || deleting || addingStarterCases;
-  const missingStarterCases = STARTER_VOCABULARY_EVALUATION_CASES.filter(
-    starter => !cases.some(item => item.title === starter.title)
-  );
-  const navigationGuard = useUnsavedNavigationGuard(
-    dirty,
-    'You have unsaved evaluation edits. Leave this page or switch cases without saving?'
-  );
-
-  const applySelectedCase = (evaluationCase: VocabularyEvaluationCase) => {
-    runGenerationRef.current += 1;
-    setSelectedId(evaluationCase.id);
-    setForm(cloneCase(evaluationCase));
-    setSavedForm(cloneCase(evaluationCase));
-    setCollapsed(false);
-    setDisplayedRun(null);
-  };
-
-  const applyNewCase = () => {
-    runGenerationRef.current += 1;
-    setSelectedId(null);
-    setForm(blankCase());
-    setSavedForm(null);
-    setCollapsed(false);
-    setDisplayedRun(null);
-  };
-
-  const loadCases = async () => {
-    setLoadingCases(true);
-    setLoadError(null);
-    try {
-      const nextCases = await listVocabularyEvaluationCasesInFirebase();
-      setCases(nextCases);
-      if (nextCases.length > 0) applySelectedCase(nextCases[0]);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to load evaluation cases');
-    } finally {
-      setLoadingCases(false);
-    }
-  };
-
-  const loadOnMount = useEffectEvent(() => void loadCases());
-  useEffect(() => loadOnMount(), []);
-
-  const updateForm = (updater: (previous: VocabularyEvaluationCaseInput) => VocabularyEvaluationCaseInput) => {
-    if (interactionLocked) return;
-    runGenerationRef.current += 1;
-    setDisplayedRun(null);
-    setForm(updater);
-  };
+      ),
+    listCases: listVocabularyEvaluationCasesInFirebase,
+    saveCaseInput: saveVocabularyEvaluationCaseInFirebase,
+    deleteCaseById: deleteVocabularyEvaluationCaseInFirebase,
+    runCase: runVocabularyEvaluationInFirebase,
+    starterCases: STARTER_VOCABULARY_EVALUATION_CASES,
+    starterLabel: 'starter',
+    validationMessage: 'Add a title and at least one word, with no word listed twice.',
+  });
 
   const updateEntry = (index: number, patch: Partial<VocabularyEvaluationCaseInput['entries'][number]>) =>
     updateForm(previous => ({
       ...previous,
       entries: previous.entries.map((entry, entryIndex) => (entryIndex === index ? { ...entry, ...patch } : entry)),
     }));
-
-  const selectCase = (evaluationCase: VocabularyEvaluationCase) => {
-    if (interactionLocked) return;
-    navigationGuard.requestNavigation(() => applySelectedCase(evaluationCase));
-  };
-
-  const saveCase = async () => {
-    if (interactionLocked || !valid) {
-      toast.error('Add a title and at least one word, with no word listed twice.');
-      return;
-    }
-    setSaving(true);
-    try {
-      const saved = await saveVocabularyEvaluationCaseInFirebase(form, selectedId ?? undefined);
-      setCases(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
-      applySelectedCase(saved);
-      toast.success(selectedId ? 'Evaluation case saved' : 'Evaluation case created');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to save evaluation case');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addStarterCases = async () => {
-    if (interactionLocked || loadError || missingStarterCases.length === 0) return;
-    setAddingStarterCases(true);
-    const added: VocabularyEvaluationCase[] = [];
-    try {
-      // Saved last to first so the newest-first list keeps the starter order.
-      for (const starter of [...missingStarterCases].reverse()) {
-        added.unshift(await saveVocabularyEvaluationCaseInFirebase(starter));
-      }
-      toast.success(`Added ${added.length} starter ${added.length === 1 ? 'case' : 'cases'}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to add starter cases');
-    } finally {
-      setCases(previous => [...added, ...previous]);
-      if (!selectedId && !dirty && added.length > 0) applySelectedCase(added[0]);
-      setAddingStarterCases(false);
-    }
-  };
-
-  const deleteCase = async () => {
-    if (!selectedId || interactionLocked) return;
-    setDeleting(true);
-    try {
-      await deleteVocabularyEvaluationCaseInFirebase(selectedId);
-      const remaining = cases.filter(item => item.id !== selectedId);
-      setCases(remaining);
-      if (remaining.length > 0) applySelectedCase(remaining[0]);
-      else applyNewCase();
-      toast.success('Evaluation case deleted');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to delete evaluation case');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const runEvaluation = async () => {
-    if (!selectedId || dirty || !valid || interactionLocked) return;
-    const caseIdAtStart = selectedId;
-    const caseSnapshot = cloneCase(form);
-    const requestGeneration = ++runGenerationRef.current;
-    setCollapsed(true);
-    setRunning(true);
-    setDisplayedRun(null);
-    try {
-      const response = await runVocabularyEvaluationInFirebase({ caseId: caseIdAtStart, forceRefresh });
-      if (requestGeneration !== runGenerationRef.current || response.caseId !== caseIdAtStart) return;
-      setDisplayedRun({ result: response, evaluationCase: caseSnapshot });
-      toast.success('Model comparison complete');
-    } catch (error) {
-      if (requestGeneration === runGenerationRef.current) {
-        toast.error(error instanceof Error ? error.message : 'Unable to run model comparison');
-      }
-    } finally {
-      if (requestGeneration === runGenerationRef.current) setRunning(false);
-    }
-  };
 
   if (loadingCases) {
     return (
@@ -1030,7 +911,7 @@ function VocabAutocompleteEvaluationsPage() {
                   Skip cache
                 </label>
                 {savedForm && dirty && (
-                  <Button type="button" variant="ghost" onClick={() => setForm(cloneCase(savedForm))}>
+                  <Button type="button" variant="ghost" onClick={discardChanges}>
                     Discard changes
                   </Button>
                 )}
@@ -1042,7 +923,10 @@ function VocabAutocompleteEvaluationsPage() {
                   )}
                   {saving ? 'Saving…' : 'Save case'}
                 </Button>
-                <Button type="button" disabled={!selectedId || dirty || !valid} onClick={() => void runEvaluation()}>
+                <Button
+                  type="button"
+                  disabled={!selectedId || dirty || !valid}
+                  onClick={() => void runEvaluation(forceRefresh)}>
                   {running ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
@@ -1109,52 +993,18 @@ function VocabAutocompleteEvaluationsPage() {
       )}
 
       <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
-        <aside aria-label="Saved evaluation cases" className="space-y-3 xl:sticky xl:top-6 xl:self-start">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">Cases</p>
-            <span className="text-xs tabular-nums text-roman-stone">{cases.length}</span>
-          </div>
-          {cases.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border bg-white/60 p-4 text-sm text-roman-stone">
-              No cases yet. Write one, or add the starter cases.
-            </p>
-          ) : (
-            <div className="max-h-64 space-y-1 overflow-y-auto pr-1 xl:max-h-[calc(100vh-16rem)]">
-              {cases.map(evaluationCase => (
-                <button
-                  type="button"
-                  key={evaluationCase.id}
-                  onClick={() => selectCase(evaluationCase)}
-                  disabled={interactionLocked}
-                  aria-pressed={selectedId === evaluationCase.id}
-                  className={`w-full rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
-                    selectedId === evaluationCase.id
-                      ? 'border-primary/40 bg-primary/[0.07]'
-                      : 'border-transparent hover:bg-roman-marble/60'
-                  }`}>
-                  <p className="line-clamp-2 text-sm font-medium">{evaluationCase.title}</p>
-                  <p className="mt-0.5 text-[11px] text-roman-stone">{caseSubtitle(evaluationCase)}</p>
-                </button>
-              ))}
-            </div>
-          )}
-          {missingStarterCases.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => void addStarterCases()}
-              disabled={interactionLocked || Boolean(loadError)}>
-              {addingStarterCases ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <BookOpen className="mr-2 h-4 w-4" aria-hidden="true" />
-              )}
-              {addingStarterCases ? 'Adding…' : 'Add starter cases'}
-            </Button>
-          )}
-        </aside>
+        <EvaluationCaseSidebar
+          cases={cases}
+          selectedId={selectedId}
+          onSelect={selectCase}
+          subtitle={caseSubtitle}
+          locked={interactionLocked}
+          addDisabled={Boolean(loadError)}
+          canAdd={missingStarterCases.length > 0}
+          adding={addingStarterCases}
+          onAdd={() => void addStarterCases()}
+          starterLabel="starter"
+        />
 
         <div className="min-w-0 space-y-6">
           {collapsed ? caseBanner : editor}

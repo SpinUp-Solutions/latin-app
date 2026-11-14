@@ -2,7 +2,8 @@ import {
   VOCABULARY_AUTOCOMPLETE_PROFILES,
   type VocabularyAutocompleteProfileId,
 } from '../../../shared/openai/model-registry';
-import { compareEntryForms, PROSE_FIELDS, summarizeVocabularyRun, type FormAgreement } from './comparison';
+import { summarizeVocabularyRun } from './comparison';
+import { compareEntryForms, PROSE_FIELDS, type FormAgreement } from '@/src/utils/vocabulary/word-diff';
 import type {
   VocabularyEvaluationCaseInput,
   VocabularyEvaluationCell,

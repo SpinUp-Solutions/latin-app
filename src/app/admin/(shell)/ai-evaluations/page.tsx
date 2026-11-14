@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
-  BookOpen,
   Check,
   ChevronDown,
   ChevronUp,
@@ -31,8 +30,9 @@ import { TranslationGradingFeedback } from '@/src/components/ui/exercises/transl
 import { Switch } from '@/src/components/ui/switch';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
-import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
-import { toast } from 'sonner';
+import { EvaluationCaseSidebar } from '@/src/components/admin/evaluations/EvaluationCaseSidebar';
+import { SummaryCard } from '@/src/components/admin/evaluations/SummaryCard';
+import { useEvaluationCases } from '@/src/hooks/useEvaluationCases';
 import { TRANSLATION_GRADING_MODES, type TranslationGradingMode } from '@/shared/openai/types';
 import {
   EVALUATION_TRANSLATION_PROFILE_IDS,
@@ -41,7 +41,6 @@ import {
 } from '@/shared/openai/model-registry';
 import type {
   EvaluationAggregate,
-  EvaluationCase,
   EvaluationCaseInput,
   EvaluationCellResult,
   EvaluationRunResult,
@@ -68,6 +67,14 @@ const blankCase = (): EvaluationCaseInput => ({
   sourceText: '',
   answers: [newAnswer(1)],
   modes: ['lesson', 'test'],
+});
+
+const cloneCase = (value: EvaluationCaseInput): EvaluationCaseInput => ({
+  title: value.title,
+  direction: value.direction,
+  sourceText: value.sourceText,
+  answers: value.answers.map(answer => ({ ...answer })),
+  modes: [...value.modes],
 });
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-US').format(Math.round(value));
@@ -101,11 +108,6 @@ function ProfileDot({ profileId }: { profileId: TranslationGradingProfileId }) {
     />
   );
 }
-
-type DisplayedRun = {
-  result: EvaluationRunResult;
-  evaluationCase: EvaluationCaseInput;
-};
 
 function isValidCase(value: EvaluationCaseInput) {
   const ids = new Set(value.answers.map(answer => answer.id));
@@ -355,26 +357,6 @@ function AnswerComparison({
         </div>
       </RomanCardContent>
     </RomanCard>
-  );
-}
-
-function SummaryCard({
-  title,
-  headline,
-  className = '',
-  children,
-}: {
-  title: string;
-  headline: ReactNode;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`flex flex-col rounded-xl border border-border/70 bg-white p-4 ${className}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">{title}</p>
-      <p className="mt-1 font-serif text-xl leading-snug">{headline}</p>
-      <div className="mt-3 flex-1 space-y-2">{children}</div>
-    </div>
   );
 }
 
@@ -796,198 +778,58 @@ function Results({
 }
 
 function AIEvaluationsPage() {
-  const [cases, setCases] = useState<EvaluationCase[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [form, setForm] = useState<EvaluationCaseInput>(blankCase);
-  const [savedForm, setSavedForm] = useState<EvaluationCaseInput | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
-  const [displayedRun, setDisplayedRun] = useState<DisplayedRun | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [forceRefresh, setForceRefresh] = useState(false);
-  const [loadingCases, setLoadingCases] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [addingLessonCases, setAddingLessonCases] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const dirty = useMemo(() => {
-    if (savedForm) return JSON.stringify(form) !== JSON.stringify(savedForm);
-    const firstAnswer = form.answers[0];
-    return Boolean(
-      form.title.trim() ||
-        form.sourceText.trim() ||
-        form.modes.length !== 2 ||
-        form.answers.length !== 1 ||
-        firstAnswer?.label !== 'Answer 1' ||
-        firstAnswer?.text.trim()
-    );
-  }, [form, savedForm]);
-  const valid = useMemo(() => isValidCase(form), [form]);
-  const interactionLocked = running || saving || deleting || addingLessonCases;
-  const missingLessonCases = LESSON_EVALUATION_CASES.filter(
-    lessonCase => !cases.some(item => item.title === lessonCase.title)
-  );
-  const runGenerationRef = useRef(0);
-  const navigationGuard = useUnsavedNavigationGuard(
+  const {
+    cases,
+    selectedId,
+    form,
+    savedForm,
+    collapsed,
+    setCollapsed,
+    displayedRun,
+    loadingCases,
+    saving,
+    running,
+    addingStarterCases: addingLessonCases,
+    deleteOpen,
+    setDeleteOpen,
+    loadError,
     dirty,
-    'You have unsaved evaluation edits. Leave this page or switch cases without saving?'
-  );
-
-  const cloneCaseInput = (value: EvaluationCaseInput): EvaluationCaseInput => ({
-    title: value.title,
-    direction: value.direction,
-    sourceText: value.sourceText,
-    answers: value.answers.map(answer => ({ ...answer })),
-    modes: [...value.modes],
+    valid,
+    interactionLocked,
+    missingStarterCases: missingLessonCases,
+    navigationGuard,
+    applyNewCase,
+    loadCases,
+    updateForm,
+    selectCase,
+    saveCase,
+    addStarterCases: addLessonCases,
+    deleteCase,
+    runEvaluation,
+    discardChanges,
+  } = useEvaluationCases({
+    blankCase,
+    cloneCase,
+    isValidCase,
+    hasDraft: form =>
+      Boolean(
+        form.title.trim() ||
+          form.sourceText.trim() ||
+          form.modes.length !== 2 ||
+          form.answers.length !== 1 ||
+          form.answers[0]?.label !== 'Answer 1' ||
+          form.answers[0]?.text.trim()
+      ),
+    listCases: listEvaluationCasesInFirebase,
+    saveCaseInput: saveEvaluationCaseInFirebase,
+    deleteCaseById: deleteEvaluationCaseInFirebase,
+    runCase: runEvaluationInFirebase,
+    starterCases: LESSON_EVALUATION_CASES,
+    starterLabel: 'lesson',
+    validationMessage: 'Complete the title, source, and at least one labeled answer before saving.',
   });
-
-  const updateForm = (updater: (previous: EvaluationCaseInput) => EvaluationCaseInput) => {
-    if (interactionLocked) return;
-    runGenerationRef.current += 1;
-    setDisplayedRun(null);
-    setForm(updater);
-  };
-
-  const loadCases = async () => {
-    setLoadingCases(true);
-    setLoadError(null);
-    try {
-      const nextCases = await listEvaluationCasesInFirebase();
-      setCases(nextCases);
-      if (nextCases.length > 0) applySelectedCase(nextCases[0]);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to load evaluation cases');
-    } finally {
-      setLoadingCases(false);
-    }
-  };
-
-  const retryLoadCases = () => {
-    navigationGuard.requestNavigation(() => void loadCases());
-  };
-
-  useEffect(() => {
-    void loadCases();
-    // Loading once avoids resetting an in-progress editor on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const applySelectedCase = (evaluationCase: EvaluationCase) => {
-    runGenerationRef.current += 1;
-    setSelectedId(evaluationCase.id);
-    setForm(cloneCaseInput(evaluationCase));
-    setSavedForm(cloneCaseInput(evaluationCase));
-    setCollapsed(false);
-    setDisplayedRun(null);
-  };
-
-  const selectCase = (evaluationCase: EvaluationCase) => {
-    if (interactionLocked) return;
-    navigationGuard.requestNavigation(() => applySelectedCase(evaluationCase));
-  };
-
-  const applyNewCase = () => {
-    runGenerationRef.current += 1;
-    setSelectedId(null);
-    setForm(blankCase());
-    setSavedForm(null);
-    setCollapsed(false);
-    setDisplayedRun(null);
-  };
-
-  const requestNewCase = () => {
-    if (interactionLocked) return;
-    navigationGuard.requestNavigation(applyNewCase);
-  };
-
-  const discardChanges = () => {
-    if (interactionLocked || !savedForm) return;
-    setForm(cloneCaseInput(savedForm));
-  };
-
-  const saveCase = async () => {
-    if (interactionLocked || !valid) {
-      toast.error('Complete the title, source, and at least one labeled answer before saving.');
-      return;
-    }
-    setSaving(true);
-    try {
-      const saved = await saveEvaluationCaseInFirebase(form, selectedId ?? undefined);
-      setCases(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
-      applySelectedCase(saved);
-      toast.success(selectedId ? 'Evaluation case saved' : 'Evaluation case created');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to save evaluation case');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addLessonCases = async () => {
-    if (interactionLocked || loadError || missingLessonCases.length === 0) return;
-    setAddingLessonCases(true);
-    const added: EvaluationCase[] = [];
-    try {
-      // Saved last to first so the newest-first list keeps lesson order.
-      for (const lessonCase of [...missingLessonCases].reverse()) {
-        added.unshift(await saveEvaluationCaseInFirebase(lessonCase));
-      }
-      toast.success(`Added ${added.length} lesson ${added.length === 1 ? 'case' : 'cases'}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to add lesson cases');
-    } finally {
-      setCases(previous => [...added, ...previous]);
-      if (!selectedId && !dirty && added.length > 0) applySelectedCase(added[0]);
-      setAddingLessonCases(false);
-    }
-  };
-
-  const deleteCase = async () => {
-    if (!selectedId || interactionLocked) return;
-    setDeleting(true);
-    try {
-      await deleteEvaluationCaseInFirebase(selectedId);
-      const remaining = cases.filter(item => item.id !== selectedId);
-      setCases(remaining);
-      if (remaining.length > 0) applySelectedCase(remaining[0]);
-      else applyNewCase();
-      toast.success('Evaluation case deleted');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to delete evaluation case');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const runEvaluation = async () => {
-    if (!selectedId || dirty || !valid || interactionLocked) return;
-    const caseIdAtStart = selectedId;
-    const caseSnapshot = cloneCaseInput(form);
-    const requestGeneration = ++runGenerationRef.current;
-    setCollapsed(true);
-    setRunning(true);
-    setDisplayedRun(null);
-    try {
-      // The skip-cache switch lives under Advanced, so it never applies while hidden.
-      const response = await runEvaluationInFirebase({
-        caseId: caseIdAtStart,
-        forceRefresh: showAdvanced && forceRefresh,
-      });
-      if (requestGeneration !== runGenerationRef.current || response.caseId !== caseIdAtStart) {
-        return;
-      }
-      setDisplayedRun({ result: response, evaluationCase: caseSnapshot });
-      toast.success('Model comparison complete');
-    } catch (error) {
-      if (requestGeneration === runGenerationRef.current) {
-        toast.error(error instanceof Error ? error.message : 'Unable to run model comparison');
-      }
-    } finally {
-      if (requestGeneration === runGenerationRef.current) setRunning(false);
-    }
-  };
 
   const updateAnswer = (index: number, field: 'label' | 'text', value: string) => {
     updateForm(previous => ({
@@ -1214,7 +1056,10 @@ function AIEvaluationsPage() {
                   )}
                   {saving ? 'Saving…' : 'Save case'}
                 </Button>
-                <Button type="button" disabled={!selectedId || dirty || !valid} onClick={() => void runEvaluation()}>
+                <Button
+                  type="button"
+                  disabled={!selectedId || dirty || !valid}
+                  onClick={() => void runEvaluation(showAdvanced && forceRefresh)}>
                   {running ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
@@ -1267,7 +1112,10 @@ function AIEvaluationsPage() {
               <Switch checked={showAdvanced} onCheckedChange={setShowAdvanced} aria-label="Show advanced details" />
               Advanced
             </label>
-            <Button type="button" onClick={requestNewCase} disabled={interactionLocked}>
+            <Button
+              type="button"
+              onClick={() => !interactionLocked && navigationGuard.requestNavigation(applyNewCase)}
+              disabled={interactionLocked}>
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
               New case
             </Button>
@@ -1275,58 +1123,29 @@ function AIEvaluationsPage() {
         }
       />
 
-      {loadError && <AdminErrorState message={loadError} onRetry={retryLoadCases} className="mb-6" />}
+      {loadError && (
+        <AdminErrorState
+          message={loadError}
+          onRetry={() => navigationGuard.requestNavigation(() => void loadCases())}
+          className="mb-6"
+        />
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
-        <aside aria-label="Saved evaluation cases" className="space-y-3 xl:sticky xl:top-6 xl:self-start">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">Cases</p>
-            <span className="text-xs tabular-nums text-roman-stone">{cases.length}</span>
-          </div>
-          {cases.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border bg-white/60 p-4 text-sm text-roman-stone">
-              No cases yet. Write one, or add the ready-made lesson cases.
-            </p>
-          ) : (
-            <div className="max-h-64 space-y-1 overflow-y-auto pr-1 xl:max-h-[calc(100vh-16rem)]">
-              {cases.map(evaluationCase => (
-                <button
-                  type="button"
-                  key={evaluationCase.id}
-                  onClick={() => selectCase(evaluationCase)}
-                  disabled={interactionLocked}
-                  aria-pressed={selectedId === evaluationCase.id}
-                  className={`w-full rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
-                    selectedId === evaluationCase.id
-                      ? 'border-primary/40 bg-primary/[0.07]'
-                      : 'border-transparent hover:bg-roman-marble/60'
-                  }`}>
-                  <p className="line-clamp-2 text-sm font-medium">{evaluationCase.title}</p>
-                  <p className="mt-0.5 text-[11px] text-roman-stone">
-                    {directionLabel(evaluationCase.direction)} · {evaluationCase.answers.length}{' '}
-                    {evaluationCase.answers.length === 1 ? 'answer' : 'answers'}
-                  </p>
-                </button>
-              ))}
-            </div>
-          )}
-          {missingLessonCases.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => void addLessonCases()}
-              disabled={interactionLocked || Boolean(loadError)}>
-              {addingLessonCases ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <BookOpen className="mr-2 h-4 w-4" aria-hidden="true" />
-              )}
-              {addingLessonCases ? 'Adding…' : 'Add lesson cases'}
-            </Button>
-          )}
-        </aside>
+        <EvaluationCaseSidebar
+          cases={cases}
+          selectedId={selectedId}
+          onSelect={selectCase}
+          subtitle={evaluationCase =>
+            `${directionLabel(evaluationCase.direction)} · ${evaluationCase.answers.length} ${evaluationCase.answers.length === 1 ? 'answer' : 'answers'}`
+          }
+          locked={interactionLocked}
+          addDisabled={Boolean(loadError)}
+          canAdd={missingLessonCases.length > 0}
+          adding={addingLessonCases}
+          onAdd={() => void addLessonCases()}
+          starterLabel="lesson"
+        />
 
         <div className="min-w-0 space-y-6">
           {collapsed ? caseBanner : editor}

@@ -1,3 +1,4 @@
+import { WORD_FIELDS } from '@/src/components/ui/admin/vocabulary/wordFields';
 import { useFormContext } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
@@ -13,7 +14,7 @@ export const PrepositionForm = () => {
         name="case"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Case</FormLabel>
+            <FormLabel>{WORD_FIELDS.case.label}</FormLabel>
             <Select onValueChange={field.onChange} value={field.value || undefined}>
               <FormControl>
                 <SelectTrigger>

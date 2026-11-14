@@ -1,5 +1,7 @@
 'use client';
 
+import { AdminPillPicker } from '@/src/components/admin/shell/AdminPillPicker';
+
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
@@ -16,7 +18,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { BookOpen, CheckCircle, Clock, Edit, FileCheck2, Filter, Globe, Plus, Search } from 'lucide-react';
+import { BookOpen, CheckCircle, Clock, Edit, FileCheck2, Globe, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
@@ -811,27 +813,15 @@ function LiveLessonsPage() {
                       className="pl-10"
                     />
                   </div>
-                  <div
-                    className="flex items-center gap-1.5 rounded-xl border border-border/80 bg-white/80 p-1.5 shadow-sm"
-                    role="group"
-                    aria-label="Lesson status">
-                    <Filter className="ml-1 h-4 w-4 text-roman-stone" aria-hidden="true" />
-                    {(['all', 'live', 'draft'] as FilterStatus[]).map(status => (
-                      <Button
-                        key={status}
-                        variant={filterStatus === status ? 'default' : 'ghost'}
-                        size="sm"
-                        aria-pressed={filterStatus === status}
-                        className={
-                          filterStatus === status
-                            ? 'h-9 rounded-lg px-3.5 text-xs font-semibold shadow-[0_2px_6px_hsl(var(--primary)/0.22)]'
-                            : 'h-9 rounded-lg px-3.5 text-xs font-medium text-roman-stone hover:bg-roman-parchment hover:text-foreground'
-                        }
-                        onClick={() => setFilterStatus(status)}>
-                        {status[0].toUpperCase() + status.slice(1)}
-                      </Button>
-                    ))}
-                  </div>
+                  <AdminPillPicker
+                    label="Lesson status"
+                    value={filterStatus}
+                    onValueChange={setFilterStatus}
+                    options={(['all', 'live', 'draft'] as FilterStatus[]).map(value => ({
+                      value,
+                      label: value[0].toUpperCase() + value.slice(1),
+                    }))}
+                  />
                 </RomanCardContent>
               </RomanCard>
 

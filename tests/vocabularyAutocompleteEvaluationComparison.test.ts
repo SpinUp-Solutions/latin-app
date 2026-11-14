@@ -1,10 +1,5 @@
-import {
-  compareEntryForms,
-  differingSpan,
-  formMatchesQuery,
-  formAgreement,
-  summarizeVocabularyRun,
-} from '@/src/lib/vocabulary-autocomplete-evaluations/comparison';
+import { summarizeVocabularyRun } from '@/src/lib/vocabulary-autocomplete-evaluations/comparison';
+import { compareEntryForms, differingSpan, formMatchesQuery, formAgreement } from '@/src/utils/vocabulary/word-diff';
 import type { VocabularyEvaluationCell } from '@/src/lib/vocabulary-autocomplete-evaluations/contracts';
 
 describe('vocabulary autocomplete form comparison', () => {

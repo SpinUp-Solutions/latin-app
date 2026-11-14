@@ -360,6 +360,20 @@ describe('listing word updates', () => {
   });
 });
 
+it('keeps valid updates available when another stored summary is malformed', async () => {
+  const { body } = await stage();
+  mockDb.seed(UPDATES, 'broken', { status: 'pending', summary: { word: 'broken' } });
+  const response = (await listRequests(request('http://localhost/x?status=pending'))) as unknown as Response<{
+    requests: Data[];
+    invalidCount: number;
+  }>;
+
+  expect(response.status).toBe(200);
+  expect(response.body.invalidCount).toBe(1);
+  expect(response.body.requests).toEqual([expect.objectContaining({ id: body.id })]);
+  expect(await detail('broken')).toMatchObject({ status: 409, body: { code: 'INVALID_VOCABULARY_UPDATE_REQUEST' } });
+});
+
 describe('approving a word update', () => {
   it('writes the proposal and keeps the creation time, random index and pool bookkeeping', async () => {
     const { body } = await stage({ proposedWord: { ...proposal, etymology: null } });
@@ -382,8 +396,41 @@ describe('approving a word update', () => {
     expect(response.body.request).toMatchObject({
       status: 'approved',
       approvedBy: 'admin-1',
-      appliedFromWord: expect.objectContaining({ word: 'ardor' }),
+      baseWord: expect.objectContaining({ word: 'ardor' }),
     });
+  });
+
+  it('keeps only the proposal and the actual replaced word, including when the live word changed after staging', async () => {
+    const { body } = await stage();
+    mockDb.seed(WORDS, 'ardor', { ...liveWord, translation: 'warmth' });
+    const response = await approve(body.id);
+
+    expect(response.status).toBe(200);
+    expect(response.body.request.baseWord.translation).toBe('warmth');
+    expect(response.body.request.proposedWord.word).toBe('ārdor');
+    expect(mockDb.read(UPDATES, body.id)).not.toHaveProperty('appliedFromWord');
+  });
+
+  it('reads the replaced-word snapshot from legacy approved requests', async () => {
+    const { body } = await stage();
+    mockDb.seed(UPDATES, body.id, {
+      ...mockDb.read(UPDATES, body.id),
+      status: 'approved',
+      appliedFromWord: { ...liveWord, translation: 'legacy replacement' },
+    });
+
+    const response = await detail(body.id);
+    expect(response.status).toBe(200);
+    expect(response.body.request.baseWord.translation).toBe('legacy replacement');
+  });
+
+  it('rejects approval without writing if the new before snapshot would make the request too large', async () => {
+    const { body } = await stage();
+    mockDb.seed(WORDS, 'ardor', { ...liveWord, etymology: 'x'.repeat(920 * 1024) });
+
+    expect(await approve(body.id)).toMatchObject({ status: 413, body: { code: 'VOCABULARY_UPDATE_TOO_LARGE' } });
+    expect(mockDb.read(WORDS, 'ardor')?.word).toBe('ardor');
+    expect(mockDb.read(UPDATES, body.id)?.status).toBe('pending');
   });
 
   it('removes an optional field the proposal leaves out and keeps fields the schema does not know', async () => {
@@ -478,6 +525,21 @@ describe('editing and dismissing a word update', () => {
       changes: { fields: ['translation'], tableCells: 0 },
     });
     expect(response.body.request.version).not.toBe(opened.request.version);
+  });
+
+  it('checks the size of both the saved proposal and its list summary', async () => {
+    const { body } = await stage();
+    const opened = (await detail(body.id)).body;
+    const response = (await saveProposal(
+      request(`http://localhost/x/${body.id}`, {
+        proposedWord: { ...proposal, translation: 'x'.repeat(460 * 1024) },
+        version: opened.request.version,
+      }),
+      params(body.id)
+    )) as unknown as Response;
+
+    expect(response).toMatchObject({ status: 413, body: { code: 'VOCABULARY_UPDATE_TOO_LARGE' } });
+    expect((await detail(body.id)).body.request.proposedWord.translation).toBe('fire, heat');
   });
 
   it('dismisses without touching the word', async () => {

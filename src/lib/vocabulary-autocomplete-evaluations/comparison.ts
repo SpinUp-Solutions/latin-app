@@ -1,107 +1,9 @@
-import type { VocabularyAutocompleteProfileId } from '../../../shared/openai/model-registry';
+import type { VocabularyAutocompleteProfileId } from '@/shared/openai/model-registry';
 import type { VocabularyEvaluationCell } from './contracts';
 
-/** Free-text fields: shown side by side, never scored, because wording always differs. */
-export const PROSE_FIELDS = ['translation', 'definitions', 'etymology', 'pronunciation'] as const;
-
-/**
- * How two models' values for one form compare. `macrons` means the letters
- * match but vowel length marks or capitals differ; `missing` means only one
- * model filled the form.
- */
-export type FormAgreement = 'same' | 'macrons' | 'missing' | 'different';
-
-export interface FormRow {
-  key: string;
-  field: string;
-  /** The path below the field, e.g. ["indicative", "active", "present", "singular", "first"]. */
-  path: string[];
-  values: [string[], string[]];
-  agreement: FormAgreement;
-}
-
-export interface FormCounts extends Record<FormAgreement, number> {
-  total: number;
-}
-
-export interface EntryComparison {
-  rows: FormRow[];
-  counts: FormCounts;
-}
+import { compareEntryForms, type FormCounts } from '@/src/utils/vocabulary/word-diff';
 
 const emptyCounts = (): FormCounts => ({ same: 0, macrons: 0, missing: 0, different: 0, total: 0 });
-
-const isPrimitive = (value: unknown) =>
-  value === null || ['string', 'number', 'boolean'].includes(typeof value) || value === undefined;
-
-const toValues = (value: unknown): string[] => {
-  const items = Array.isArray(value) ? value : [value];
-  return items
-    .filter(item => item !== null && item !== undefined)
-    .map(item => String(item).normalize('NFC').trim())
-    .filter(Boolean);
-};
-
-/** Flattens an entry into its individual forms, keyed by path. Lists of plain values are one form. */
-export function flattenEntry(value: unknown) {
-  const leaves = new Map<string, { path: string[]; values: string[] }>();
-  const walk = (node: unknown, nodePath: string[]) => {
-    if (isPrimitive(node) || (Array.isArray(node) && node.every(isPrimitive))) {
-      leaves.set(nodePath.join('.'), { path: nodePath, values: toValues(node) });
-      return;
-    }
-    if (Array.isArray(node)) {
-      node.forEach((item, index) => walk(item, [...nodePath, String(index + 1)]));
-      return;
-    }
-    for (const [key, child] of Object.entries(node as Record<string, unknown>)) walk(child, [...nodePath, key]);
-  };
-  walk(value, []);
-  return leaves;
-}
-
-const stripMarks = (text: string) => text.normalize('NFD').replace(/[̄̆]/g, '').toLowerCase();
-
-const sameSet = (left: string[], right: string[], normalize: (text: string) => string) => {
-  const a = [...new Set(left.map(normalize))].sort();
-  const b = [...new Set(right.map(normalize))].sort();
-  return a.length === b.length && a.every((item, index) => item === b[index]);
-};
-
-export function formAgreement(left: string[], right: string[]): FormAgreement | null {
-  if (left.length === 0 && right.length === 0) return null;
-  if (left.length === 0 || right.length === 0) return 'missing';
-  if (sameSet(left, right, text => text)) return 'same';
-  if (sameSet(left, right, stripMarks)) return 'macrons';
-  return 'different';
-}
-
-/**
- * Compares the grammatical fields of two autocompleted entries form by form.
- * Forms both models left empty (a locative most words lack) are not counted.
- */
-export function compareEntryForms(first: Record<string, unknown>, second: Record<string, unknown>): EntryComparison {
-  const grammar = (output: Record<string, unknown>) =>
-    Object.fromEntries(
-      Object.entries(output).filter(([field]) => !(PROSE_FIELDS as readonly string[]).includes(field))
-    );
-  const left = flattenEntry(grammar(first));
-  const right = flattenEntry(grammar(second));
-  const keys = [...new Set([...left.keys(), ...right.keys()])];
-  const counts = emptyCounts();
-  const rows: FormRow[] = [];
-  for (const key of keys) {
-    const leftValues = left.get(key)?.values ?? [];
-    const rightValues = right.get(key)?.values ?? [];
-    const agreement = formAgreement(leftValues, rightValues);
-    if (!agreement) continue;
-    const [field, ...path] = (left.get(key) ?? right.get(key))!.path;
-    rows.push({ key, field, path, values: [leftValues, rightValues], agreement });
-    counts[agreement] += 1;
-    counts.total += 1;
-  }
-  return { rows, counts };
-}
 
 export interface VocabularyProfileFigures {
   profileId: VocabularyAutocompleteProfileId;
@@ -212,39 +114,4 @@ export function summarizeVocabularyRun(
     faster: comparedCount ? leadOf(figures, item => item.averageMs) : null,
     cheaper: costComparedCount ? leadOf(figures, item => item.averageCost) : null,
   };
-}
-
-/**
- * Splits `text` into the part it shares with `other` at the start, the part
- * that differs, and the part it shares at the end, so a table can mark only
- * the letters that changed (amāverītis against amāveritis marks "ī").
- */
-export function differingSpan(text: string, other: string): [string, string, string] {
-  let start = 0;
-  while (start < text.length && start < other.length && text[start] === other[start]) start += 1;
-  let end = 0;
-  while (
-    end < text.length - start &&
-    end < other.length - start &&
-    text[text.length - 1 - end] === other[other.length - 1 - end]
-  ) {
-    end += 1;
-  }
-  return [text.slice(0, start), text.slice(start, text.length - end), text.slice(text.length - end)];
-}
-
-const searchText = (text: string) =>
-  stripMarks(text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_.]/g, ' ')).replace(/\s+/g, ' ');
-
-/**
- * Whether a form matches a search: every word of the query must start a word
- * of the form's path or of either model's value, ignoring case and macrons, so
- * "subj perf pl" finds the perfect subjunctive plurals (not the imperfect or
- * pluperfect) and "amaver" finds amāverītis.
- */
-export function formMatchesQuery(row: FormRow, query: string) {
-  const words = searchText(query).trim().split(' ').filter(Boolean);
-  if (words.length === 0) return true;
-  const haystack = searchText([row.field, ...row.path, ...row.values.flat()].join(' ')).split(' ');
-  return words.every(word => haystack.some(item => item.startsWith(word)));
 }
