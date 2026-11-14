@@ -43,15 +43,20 @@ const proposed = {
   declension_table: { ...current.declension_table, ablative: row(['rosā'], ['rosīs']) },
 };
 
-it('shows a word read-only without save, AI or list editing controls', () => {
-  render(<WordEditPanel word={current as never} readOnly />);
+it('reports unsaved edits to the form or the table, and clears the report when it goes away', () => {
+  const onDirtyChange = jest.fn();
+  const { unmount } = render(
+    <WordEditPanel word={current as never} onSave={async () => true} updating={false} onDirtyChange={onDirtyChange} />
+  );
+  expect(onDirtyChange).toHaveBeenLastCalledWith(false);
 
-  expect(screen.queryByText('Apply')).toBeNull();
-  expect(screen.queryByText('AI Autocomplete')).toBeNull();
-  expect(screen.queryByTitle('Add definition')).toBeNull();
-  expect(screen.getByDisplayValue('rosa, rosae').matches(':disabled')).toBe(true);
   fireEvent.doubleClick(screen.getByText('rosam'));
-  expect(screen.queryByPlaceholderText('Enter value...')).toBeNull();
+  fireEvent.change(screen.getByPlaceholderText('Enter value...'), { target: { value: 'rosām' } });
+  fireEvent.keyDown(screen.getByPlaceholderText('Enter value...'), { key: 'Enter' });
+  expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+
+  unmount();
+  expect(onDirtyChange).toHaveBeenLastCalledWith(false);
 });
 
 it('lays out a change like the editor, with old and new values and changed cells marked', () => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
@@ -20,7 +20,6 @@ import {
 } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
-import { WordFormReadOnlyContext } from './forms/readOnlyContext';
 import {
   toFormDefaultValues,
   applyFormValuesToWord,
@@ -31,19 +30,16 @@ export const AIFilledFieldsContext = React.createContext<Map<string, 'filled' | 
 
 interface WordEditPanelProps {
   word: VocabularyWordWithId | null;
-  onSave?: (updates: Partial<VocabularyWord>) => Promise<boolean>;
-  updating?: boolean;
-  /** Shows the word without letting it be edited. */
-  readOnly?: boolean;
+  onSave: (updates: Partial<VocabularyWord>) => Promise<boolean>;
+  updating: boolean;
   /** Label of the save button. */
   saveLabel?: string;
-  /** Buttons shown before the save button, or alone when the panel is read-only. */
+  /** Buttons shown before the save button. */
   actions?: React.ReactNode;
   allowAIAutocomplete?: boolean;
+  /** Told whether the word has edits that have not been saved; false again when the panel goes away. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
-
-/** Disabled fields keep their normal look, so a read-only word reads like the editor. */
-const READ_ONLY_FIELDS = 'min-w-0 space-y-6 [&_:disabled]:!cursor-default [&_:disabled]:!opacity-100';
 
 type TableData = Record<string, unknown>;
 
@@ -167,11 +163,11 @@ const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown =
 export const WordEditPanel: React.FC<WordEditPanelProps> = ({
   word,
   onSave,
-  updating = false,
-  readOnly = false,
+  updating,
   saveLabel = 'Apply',
   actions,
   allowAIAutocomplete = true,
+  onDirtyChange,
 }) => {
   const form = useForm<VocabularyFormValues>({
     resolver: zodResolver(VocabularyFormSchema) as Resolver<VocabularyFormValues>,
@@ -284,7 +280,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
 
   const handleSubmit = form.handleSubmit(
     async values => {
-      if (!word || readOnly || !onSave) return;
+      if (!word) return;
 
       if (editableTable) {
         const schema =
@@ -343,6 +339,13 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
 
   const isSubmitting = form.formState.isSubmitting;
 
+  const savedTable = useMemo(() => JSON.stringify(tableFromWord(word)), [word]);
+  const dirty = form.formState.isDirty || JSON.stringify(table) !== savedTable;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
+
   if (!word) {
     return <EmptyState />;
   }
@@ -361,7 +364,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 {actions}
-                {!readOnly && allowAIAutocomplete && (
+                {allowAIAutocomplete && (
                   <AIAutocompleteButton
                     wordId={word.id}
                     word={watchedWord || word.word}
@@ -371,11 +374,9 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
                     disabled={updating || isSubmitting}
                   />
                 )}
-                {!readOnly && (
-                  <Button type="submit" disabled={updating || isSubmitting}>
-                    {updating || isSubmitting ? 'Saving...' : saveLabel}
-                  </Button>
-                )}
+                <Button type="submit" disabled={updating || isSubmitting}>
+                  {updating || isSubmitting ? 'Saving...' : saveLabel}
+                </Button>
               </div>
             </div>
             {Object.keys(form.formState.errors).length > 0 && (
@@ -402,12 +403,8 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
               without it they are positioned against the page and make the whole document scrollable. */}
           <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
             <div className="space-y-6">
-              <WordFormReadOnlyContext.Provider value={readOnly}>
-                <fieldset disabled={readOnly} className={READ_ONLY_FIELDS}>
-                  <BaseWordForm />
-                  {renderPosForm()}
-                </fieldset>
-              </WordFormReadOnlyContext.Provider>
+              <BaseWordForm />
+              {renderPosForm()}
 
               {editableTable && (
                 <SchemaTable
@@ -426,7 +423,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
                   color={editableTable.color}
                   isExpanded={tableExpanded}
                   onToggle={() => setTableExpanded(expanded => !expanded)}
-                  isEditMode={!readOnly}
+                  isEditMode={true}
                   editingCell={editingCell}
                   editingCellValue={editingCellValue}
                   editCallbacks={{
