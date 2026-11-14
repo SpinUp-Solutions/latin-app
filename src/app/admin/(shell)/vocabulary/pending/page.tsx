@@ -7,10 +7,10 @@ import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { AdminPillPicker } from '@/src/components/admin/shell';
 import {
   useApproveVocabularyWordRequestMutation,
   useDismissVocabularyWordRequestMutation,
@@ -232,56 +232,42 @@ function NewWordRequestsReview() {
   );
 }
 
-function TabCount({ count }: { count: string | null }) {
-  if (!count) return null;
-  return (
-    <span className="ml-2 rounded-full bg-roman-parchment px-1.5 text-xs leading-5 text-roman-stone">{count}</span>
-  );
-}
+type PendingTab = 'new' | 'updates';
 
 function PendingVocabularyPage() {
-  const [tab, setTab] = useState<'new' | 'updates'>('new');
+  const [tab, setTab] = useState<PendingTab>('new');
   const { data: newWords } = useGetVocabularyWordRequestsQuery({ status: 'pending' });
   const { data: updates } = useGetVocabularyWordUpdateRequestsQuery({ status: 'pending' });
 
   return (
-    <Tabs
-      value={tab}
-      onValueChange={value => setTab(value as 'new' | 'updates')}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-roman-marble">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between gap-4 flex-shrink-0">
         <div className="flex items-center gap-6">
           <div>
             <h1 className="text-xl font-serif tracking-wide">Pending Vocabulary</h1>
             <p className="text-sm text-roman-stone">Review new words and changes to existing words</p>
           </div>
-          <TabsList>
-            <TabsTrigger value="new">
-              New words
-              <TabCount count={newWords ? String(newWords.length) : null} />
-            </TabsTrigger>
-            <TabsTrigger value="updates">
-              Updates
-              <TabCount count={updates ? `${updates.requests.length}${updates.truncated ? '+' : ''}` : null} />
-            </TabsTrigger>
-          </TabsList>
+          <AdminPillPicker<PendingTab>
+            label="Pending vocabulary"
+            value={tab}
+            onValueChange={setTab}
+            options={[
+              { value: 'new', label: 'New words', count: newWords?.length },
+              {
+                value: 'updates',
+                label: 'Updates',
+                count: updates && `${updates.requests.length}${updates.truncated ? '+' : ''}`,
+              },
+            ]}
+          />
         </div>
         <Button asChild size="sm" variant="outline">
           <Link href="/admin/vocabulary">View All Words</Link>
         </Button>
       </header>
 
-      <TabsContent
-        value="new"
-        className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
-        <NewWordRequestsReview />
-      </TabsContent>
-      <TabsContent
-        value="updates"
-        className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
-        <WordUpdateReview />
-      </TabsContent>
-    </Tabs>
+      {tab === 'new' ? <NewWordRequestsReview /> : <WordUpdateReview />}
+    </div>
   );
 }
 
