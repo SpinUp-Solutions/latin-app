@@ -6,10 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { VocabularyFormValues } from './types';
 import { Plus, Trash2 } from 'lucide-react';
 import { AITextField } from './AITextField';
+import { useContext } from 'react';
+import { WordFormReadOnlyContext } from './readOnlyContext';
 
 export const BaseWordForm = () => {
   const form = useFormContext<VocabularyFormValues>();
   const definitions = form.watch('definitions') || [];
+  const readOnly = useContext(WordFormReadOnlyContext);
 
   const addDefinition = () => {
     form.setValue('definitions', [...definitions, '']);
@@ -81,19 +84,23 @@ export const BaseWordForm = () => {
                   </FormItem>
                 )}
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => removeDefinition(index)}
-                title="Remove definition">
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {!readOnly && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => removeDefinition(index)}
+                  title="Remove definition">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           ))}
-          <Button type="button" variant="outline" size="icon" onClick={addDefinition} title="Add definition">
-            <Plus className="h-4 w-4" />
-          </Button>
+          {!readOnly && (
+            <Button type="button" variant="outline" size="icon" onClick={addDefinition} title="Add definition">
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 

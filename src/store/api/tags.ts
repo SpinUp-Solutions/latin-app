@@ -18,7 +18,7 @@ export const APP_API_TAG_TYPES = [
   'FeedbackList',
   'FeedbackDetail',
   'FeedbackCount',
-  // Vocabulary words, pools and word requests.
+  // Vocabulary words, pools, and requests to add or update words.
   'Word',
   'WordList',
   'WordCounts',
@@ -29,6 +29,9 @@ export const APP_API_TAG_TYPES = [
   'AvailableWords',
   'VocabularyWordRequest',
   'VocabularyWordRequestList',
+  'VocabularyWordUpdateRequest',
+  'VocabularyWordUpdateRequestList',
+  'VocabularyWordUpdateNotes',
 ] as const;
 
 export const PRACTICE_CATEGORY_ASSIGNMENTS_TAG = {
