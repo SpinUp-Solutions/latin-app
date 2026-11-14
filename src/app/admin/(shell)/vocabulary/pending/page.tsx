@@ -271,10 +271,14 @@ function PendingVocabularyPage() {
         </Button>
       </header>
 
-      <TabsContent value="new" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+      <TabsContent
+        value="new"
+        className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
         <NewWordRequestsReview />
       </TabsContent>
-      <TabsContent value="updates" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+      <TabsContent
+        value="updates"
+        className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
         <WordUpdateReview />
       </TabsContent>
     </Tabs>

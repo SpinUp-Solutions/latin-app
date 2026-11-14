@@ -14,6 +14,7 @@ import {
 import { ArrayCellContent } from './tables/ArrayCellContent';
 import { SchemaTable } from './tables/SchemaTable';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
+import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 
 type Plain = Record<string, unknown>;
 
@@ -113,16 +114,21 @@ function DiffValue({ before, after, multiline = false }: { before: string; after
       </div>
     );
   }
+  // A value that is only added or only removed shows just that side.
   return (
     <div className="space-y-1">
-      <div className={cn(box, 'min-h-10 whitespace-pre-wrap border-red-200 bg-red-50 text-red-900')}>
-        <Sign tone="removed" />
-        <Marked text={before} other={after} markClass="bg-red-200/80" />
-      </div>
-      <div className={cn(box, 'min-h-10 whitespace-pre-wrap border-green-300 bg-green-50 text-green-900')}>
-        <Sign tone="added" />
-        <Marked text={after} other={before} markClass="bg-green-200/80" />
-      </div>
+      {before && (
+        <div className={cn(box, 'min-h-10 whitespace-pre-wrap border-red-200 bg-red-50 text-red-900')}>
+          <Sign tone="removed" />
+          <Marked text={before} other={after} markClass="bg-red-200/80" />
+        </div>
+      )}
+      {after && (
+        <div className={cn(box, 'min-h-10 whitespace-pre-wrap border-green-300 bg-green-50 text-green-900')}>
+          <Sign tone="added" />
+          <Marked text={after} other={before} markClass="bg-green-200/80" />
+        </div>
+      )}
     </div>
   );
 }
@@ -309,17 +315,30 @@ function DiffCell({ before, after, changed }: { before: unknown; after: unknown;
   const afterText = asText(after);
   return (
     <div className="space-y-1">
-      <div className="rounded bg-red-50 px-1.5 py-0.5 text-red-900">
-        <Sign tone="removed" />
-        <Marked text={beforeText} other={afterText} markClass="bg-red-200/80" />
-      </div>
-      <div className="rounded bg-green-50 px-1.5 py-0.5 text-green-900">
-        <Sign tone="added" />
-        <Marked text={afterText} other={beforeText} markClass="bg-green-200/80" />
-      </div>
+      {beforeText && (
+        <div className="rounded bg-red-50 px-1.5 py-0.5 text-red-900">
+          <Sign tone="removed" />
+          <Marked text={beforeText} other={afterText} markClass="bg-red-200/80" />
+        </div>
+      )}
+      {afterText && (
+        <div className="rounded bg-green-50 px-1.5 py-0.5 text-green-900">
+          <Sign tone="added" />
+          <Marked text={afterText} other={beforeText} markClass="bg-green-200/80" />
+        </div>
+      )}
     </div>
   );
 }
+
+const hasPath = (value: unknown, path: string) => {
+  let current = value;
+  for (const key of path.split('.')) {
+    if (!current || typeof current !== 'object' || !(key in current)) return false;
+    current = (current as Plain)[key];
+  }
+  return true;
+};
 
 function TableDiff() {
   const { before, after, changesOnly } = useContext(DiffContext);
@@ -329,25 +348,46 @@ function TableDiff() {
   const afterTable = table ? after[table.field] : undefined;
   const changedCells = useMemo(() => new Set(changedTableCells(beforeTable, afterTable)), [beforeTable, afterTable]);
 
-  if (!table || (changesOnly && changedCells.size === 0)) return null;
   const isPronoun = after.part_of_speech === 'pronoun';
   const pronounType = (after.pronoun_type ?? null) as PronounType | null;
   const person = (after.person ?? null) as PronounPerson | null;
+  const schema = table && (isPronoun ? getPronounTableSchema(pronounType, person) : table.schema);
+  // Changed cells the table has no slot for, such as a form stored under a key the schema lacks.
+  const unshown = useMemo(() => {
+    if (!schema) return [];
+    const shape = buildEmptyFromSchema(schema);
+    return [...changedCells].filter(path => !hasPath(shape, path));
+  }, [schema, changedCells]);
+
+  if (!table || !schema || (changesOnly && changedCells.size === 0)) return null;
 
   return (
-    <SchemaTable
-      schema={isPronoun ? getPronounTableSchema(pronounType, person) : table.schema}
-      data={afterTable ?? {}}
-      tableType={table.tableType}
-      title={isPronoun ? getPronounTableTitle(pronounType, person) : table.title}
-      color={table.color}
-      isExpanded={expanded}
-      onToggle={() => setExpanded(value => !value)}
-      renderCell={cell => (
-        <DiffCell before={valueAt(beforeTable, cell.path)} after={cell.value} changed={changedCells.has(cell.path)} />
+    <>
+      <SchemaTable
+        schema={schema}
+        data={afterTable ?? {}}
+        tableType={table.tableType}
+        title={isPronoun ? getPronounTableTitle(pronounType, person) : table.title}
+        color={table.color}
+        isExpanded={expanded}
+        onToggle={() => setExpanded(value => !value)}
+        renderCell={cell => (
+          <DiffCell before={valueAt(beforeTable, cell.path)} after={cell.value} changed={changedCells.has(cell.path)} />
+        )}
+        cellFilter={changesOnly ? cell => changedCells.has(cell.path) : undefined}
+      />
+      {unshown.length > 0 && (
+        <div className="space-y-2 rounded-md border border-dashed border-gray-300 p-3">
+          <p className="text-sm font-medium text-gray-700">Forms the table has no place for</p>
+          {unshown.map(path => (
+            <div key={path} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start gap-3 text-sm">
+              <span className="text-gray-600">{path.split('.').map(humanize).join(' › ')}</span>
+              <DiffCell before={valueAt(beforeTable, path)} after={valueAt(afterTable, path)} changed />
+            </div>
+          ))}
+        </div>
       )}
-      cellFilter={changesOnly ? cell => changedCells.has(cell.path) : undefined}
-    />
+    </>
   );
 }
 

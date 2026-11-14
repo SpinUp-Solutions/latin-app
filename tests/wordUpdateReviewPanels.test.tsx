@@ -77,3 +77,18 @@ it('hides unchanged fields and table rows when showing changes only', () => {
   expect(screen.queryByText('Genitive')).toBeNull();
   expect(screen.getByText('Ablative')).toBeTruthy();
 });
+
+it('lists changed forms the table has no slot for, and shows an added value without an empty "before"', () => {
+  const withStrayForm = {
+    ...current,
+    definitions: ['rose'],
+    declension_table: { ...current.declension_table, nominative: { ...row(['rosa'], ['rosae']), dual: ['rosae'] } },
+  };
+  render(<WordDiffPanel before={withStrayForm} after={{ ...current, definitions: ['rose', 'garland'] }} />);
+
+  expect(screen.getByText('Forms the table has no place for')).toBeTruthy();
+  expect(screen.getByText('Nominative › Dual')).toBeTruthy();
+  // The added definition shows only its new value; the removed stray form only its old one.
+  expect(screen.getAllByText('Before:')).toHaveLength(1);
+  expect(screen.getAllByText('After:')).toHaveLength(1);
+});
