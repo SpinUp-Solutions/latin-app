@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
 import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
 import type {
   VocabularyWordUpdateRequestStatus,
@@ -64,6 +63,43 @@ export function describeChanges({ fields, tableCells }: WordChangeSummary): stri
 const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '');
 
 type View = 'current' | 'proposed' | 'changes';
+
+/** The segmented picker the AI evaluation results use for lesson and test grading modes. */
+function ViewPicker({
+  view,
+  onChange,
+  beforeLabel,
+  locked,
+}: {
+  view: View;
+  onChange: (view: View) => void;
+  beforeLabel: string;
+  /** While a proposal is being edited, only the Proposed view is available. */
+  locked: boolean;
+}) {
+  const views: Array<[View, string]> = [
+    ['current', beforeLabel],
+    ['proposed', 'Proposed'],
+    ['changes', 'Changes'],
+  ];
+  return (
+    <div className="inline-flex rounded-lg bg-roman-marble p-1" role="group" aria-label="Update view">
+      {views.map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={value === view}
+          disabled={locked && value !== view}
+          onClick={() => onChange(value)}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+            value === view ? 'bg-white text-foreground shadow-sm' : 'text-roman-stone hover:text-foreground'
+          }`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
   const { data, isLoading, isFetching, error, refetch } = useGetVocabularyWordUpdateRequestQuery(id);
@@ -180,17 +216,7 @@ function UpdateDetail({ id, onClosed }: { id: string; onClosed: () => void }) {
       )}
 
       <div className="border-b border-gray-200 px-6 py-2">
-        <Tabs value={view} onValueChange={value => setView(value as View)}>
-          <TabsList>
-            <TabsTrigger value="current" disabled={editing}>
-              {beforeLabel}
-            </TabsTrigger>
-            <TabsTrigger value="proposed">Proposed</TabsTrigger>
-            <TabsTrigger value="changes" disabled={editing}>
-              Changes
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <ViewPicker view={view} onChange={setView} beforeLabel={beforeLabel} locked={editing} />
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
