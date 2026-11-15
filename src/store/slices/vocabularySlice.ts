@@ -1,15 +1,14 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import type { VocabularyFilters } from '@/src/types/admin-vocabulary';
 
 interface VocabularyState {
-  filters: {
-    wordType: string;
-    search: string;
-  };
+  filters: VocabularyFilters;
 }
 
 const initialState: VocabularyState = {
   filters: {
     wordType: 'all',
+    coreType: null,
     search: '',
   },
 };

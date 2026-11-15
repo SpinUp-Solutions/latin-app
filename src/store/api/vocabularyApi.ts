@@ -2,6 +2,7 @@ import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/ind
 import { appApi } from './appApi';
 import { STUDENT_POOLS_TAG } from './tags';
 import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
+import type { WordType } from '@/shared/types/vocabulary/schemas/enums';
 import { z, ZodError } from 'zod';
 
 type ZodIssue = z.core.$ZodIssue;
@@ -45,15 +46,17 @@ export const vocabularyApi = appApi.injectEndpoints({
       { words: VocabularyWordWithId[]; hasMore: boolean; lastWordId: string | null },
       {
         wordType?: string;
+        coreType?: WordType | null;
         search?: string;
         limit?: number;
         lastWordId?: string | null;
       }
     >({
-      query: ({ wordType, search, limit = 20, lastWordId }) => {
+      query: ({ wordType, coreType, search, limit = 20, lastWordId }) => {
         const params = new URLSearchParams({ limit: limit.toString() });
 
         if (wordType && wordType !== 'all') params.append('wordType', wordType);
+        if (coreType) params.append('coreType', coreType);
         if (search) params.append('search', search);
         if (lastWordId) params.append('lastWordId', lastWordId);
 
@@ -69,6 +72,7 @@ export const vocabularyApi = appApi.injectEndpoints({
       serializeQueryArgs: ({ queryArgs }) => {
         return {
           wordType: queryArgs.wordType,
+          coreType: queryArgs.coreType,
           search: queryArgs.search,
         };
       },
@@ -91,6 +95,7 @@ export const vocabularyApi = appApi.injectEndpoints({
         if (!previousArg) return true;
         if (currentArg?.search !== previousArg.search) return true;
         if (currentArg?.wordType !== previousArg.wordType) return true;
+        if (currentArg?.coreType !== previousArg.coreType) return true;
         return currentArg?.lastWordId !== previousArg.lastWordId;
       },
       providesTags: result =>

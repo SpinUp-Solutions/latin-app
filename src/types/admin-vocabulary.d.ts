@@ -1,3 +1,5 @@
+import type { WordType } from '@/shared/types/vocabulary/schemas/enums';
+
 export interface Word {
   id: string;
   word: string;
@@ -23,6 +25,7 @@ export interface Word {
 
 export interface VocabularyFilters {
   wordType: string;
+  coreType: WordType | null;
   search: string;
 }
 

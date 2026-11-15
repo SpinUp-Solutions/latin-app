@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/src/components/ui/label';
 import { Filter, Search, X, RotateCcw } from 'lucide-react';
 import { VocabularyFilters } from '@/src/types/admin-vocabulary';
+import { CoreTypeSelect } from './CoreTypeSelect';
 
 interface VocabularyFiltersProps {
   filters: VocabularyFilters;
@@ -36,7 +37,7 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
   onSearch,
   onReset,
 }) => {
-  const hasActiveFilters = filters.wordType !== 'all' || filters.search !== '';
+  const hasActiveFilters = filters.wordType !== 'all' || filters.coreType !== null || filters.search !== '';
 
   return (
     <Card className="mb-4 border-border bg-white shadow-sm">
@@ -72,6 +73,8 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
               </SelectContent>
             </Select>
           </div>
+
+          <CoreTypeSelect id="coreType" value={filters.coreType} onChange={coreType => onFiltersChange({ coreType })} />
 
           <div className="min-w-0 space-y-2">
             <Label htmlFor="search" className="text-sm font-medium text-gray-700">
@@ -118,6 +121,17 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
                   Type: {WORD_TYPE_OPTIONS.find(opt => opt.value === filters.wordType)?.label}
                   <button
                     onClick={() => onFiltersChange({ wordType: 'all' })}
+                    className="ml-1 rounded-full p-0.5 hover:bg-primary/10"
+                    title="Remove filter">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {filters.coreType && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-roman-parchment px-2 py-1 text-xs text-foreground">
+                  {filters.coreType === 'core' ? 'Core only' : 'Non-Core only'}
+                  <button
+                    onClick={() => onFiltersChange({ coreType: null })}
                     className="ml-1 rounded-full p-0.5 hover:bg-primary/10"
                     title="Remove filter">
                     <X className="h-3 w-3" />

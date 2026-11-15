@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { Query } from 'firebase-admin/firestore';
 import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
+import { WordTypeSchema } from '@/shared/types/vocabulary/schemas/enums';
 import { serializeVocabularyWord } from '@/src/lib/vocabulary/word-serialization.server';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     const wordType = searchParams.get('wordType');
+    const coreType = WordTypeSchema.safeParse(searchParams.get('coreType'));
     const limit = parseInt(searchParams.get('limit') || '20');
     const lastWordId = searchParams.get('lastWordId');
     // A prefix match on "amo " would find nothing, and every caller means "amo".
@@ -57,6 +59,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     let query: Query = selectValues.length > 0 ? words.select(...selectValues) : words;
     query = query.orderBy('sort_key');
     if (wordType) query = query.where('part_of_speech', '==', wordType);
+    if (coreType.success) query = query.where('type', '==', coreType.data);
     if (search) {
       const searchKey = stripMacrons(search);
       query = query.where('sort_key', '>=', searchKey).where('sort_key', '<=', searchKey + '\uf8ff');

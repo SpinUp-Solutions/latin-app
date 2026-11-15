@@ -6,6 +6,7 @@ import {
   PronounPersonSchema,
   PronounTypeSchema,
   VerbConjugationSchema,
+  WordTypeSchema,
 } from '@/shared/types/vocabulary/schemas/enums';
 import { MAX_GENERATED_FILTER_OPERANDS, MAX_GENERATED_WORD_COUNT } from '@/src/config/generatedExerciseLimits';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
@@ -76,6 +77,7 @@ export const generatedPreviewGeneratorConfigSchema = z
     poolId: z.string().trim().min(1).nullable().optional(),
     count: generatedWordCountSchema,
     uniqueWordCount: generatedUniqueWordCountSchema.optional(),
+    coreType: WordTypeSchema.nullable().optional(),
     filters: generatedPreviewFiltersSchema.optional(),
     formSelection: formSelectionSchema,
   })
