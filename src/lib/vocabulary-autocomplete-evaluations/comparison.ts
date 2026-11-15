@@ -1,9 +1,7 @@
 import type { VocabularyAutocompleteProfileId } from '@/shared/openai/model-registry';
+import { compareEntryForms, emptyCounts, type FormCounts } from '@/src/utils/vocabulary/word-diff';
+import { leadOf, type Lead } from '../ai-evaluations/comparison';
 import type { VocabularyEvaluationCell } from './contracts';
-
-import { compareEntryForms, type FormCounts } from '@/src/utils/vocabulary/word-diff';
-
-const emptyCounts = (): FormCounts => ({ same: 0, macrons: 0, missing: 0, different: 0, total: 0 });
 
 export interface VocabularyProfileFigures {
   profileId: VocabularyAutocompleteProfileId;
@@ -29,19 +27,9 @@ export interface VocabularyRunSummary {
   /** Compared words where every form matches exactly. */
   identicalEntries: number;
   figures: [VocabularyProfileFigures, VocabularyProfileFigures];
-  faster: { profileId: VocabularyAutocompleteProfileId; ratio: number } | null;
-  cheaper: { profileId: VocabularyAutocompleteProfileId; ratio: number } | null;
+  faster: Lead<VocabularyAutocompleteProfileId> | null;
+  cheaper: Lead<VocabularyAutocompleteProfileId> | null;
 }
-
-const leadOf = (
-  figures: [VocabularyProfileFigures, VocabularyProfileFigures],
-  value: (item: VocabularyProfileFigures) => number
-) => {
-  const [a, b] = figures.map(value);
-  if (a === b || Math.min(a, b) <= 0) return null;
-  const [winner, loser] = a < b ? [figures[0], figures[1]] : [figures[1], figures[0]];
-  return { profileId: winner.profileId, ratio: value(loser) / value(winner) };
-};
 
 export function summarizeVocabularyRun(
   cells: readonly VocabularyEvaluationCell[],

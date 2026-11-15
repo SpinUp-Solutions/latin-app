@@ -120,48 +120,44 @@ function UpdateDetail({
   const beforeWord = { ...before, id: request.wordId } as VocabularyWordWithId;
   const proposedWord = { ...request.proposedWord, id: request.wordId } as VocabularyWordWithId;
 
-  const handleError = (failure: unknown, fallback: string) => {
-    toast.error(getApiErrorMessage(failure, fallback));
-    // A conflict means the word or the proposal moved on; show the reviewer what is there now.
-    if ((failure as { status?: unknown })?.status === 409) refetch();
-  };
-
-  const handleSave = async (updates: Partial<VocabularyWord>) => {
+  /** Runs a mutation and reports how it went; resolves to whether it succeeded. */
+  const attempt = async (action: Promise<unknown>, done: string, failed: string) => {
     try {
-      await saveProposal({ id, proposedWord: updates as VocabularyWord, version: request.version }).unwrap();
-      toast.success('Proposal saved');
-      setEditing(false);
+      await action;
+      toast.success(done);
       return true;
     } catch (failure) {
-      handleError(failure, 'Could not save the proposal');
+      toast.error(getApiErrorMessage(failure, failed));
+      // A conflict means the word or the proposal moved on; show the reviewer what is there now.
+      if ((failure as { status?: unknown })?.status === 409) refetch();
       return false;
     }
   };
 
+  const handleSave = async (updates: Partial<VocabularyWord>) => {
+    const saved = await attempt(
+      saveProposal({ id, proposedWord: updates as VocabularyWord, version: request.version }).unwrap(),
+      'Proposal saved',
+      'Could not save the proposal'
+    );
+    if (saved) setEditing(false);
+    return saved;
+  };
+
   const handleApprove = async () => {
     if (!liveFingerprint) return;
-    try {
-      await approve({
-        id,
-        wordId: request.wordId,
-        version: request.version,
-        wordFingerprint: liveFingerprint,
-      }).unwrap();
-      toast.success(`Updated ${request.word}`);
-      onClosed();
-    } catch (failure) {
-      handleError(failure, 'Could not approve the update');
-    }
+    const approval = approve({
+      id,
+      wordId: request.wordId,
+      version: request.version,
+      wordFingerprint: liveFingerprint,
+    });
+    if (await attempt(approval.unwrap(), `Updated ${request.word}`, 'Could not approve the update')) onClosed();
   };
 
   const handleDismiss = async (reason: string) => {
-    try {
-      await dismiss({ id, reason: reason || undefined }).unwrap();
-      toast.success('Update dismissed');
-      onClosed();
-    } catch (failure) {
-      handleError(failure, 'Could not dismiss the update');
-    }
+    const dismissal = dismiss({ id, reason: reason || undefined });
+    if (await attempt(dismissal.unwrap(), 'Update dismissed', 'Could not dismiss the update')) onClosed();
   };
 
   const panelKey = `${request.version}-${liveFingerprint ?? 'deleted'}`;

@@ -29,8 +29,8 @@ export interface ProfileFigures {
   totalCost: number;
 }
 
-export interface Lead {
-  profileId: TranslationGradingProfileId;
+export interface Lead<ProfileId = TranslationGradingProfileId> {
+  profileId: ProfileId;
   /** How much less the leader needs, as a percentage of the other profile's figure. */
   percent: number;
 }
@@ -48,10 +48,11 @@ export interface ProfileComparison {
   cheaper: Lead | null;
 }
 
-const leadOf = (
-  [first, second]: [ProfileFigures, ProfileFigures],
-  value: (figures: ProfileFigures) => number
-): Lead | null => {
+/** The profile that needs less of a figure such as time or cost, or null when they tie. */
+export const leadOf = <Figures extends { profileId: string }>(
+  [first, second]: readonly [Figures, Figures],
+  value: (figures: Figures) => number
+): Lead<Figures['profileId']> | null => {
   const a = value(first);
   const b = value(second);
   if (a === b || Math.max(a, b) <= 0) return null;

@@ -3,44 +3,49 @@ import { functions } from '../../services/firebase';
 import type {
   EvaluationCase,
   EvaluationCaseInput,
-  EvaluationFunctionDeleteRequest,
   EvaluationFunctionRunRequest,
-  EvaluationFunctionSaveRequest,
   EvaluationRunResult,
 } from './contracts';
 
 const FIREBASE_EVALUATION_TIMEOUT_MS = 540_000;
 
-export async function runEvaluationInFirebase(request: EvaluationFunctionRunRequest): Promise<EvaluationRunResult> {
-  const callable = httpsCallable<EvaluationFunctionRunRequest, EvaluationRunResult>(functions, 'runAiEvaluationFn', {
-    timeout: FIREBASE_EVALUATION_TIMEOUT_MS,
-  });
-  return (await callable(request)).data;
+/** The browser side of one evaluation suite, given the names its four Cloud Functions are exported under. */
+export function evaluationClient<Input, Case, Result>(names: {
+  run: string;
+  list: string;
+  save: string;
+  remove: string;
+}) {
+  return {
+    run: async (request: EvaluationFunctionRunRequest) =>
+      (
+        await httpsCallable<EvaluationFunctionRunRequest, Result>(functions, names.run, {
+          timeout: FIREBASE_EVALUATION_TIMEOUT_MS,
+        })(request)
+      ).data,
+    list: async () =>
+      (await httpsCallable<Record<string, never>, { cases: Case[] }>(functions, names.list)({})).data.cases,
+    save: async (input: Input, caseId?: string) =>
+      (
+        await httpsCallable<{ input: Input; caseId?: string }, { case: Case }>(
+          functions,
+          names.save
+        )({ input, ...(caseId ? { caseId } : {}) })
+      ).data.case,
+    remove: async (caseId: string): Promise<void> => {
+      await httpsCallable<{ caseId: string }, { success: true }>(functions, names.remove)({ caseId });
+    },
+  };
 }
 
-export async function listEvaluationCasesInFirebase(): Promise<EvaluationCase[]> {
-  const callable = httpsCallable<Record<string, never>, { cases: EvaluationCase[] }>(
-    functions,
-    'listAiEvaluationCasesFn'
-  );
-  return (await callable({})).data.cases;
-}
-
-export async function saveEvaluationCaseInFirebase(
-  input: EvaluationCaseInput,
-  caseId?: string
-): Promise<EvaluationCase> {
-  const callable = httpsCallable<EvaluationFunctionSaveRequest, { case: EvaluationCase }>(
-    functions,
-    'saveAiEvaluationCaseFn'
-  );
-  return (await callable({ input, ...(caseId ? { caseId } : {}) })).data.case;
-}
-
-export async function deleteEvaluationCaseInFirebase(caseId: string): Promise<void> {
-  const callable = httpsCallable<EvaluationFunctionDeleteRequest, { success: true }>(
-    functions,
-    'deleteAiEvaluationCaseFn'
-  );
-  await callable({ caseId });
-}
+export const {
+  run: runEvaluationInFirebase,
+  list: listEvaluationCasesInFirebase,
+  save: saveEvaluationCaseInFirebase,
+  remove: deleteEvaluationCaseInFirebase,
+} = evaluationClient<EvaluationCaseInput, EvaluationCase, EvaluationRunResult>({
+  run: 'runAiEvaluationFn',
+  list: 'listAiEvaluationCasesFn',
+  save: 'saveAiEvaluationCaseFn',
+  remove: 'deleteAiEvaluationCaseFn',
+});

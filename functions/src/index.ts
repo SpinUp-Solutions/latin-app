@@ -1,11 +1,11 @@
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, type CallableOptions, type CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { ZodError } from 'zod';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { ZodError, type z } from 'zod';
 import { autocompleteVocabularyWord } from '../../shared/openai/autocomplete';
 import { resolveRootWord, ResolveRootWordRequest } from '../../shared/openai/root-resolver';
 import { gradeTranslation } from '../../shared/openai/translation-grading';
@@ -14,32 +14,20 @@ import {
   evaluationFunctionDeleteRequestSchema,
   evaluationFunctionRunRequestSchema,
   evaluationFunctionSaveRequestSchema,
+  type StoredEvaluationCase,
 } from '../../src/lib/ai-evaluations/contracts';
 import { countEvaluationCells, runEvaluationCase } from '../../src/lib/ai-evaluations/execution';
 import {
   AIEvaluationServiceError,
-  createEvaluationCase,
-  deleteEvaluationCase,
-  getEvaluationCase,
-  listEvaluationCases,
-  updateEvaluationCase,
+  aiEvaluationCases,
+  type EvaluationCaseStore,
 } from '../../src/lib/ai-evaluations/persistence';
 import { AIEvaluationThrottleError, consumeEvaluationRunQuota } from '../../src/lib/ai-evaluations/throttle';
-import {
-  vocabularyEvaluationDeleteRequestSchema,
-  vocabularyEvaluationRunRequestSchema,
-  vocabularyEvaluationSaveRequestSchema,
-} from '../../src/lib/vocabulary-autocomplete-evaluations/contracts';
 import {
   countVocabularyEvaluationCells,
   runVocabularyEvaluationCase,
 } from '../../src/lib/vocabulary-autocomplete-evaluations/execution';
-import {
-  deleteVocabularyEvaluationCase,
-  getVocabularyEvaluationCase,
-  listVocabularyEvaluationCases,
-  saveVocabularyEvaluationCase,
-} from '../../src/lib/vocabulary-autocomplete-evaluations/persistence';
+import { vocabularyEvaluationCases } from '../../src/lib/vocabulary-autocomplete-evaluations/persistence';
 
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
 const adminApp = getApps()[0] ?? initializeApp();
@@ -156,125 +144,70 @@ const evaluationCrudOptions = {
   maxInstances: 2,
 };
 
-export const listAiEvaluationCasesFn = onCall(evaluationCrudOptions, async request => {
-  try {
-    await requireAdmin(request.auth);
-    return { cases: await listEvaluationCases(functionsDb) };
-  } catch (error) {
-    return throwEvaluationHttpsError(error);
-  }
-});
+const evaluationRunOptions = {
+  timeoutSeconds: 540,
+  memory: '1GiB' as const,
+  region: 'us-central1',
+  concurrency: 2,
+  maxInstances: 2,
+  secrets: [openaiApiKey],
+};
 
-export const saveAiEvaluationCaseFn = onCall(evaluationCrudOptions, async request => {
-  try {
-    const actorId = await requireAdmin(request.auth);
-    const input = evaluationFunctionSaveRequestSchema.parse(request.data);
-    const evaluationCase = input.caseId
-      ? await updateEvaluationCase(input.caseId, input.input, actorId, functionsDb)
-      : await createEvaluationCase(input.input, actorId, functionsDb);
-    return { case: evaluationCase };
-  } catch (error) {
-    return throwEvaluationHttpsError(error);
-  }
-});
-
-export const deleteAiEvaluationCaseFn = onCall(evaluationCrudOptions, async request => {
-  try {
-    await requireAdmin(request.auth);
-    const input = evaluationFunctionDeleteRequestSchema.parse(request.data);
-    await deleteEvaluationCase(input.caseId, functionsDb);
-    return { success: true };
-  } catch (error) {
-    return throwEvaluationHttpsError(error);
-  }
-});
-
-/**
- * Runs the expensive side-by-side model evaluation entirely in Firebase.
- * The browser calls this function directly, so Netlify never owns the
- * long-lived request and its free-plan timeout cannot terminate the run.
- */
-export const runAiEvaluationFn = onCall(
-  {
-    timeoutSeconds: 540,
-    memory: '1GiB',
-    region: 'us-central1',
-    concurrency: 2,
-    maxInstances: 2,
-    secrets: [openaiApiKey],
-  },
-  async request => {
+const evaluationCallable = <T>(options: CallableOptions, handler: (request: CallableRequest) => Promise<T>) =>
+  onCall(options, async request => {
     try {
-      const actorId = await requireAdmin(request.auth);
-      const input = evaluationFunctionRunRequestSchema.parse(request.data);
-      const evaluationCase = await getEvaluationCase(input.caseId, functionsDb);
-      const requestedCells = countEvaluationCells(evaluationCase);
-      await consumeEvaluationRunQuota(actorId, input.forceRefresh, requestedCells, functionsDb);
-
-      return await runEvaluationCase(evaluationCase, input.forceRefresh, functionsDb);
+      return await handler(request);
     } catch (error) {
       return throwEvaluationHttpsError(error);
     }
-  }
-);
-
-export const listVocabAutocompleteEvalCasesFn = onCall(evaluationCrudOptions, async request => {
-  try {
-    await requireAdmin(request.auth);
-    return { cases: await listVocabularyEvaluationCases(functionsDb) };
-  } catch (error) {
-    return throwEvaluationHttpsError(error);
-  }
-});
-
-export const saveVocabAutocompleteEvalCaseFn = onCall(evaluationCrudOptions, async request => {
-  try {
-    const actorId = await requireAdmin(request.auth);
-    const input = vocabularyEvaluationSaveRequestSchema.parse(request.data);
-    return { case: await saveVocabularyEvaluationCase(input.caseId, input.input, actorId, functionsDb) };
-  } catch (error) {
-    return throwEvaluationHttpsError(error);
-  }
-});
-
-export const deleteVocabAutocompleteEvalCaseFn = onCall(evaluationCrudOptions, async request => {
-  try {
-    await requireAdmin(request.auth);
-    const input = vocabularyEvaluationDeleteRequestSchema.parse(request.data);
-    await deleteVocabularyEvaluationCase(input.caseId, functionsDb);
-    return { success: true };
-  } catch (error) {
-    return throwEvaluationHttpsError(error);
-  }
-});
+  });
 
 /**
- * Autocompletes every word in a case with both profiles. It shares the
- * per-admin run quota with the translation evaluation suite.
+ * The four admin callables of one evaluation suite: list, save and delete its
+ * saved cases, and run one. A run happens entirely in Firebase and the browser
+ * calls it directly, so the web host never owns the long-lived request and its
+ * timeout cannot end the run. Every suite shares the per-admin run quota.
  */
-export const runVocabAutocompleteEvalFn = onCall(
-  {
-    timeoutSeconds: 540,
-    memory: '1GiB',
-    region: 'us-central1',
-    concurrency: 2,
-    maxInstances: 2,
-    secrets: [openaiApiKey],
-  },
-  async request => {
-    try {
+function evaluationSuiteFunctions<Schema extends z.ZodObject>(
+  store: EvaluationCaseStore<Schema>,
+  countCells: (evaluationCase: StoredEvaluationCase<z.infer<Schema>>) => number,
+  run: (evaluationCase: StoredEvaluationCase<z.infer<Schema>>, forceRefresh: boolean, db: Firestore) => Promise<unknown>
+) {
+  return {
+    list: evaluationCallable(evaluationCrudOptions, async request => {
+      await requireAdmin(request.auth);
+      return { cases: await store.list(functionsDb) };
+    }),
+    save: evaluationCallable(evaluationCrudOptions, async request => {
       const actorId = await requireAdmin(request.auth);
-      const input = vocabularyEvaluationRunRequestSchema.parse(request.data);
-      const evaluationCase = await getVocabularyEvaluationCase(input.caseId, functionsDb);
-      await consumeEvaluationRunQuota(
-        actorId,
-        input.forceRefresh,
-        countVocabularyEvaluationCells(evaluationCase),
-        functionsDb
-      );
-      return await runVocabularyEvaluationCase(evaluationCase, input.forceRefresh, functionsDb);
-    } catch (error) {
-      return throwEvaluationHttpsError(error);
-    }
-  }
-);
+      const { caseId, input } = evaluationFunctionSaveRequestSchema.parse(request.data);
+      return { case: await store.save(caseId, store.inputSchema.parse(input), actorId, functionsDb) };
+    }),
+    remove: evaluationCallable(evaluationCrudOptions, async request => {
+      await requireAdmin(request.auth);
+      await store.remove(evaluationFunctionDeleteRequestSchema.parse(request.data).caseId, functionsDb);
+      return { success: true };
+    }),
+    run: evaluationCallable(evaluationRunOptions, async request => {
+      const actorId = await requireAdmin(request.auth);
+      const { caseId, forceRefresh } = evaluationFunctionRunRequestSchema.parse(request.data);
+      const evaluationCase = await store.get(caseId, functionsDb);
+      await consumeEvaluationRunQuota(actorId, forceRefresh, countCells(evaluationCase), functionsDb);
+      return run(evaluationCase, forceRefresh, functionsDb);
+    }),
+  };
+}
+
+export const {
+  list: listAiEvaluationCasesFn,
+  save: saveAiEvaluationCaseFn,
+  remove: deleteAiEvaluationCaseFn,
+  run: runAiEvaluationFn,
+} = evaluationSuiteFunctions(aiEvaluationCases, countEvaluationCells, runEvaluationCase);
+
+export const {
+  list: listVocabAutocompleteEvalCasesFn,
+  save: saveVocabAutocompleteEvalCaseFn,
+  remove: deleteVocabAutocompleteEvalCaseFn,
+  run: runVocabAutocompleteEvalFn,
+} = evaluationSuiteFunctions(vocabularyEvaluationCases, countVocabularyEvaluationCells, runVocabularyEvaluationCase);

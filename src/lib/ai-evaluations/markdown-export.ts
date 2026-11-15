@@ -1,6 +1,6 @@
 import { TRANSLATION_GRADING_PROFILES, type TranslationGradingProfileId } from '../../../shared/openai/model-registry';
 import type { TranslationGradingMode } from '../../../shared/openai/types';
-import { markdownTable as table } from '../markdown/table';
+import { markdownCount as count, markdownSeconds as seconds, markdownTable as table } from '../markdown/table';
 import { compareProfiles, gradeAgreement, type GradeAgreement } from './comparison';
 import type { EvaluationCaseInput, EvaluationCellResult, EvaluationRunResult } from './contracts';
 
@@ -16,8 +16,6 @@ const AGREEMENT_WORDS: Record<GradeAgreement, string> = {
   different: 'different (more than one step or point apart)',
 };
 
-const count = (value: number) => new Intl.NumberFormat('en-US').format(Math.round(value));
-const seconds = (milliseconds: number) => `${(milliseconds / 1_000).toFixed(1)} s`;
 const dollars = (value: number) => `$${value.toFixed(6)}`;
 const label = (profileId: TranslationGradingProfileId) => TRANSLATION_GRADING_PROFILES[profileId].label;
 const quote = (text: string) =>

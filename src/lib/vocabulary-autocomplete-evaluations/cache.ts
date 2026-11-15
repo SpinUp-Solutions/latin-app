@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Firestore } from 'firebase-admin/firestore';
 import { Timestamp } from 'firebase-admin/firestore';
+import { z } from 'zod';
 import { VOCABULARY_EVALUATION_RESULT_CACHE_COLLECTION } from '../../../shared/constants/firestore';
 import { vocabularyAutocompleteRequestBody } from '../../../shared/openai/autocomplete';
 import { isValidTokenUsage, type VocabularyAutocompleteProfile } from '../../../shared/openai/model-registry';
@@ -10,14 +11,15 @@ import { VOCABULARY_EVALUATION_SCHEMA_VERSION } from './contracts';
 
 const CACHE_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
-export interface CachedVocabularyResult {
-  model: string;
-  actualModel: string;
-  output: Record<string, unknown>;
-  usage: TokenUsage;
-  latencyMs: number;
-  generatedAt: string;
-}
+const cachedResultSchema = z.object({
+  model: z.string(),
+  actualModel: z.string(),
+  output: z.record(z.string(), z.unknown()),
+  usage: z.custom<TokenUsage>(isValidTokenUsage),
+  latencyMs: z.number(),
+  generatedAt: z.string(),
+});
+export type CachedVocabularyResult = z.infer<typeof cachedResultSchema>;
 
 /**
  * Hashes the exact prompt and output schema, so editing either one starts
@@ -44,36 +46,14 @@ export function createVocabularyCacheKey(
 
 const cacheCollection = (db: Firestore) => db.collection(VOCABULARY_EVALUATION_RESULT_CACHE_COLLECTION);
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
+/** A stored result that is still fresh and well formed; anything else counts as a miss. */
 export async function getCachedVocabularyResult(
   cacheKey: string,
   db: Firestore
 ): Promise<CachedVocabularyResult | null> {
-  const snapshot = await cacheCollection(db).doc(cacheKey).get();
-  if (!snapshot.exists) return null;
-  const data = snapshot.data() as Partial<CachedVocabularyResult> & { expiresAt?: Timestamp };
-  if (!(data.expiresAt instanceof Timestamp) || data.expiresAt.toMillis() <= Date.now()) return null;
-  if (
-    typeof data.model !== 'string' ||
-    typeof data.actualModel !== 'string' ||
-    !isPlainObject(data.output) ||
-    !isValidTokenUsage(data.usage) ||
-    typeof data.latencyMs !== 'number' ||
-    !Number.isFinite(data.latencyMs) ||
-    typeof data.generatedAt !== 'string'
-  ) {
-    return null;
-  }
-  return {
-    model: data.model,
-    actualModel: data.actualModel,
-    output: data.output,
-    usage: data.usage,
-    latencyMs: data.latencyMs,
-    generatedAt: data.generatedAt,
-  };
+  const data = (await cacheCollection(db).doc(cacheKey).get()).data();
+  if (!(data?.expiresAt instanceof Timestamp) || data.expiresAt.toMillis() <= Date.now()) return null;
+  return cachedResultSchema.safeParse(data).data ?? null;
 }
 
 export async function setCachedVocabularyResult(
