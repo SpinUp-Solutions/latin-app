@@ -7,7 +7,6 @@ import { BookOpen, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import {
-  useGetWordsQuery,
   useGetWordTypeCountsQuery,
   useUpdateWordMutation,
   useCreateWordMutation,
@@ -19,6 +18,7 @@ import {
   resetFilters as resetFiltersAction,
   selectVocabularyFilters,
 } from '@/src/store/slices/vocabularySlice';
+import { useCurrentWordsQuery } from '@/src/hooks/useCurrentWordsQuery';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
@@ -60,7 +60,7 @@ function AdminVocabularyPage() {
     lastWordId: searchPending ? null : lastWordId,
   };
 
-  const { data, isLoading, isFetching } = useGetWordsQuery(queryArgs);
+  const { data, isLoading, isFetching, isError, refetch } = useCurrentWordsQuery(queryArgs);
   const { data: wordTypeCounts = {}, isLoading: countsLoading } = useGetWordTypeCountsQuery();
   const [updateWord, { isLoading: updating }] = useUpdateWordMutation();
   const [createWord, { isLoading: creating }] = useCreateWordMutation();
@@ -303,6 +303,8 @@ function AdminVocabularyPage() {
               loading={isLoading}
               loadingMore={loadingMore}
               hasMore={hasMore}
+              error={isError}
+              onRetry={refetch}
               onLoadMore={handleLoadMore}
               onSelectWord={handleSelectWord}
               onDeleteWord={handleDeleteWord}

@@ -7,6 +7,7 @@ import { Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { WordFiltersPanel } from '@/src/components/ui/admin/vocabulary/WordFiltersPanel';
+import { VocabularyLoadError } from '@/src/components/ui/admin/vocabulary/VocabularyResultsState';
 import { CoreTypeSelect } from '@/src/components/ui/admin/vocabulary/CoreTypeSelect';
 import { useWordSelection } from '@/src/hooks/useWordSelection';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
@@ -35,7 +36,10 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
     filtersExpanded,
     hasMore,
     isLoading,
+    isLoadingResults,
     isFetching,
+    isError,
+    retry,
     addWord,
     addAllVisible,
     removeWord,
@@ -56,7 +60,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
 
   const sentinelRef = useInfiniteScroll({
     onLoadMore: loadMore,
-    hasMore,
+    hasMore: hasMore && !isError,
     loading: isFetching,
     rootMargin: '200px',
   });
@@ -129,15 +133,19 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
               )}
             </div>
 
-            {isLoading && !isFetching ? (
+            {isError && <VocabularyLoadError onRetry={retry} />}
+
+            {isLoadingResults ? (
               <div className="text-center py-8">
                 <RomanSpinner className="mx-auto mb-2 h-6 w-6" />
                 <p className="text-sm text-gray-600">Loading words...</p>
               </div>
             ) : availableWords.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <p>No words found matching your criteria.</p>
-              </div>
+              isError ? null : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No words found matching your criteria.</p>
+                </div>
+              )
             ) : (
               <div className="max-h-96 overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

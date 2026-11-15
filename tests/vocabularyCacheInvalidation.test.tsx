@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 const mockBaseQuery = jest.fn();
 
@@ -15,6 +15,9 @@ jest.mock('@/src/store/api/baseQuery', () => ({
 import { appApi } from '@/src/store/api/appApi';
 import { useGetWordsQuery, vocabularyApi } from '@/src/store/api/vocabularyApi';
 import { useGetStudentPoolQuery, vocabularyPoolApi } from '@/src/store/api/vocabularyPoolApi';
+import vocabularyPoolsReducer from '@/src/store/slices/vocabularyPoolSlice';
+import { useCurrentWordsQuery } from '@/src/hooks/useCurrentWordsQuery';
+import { useWordSelection } from '@/src/hooks/useWordSelection';
 import { vocabularyWordRequestsApi } from '@/src/store/api/vocabularyWordRequestsApi';
 
 const createStore = () =>
@@ -277,5 +280,56 @@ describe('refetch policy inside the shared cache', () => {
     } finally {
       unmount();
     }
+  });
+});
+
+describe('a filtered word list that fails to load', () => {
+  /** Serves the unfiltered list and fails every request that asks for a core filter. */
+  const failCoreFilters = () =>
+    mockBaseQuery.mockImplementation(async (request: unknown) => {
+      const params = new URL(urlOf(request), 'http://localhost').searchParams;
+      if (params.get('coreType')) return { error: { status: 500, data: { error: 'Failed to fetch words' } } };
+      return {
+        data: { success: true, data: { words: [word('absentia', 'absence')], hasMore: false, lastWordId: null } },
+      };
+    });
+
+  it('drops the previous words from the vocabulary viewer and reports the failure', async () => {
+    const store = createStore();
+    failCoreFilters();
+    const wrapper = ({ children }: { children: ReactNode }) => <Provider store={store}>{children}</Provider>;
+    const { result, rerender } = renderHook(
+      ({ coreType }: { coreType: 'core' | null }) => useCurrentWordsQuery({ wordType: 'all', coreType, search: '' }),
+      { wrapper, initialProps: { coreType: null as 'core' | null } }
+    );
+    await waitFor(() => expect(result.current.data?.words.map(({ id }) => id)).toEqual(['absentia']));
+
+    rerender({ coreType: 'core' });
+    expect(result.current.data?.words).toHaveLength(1);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+
+    rerender({ coreType: null });
+    await waitFor(() => expect(result.current.data?.words).toHaveLength(1));
+    expect(result.current.isError).toBe(false);
+  });
+
+  it('offers no words to add to a pool while the chosen filter has no loaded results', async () => {
+    const store = configureStore({
+      reducer: { [appApi.reducerPath]: appApi.reducer, vocabularyPools: vocabularyPoolsReducer },
+      middleware: getDefaultMiddleware => getDefaultMiddleware({ serializableCheck: false }).concat(appApi.middleware),
+    });
+    failCoreFilters();
+    const wrapper = ({ children }: { children: ReactNode }) => <Provider store={store}>{children}</Provider>;
+    const { result } = renderHook(() => useWordSelection(), { wrapper });
+    await waitFor(() => expect(result.current.availableWords.map(({ id }) => id)).toEqual(['absentia']));
+
+    act(() => result.current.updateFilters({ coreType: 'core' }));
+    expect(result.current.availableWords).toEqual([]);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    act(() => result.current.addAllVisible());
+
+    expect(result.current.availableWords).toEqual([]);
+    expect(result.current.selectedIds).toEqual([]);
   });
 });

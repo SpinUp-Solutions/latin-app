@@ -7,6 +7,7 @@ import {
   formatVocabularyResultsSummary,
   VocabularyEmptyState,
   VocabularyInfiniteScrollSentinel,
+  VocabularyLoadError,
 } from './VocabularyResultsState';
 
 interface VocabularyListProps {
@@ -14,6 +15,9 @@ interface VocabularyListProps {
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
+  /** The request for the current filters failed. */
+  error?: boolean;
+  onRetry?: () => void;
   onLoadMore: () => void;
   onSelectWord: (word: VocabularyWordWithId) => void;
   onDeleteWord?: (word: VocabularyWordWithId) => void;
@@ -35,6 +39,8 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
   loading,
   loadingMore,
   hasMore,
+  error = false,
+  onRetry,
   onLoadMore,
   onSelectWord,
   onDeleteWord,
@@ -43,13 +49,17 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
 }) => {
   const sentinelRef = useInfiniteScroll({
     onLoadMore,
-    hasMore,
+    hasMore: hasMore && !error,
     loading: loadingMore,
     rootMargin: '500px',
   });
 
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  if (error && words.length === 0) {
+    return <VocabularyLoadError onRetry={onRetry} />;
   }
 
   if (words.length === 0) {
@@ -64,6 +74,8 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
       <div className="mb-4 px-1">
         <p className="text-sm text-gray-600">{formatVocabularyResultsSummary(words.length, hasMore)}</p>
       </div>
+
+      {error && <VocabularyLoadError onRetry={onRetry} className="mb-4" />}
 
       {/* Words list */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
