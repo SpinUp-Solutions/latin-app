@@ -1,6 +1,6 @@
 import { ContentItem } from '../content';
 import type { TableType } from '@/src/utils/schema-helpers';
-import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { PartOfSpeech, WordType } from '@/shared/types/vocabulary/schemas/enums';
 
 export interface FeedbackLevel {
   /** Custom message shown at this level (optional). */
@@ -100,6 +100,8 @@ export interface GeneratorConfigBase {
   count: number | 'all';
   /** Pool-backed form identification only: rotate this many words through different forms to fill `count`. */
   uniqueWordCount?: number | null;
+  /** Restrict every word source to core or non-core words; missing or null uses both. */
+  coreType?: WordType | null;
   filters?: GeneratorFilters;
 }
 

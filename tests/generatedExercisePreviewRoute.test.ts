@@ -209,6 +209,68 @@ describe('admin generated exercise preview route', () => {
     expect(new Set(payload.words.map(word => word.id)).size).toBe(10);
   });
 
+  it.each(['core', 'non-core'] as const)('uses only %s words from custom filters', async coreType => {
+    const db = createFakeGeneratedWordDb({
+      words: Array.from({ length: 12 }, (_, index) => ({
+        id: `${index % 3 === 0 ? 'core' : 'non-core'}-${index}`,
+        data: {
+          word: `noun-${index}`,
+          part_of_speech: 'noun',
+          translation: 'girl',
+          type: index % 3 === 0 ? 'core' : 'non-core',
+          random_index: index / 12,
+          sort_key: `noun-${index}`,
+        },
+      })),
+    });
+    dbState.collection = db.collection;
+
+    const response = await POST({
+      json: async () => ({
+        ...translationBody,
+        data: {
+          ...translationBody.data,
+          generatorConfig: { ...translationBody.data.generatorConfig, coreType },
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    const ids = (response as unknown as { body: { words: Array<{ id: string }> } }).body.words.map(word => word.id);
+    expect(ids).toHaveLength(coreType === 'core' ? 4 : 8);
+    expect(ids.every(id => id.startsWith(`${coreType}-`))).toBe(true);
+  });
+
+  it('uses only core words from a vocabulary pool', async () => {
+    const { words, pool, exercise } = generatedPoolFixture();
+    words.forEach((word, index) => (word.data.type = index % 2 === 0 ? 'core' : 'non-core'));
+    exercise.data.generatorConfig = { ...exercise.data.generatorConfig, coreType: 'core' };
+    const db = createFakeGeneratedWordDb({ words, pools: [pool] });
+    dbState.collection = db.collection;
+
+    const response = await POST({ json: async () => exercise } as never);
+
+    expect(response.status).toBe(200);
+    const returned = (response as unknown as { body: { words: Array<{ id: string }> } }).body.words;
+    const coreIds = new Set(words.filter(word => word.data.type === 'core').map(word => word.id));
+    // 55 words have a usable form and every second one is core.
+    expect(returned).toHaveLength(28);
+    expect(returned.every(word => coreIds.has(word.id))).toBe(true);
+  });
+
+  it('rejects an unknown core filter instead of matching no words', async () => {
+    const response = await POST({
+      json: async () => ({
+        ...translationBody,
+        data: {
+          ...translationBody.data,
+          generatorConfig: { ...translationBody.data.generatorConfig, coreType: 'essential' },
+        },
+      }),
+    } as never);
+    expect(response.status).toBe(400);
+  });
+
   it.each([0, 1.5, MAX_GENERATED_WORD_COUNT + 1, '10'])('rejects unique word count %p', async uniqueWordCount => {
     const { exercise } = generatedPoolFixture();
     const response = await POST({

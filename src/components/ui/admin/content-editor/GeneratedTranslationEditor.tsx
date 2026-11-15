@@ -129,6 +129,8 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
       <WordSourceSection
         value={editor.config.wordSource}
         onChange={value => editor.updateConfig({ wordSource: value })}
+        coreType={editor.config.coreType}
+        onCoreTypeChange={coreType => editor.updateConfig({ coreType })}
         filtersContent={filtersContent}
         poolContent={poolContent}
       />

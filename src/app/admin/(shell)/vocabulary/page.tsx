@@ -55,6 +55,7 @@ function AdminVocabularyPage() {
   const searchPending = filters.search !== debouncedSearch;
   const queryArgs = {
     wordType: filters.wordType,
+    coreType: filters.coreType,
     search: debouncedSearch,
     lastWordId: searchPending ? null : lastWordId,
   };
@@ -68,7 +69,7 @@ function AdminVocabularyPage() {
 
   useEffect(() => {
     setLastWordId(null);
-  }, [filters.wordType, debouncedSearch]);
+  }, [filters.wordType, filters.coreType, debouncedSearch]);
 
   useEffect(() => {
     const hash = window.location.hash;

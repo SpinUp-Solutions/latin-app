@@ -171,6 +171,69 @@ describe('word list edits', () => {
   });
 });
 
+describe('core and non-core word lists', () => {
+  /** Answers each list request with one word named after the core filter and cursor it asked for. */
+  const serveWordPages = () =>
+    mockBaseQuery.mockImplementation(async (request: unknown) => {
+      const params = new URL(urlOf(request), 'http://localhost').searchParams;
+      const id = `${params.get('coreType') ?? 'any'}:${params.get('lastWordId') ?? 'first'}`;
+      return { data: { success: true, data: { words: [word(id, id)], hasMore: true, lastWordId: id, filters: {} } } };
+    });
+  const loadedIds = (store: ReturnType<typeof createStore>, args: Parameters<typeof useGetWordsQuery>[0]) =>
+    vocabularyApi.endpoints.getWords
+      .select(args as never)(store.getState())
+      .data?.words.map(({ id }) => id);
+
+  it('keeps one paginated list per core filter and replaces it on a new first page', async () => {
+    const store = createStore();
+    serveWordPages();
+    const load = (args: { coreType?: 'core' | 'non-core' | null; lastWordId?: string | null }) =>
+      store.dispatch(vocabularyApi.endpoints.getWords.initiate({ wordType: 'noun', ...args }));
+    const requests = [load({ coreType: 'core' }), load({ coreType: 'non-core' }), load({ coreType: null })];
+    try {
+      await Promise.all(requests);
+      await load({ coreType: 'core', lastWordId: 'core:first' });
+
+      expect(loadedIds(store, { wordType: 'noun', coreType: 'core' })).toEqual(['core:first', 'core:core:first']);
+      expect(loadedIds(store, { wordType: 'noun', coreType: 'non-core' })).toEqual(['non-core:first']);
+      expect(loadedIds(store, { wordType: 'noun', coreType: null })).toEqual(['any:first']);
+
+      await load({ coreType: 'core', lastWordId: null });
+      expect(loadedIds(store, { wordType: 'noun', coreType: 'core' })).toEqual(['core:first']);
+    } finally {
+      requests.forEach(request => request.unsubscribe());
+    }
+  });
+
+  it('asks for the chosen core filter when picking words for a pool', async () => {
+    const store = createStore();
+    serveWordPages();
+    const filters = {
+      partOfSpeech: 'verb' as const,
+      search: '',
+      verbConjugation: 'all' as const,
+      isDeponent: 'both' as const,
+      nounDeclension: 'all' as const,
+      adjectiveDeclension: 'all' as const,
+      pronounType: 'all' as const,
+      pronounPerson: 'all' as const,
+    };
+    const load = (coreType: 'non-core' | null) =>
+      store.dispatch(
+        vocabularyPoolApi.endpoints.getWordsForPoolSelection.initiate({ filters: { ...filters, coreType } })
+      );
+    const requests = [load('non-core'), load(null)];
+    try {
+      const [nonCore, all] = await Promise.all(requests);
+
+      expect(nonCore.data?.words.map(({ id }) => id)).toEqual(['non-core:first']);
+      expect(all.data?.words.map(({ id }) => id)).toEqual(['any:first']);
+    } finally {
+      requests.forEach(request => request.unsubscribe());
+    }
+  });
+});
+
 describe('signing out', () => {
   it('clears vocabulary words, pools and word requests with the one application cache reset', async () => {
     const store = createStore();

@@ -44,6 +44,7 @@ export const useWordSelection = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       filters.partOfSpeech,
+      filters.coreType,
       filters.verbConjugation,
       filters.isDeponent,
       filters.nounDeclension,

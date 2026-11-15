@@ -2,10 +2,14 @@ import React from 'react';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/src/components/ui/radio-group';
 import { Label } from '@/src/components/ui/label';
+import { CoreTypeSelect } from '@/src/components/ui/admin/vocabulary/CoreTypeSelect';
+import type { WordType } from '@/shared/types/vocabulary/schemas/enums';
 
 interface WordSourceSectionProps {
   value: 'filters' | 'pool';
   onChange: (value: 'filters' | 'pool') => void;
+  coreType: WordType | null | undefined;
+  onCoreTypeChange: (coreType: WordType | null) => void;
   filtersContent: React.ReactNode;
   poolContent: React.ReactNode;
 }
@@ -13,6 +17,8 @@ interface WordSourceSectionProps {
 export const WordSourceSection: React.FC<WordSourceSectionProps> = ({
   value,
   onChange,
+  coreType,
+  onCoreTypeChange,
   filtersContent,
   poolContent,
 }) => {
@@ -35,6 +41,8 @@ export const WordSourceSection: React.FC<WordSourceSectionProps> = ({
           </CardContent>
         </Card>
       </div>
+
+      <CoreTypeSelect id="generated-core-type" value={coreType} onChange={onCoreTypeChange} />
 
       {value === 'filters' ? filtersContent : poolContent}
     </div>

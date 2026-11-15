@@ -262,6 +262,9 @@ function evaluateCandidate(
 ): ExerciseWordResponse | null {
   const data = rotation?.data ?? doc.data();
   if (data._deletionPending) return null;
+  // Checked here, not in the query, so pools and filters share one rule and no composite index is needed.
+  const { coreType } = exercise.data.generatorConfig;
+  if (coreType && data.type !== coreType) return null;
   const word = mapWord(doc.id, data, spec, formRng, rotation?.form);
   if (!word) return null;
   if (isRejectedBySpecAwarePronounOverlap(word, spec.paradigm, paradigmConfigs)) return null;

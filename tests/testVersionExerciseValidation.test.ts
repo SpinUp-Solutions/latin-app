@@ -285,6 +285,20 @@ describe('active test exercise validation', () => {
     }
   });
 
+  it('accepts a core or non-core restriction and rejects unknown ones', () => {
+    const translation = copyItem(validItems['generated-translation']);
+    const generator = translation.data.generatorConfig as Record<string, unknown>;
+
+    for (const valid of ['core', 'non-core', null]) {
+      generator.coreType = valid;
+      expect(activeVersionResult(translation).success).toBe(true);
+    }
+    for (const invalid of ['all', 'essential', true]) {
+      generator.coreType = invalid;
+      expect(activeVersionResult(translation).success).toBe(false);
+    }
+  });
+
   it('accepts legacy generated configurations when they still resolve scorable items', () => {
     const translation = copyItem(validItems['generated-translation']);
     delete translation.data.posConfigs;

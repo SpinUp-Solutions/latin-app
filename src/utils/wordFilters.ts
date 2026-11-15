@@ -39,6 +39,10 @@ export const buildWordFilterParams = (
     params.append('wordType', filters.partOfSpeech);
   }
 
+  if (filters.coreType) {
+    params.append('coreType', filters.coreType);
+  }
+
   if (filters.search && filters.search.trim()) {
     params.append('search', filters.search.trim());
   }
