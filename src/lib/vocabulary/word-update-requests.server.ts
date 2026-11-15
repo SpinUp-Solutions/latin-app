@@ -129,7 +129,8 @@ function assertRequestSize(document: Plain) {
   }
 }
 
-const NullableString = z.string().nullable().optional();
+/** A missing value reads as null, so a stored request parses straight into the shape the API returns. */
+const NullableString = z.string().nullable().default(null);
 const StoredRequestSchema = z.object({
   status: z.enum(VOCABULARY_WORD_UPDATE_REQUEST_STATUSES),
   wordId: z.string().min(1),
@@ -162,34 +163,16 @@ const StoredDetailSchema = StoredRequestSchema.extend({
 const invalidStoredRequest = () =>
   new RequestError(409, 'INVALID_VOCABULARY_UPDATE_REQUEST', 'This update request is stored in an invalid format');
 
-function toSummary(id: string, data: z.infer<typeof StoredRequestSchema>): VocabularyWordUpdateRequestSummary {
-  return {
-    id,
-    status: data.status,
-    wordId: data.wordId,
-    ...data.summary,
-    reason: data.reason ?? null,
-    source: data.source ?? null,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-  };
-}
-
 function serializeRequest(snapshot: DocumentSnapshot): VocabularyWordUpdateRequest {
   const parsed = StoredDetailSchema.safeParse(toJson(snapshot.data()));
   if (!parsed.success) throw invalidStoredRequest();
-  const data = parsed.data;
+  const { summary, appliedFromWord, ...data } = parsed.data;
   return {
-    ...toSummary(snapshot.id, data),
-    proposedWord: data.proposedWord,
-    baseWord: data.status === 'approved' ? (data.appliedFromWord ?? data.baseWord) : data.baseWord,
-    baseFingerprint: data.baseFingerprint,
+    ...data,
+    ...summary,
+    id: snapshot.id,
+    baseWord: data.status === 'approved' ? (appliedFromWord ?? data.baseWord) : data.baseWord,
     version: firestoreVersionFingerprint(snapshot.updateTime),
-    createdBy: data.createdBy,
-    approvedBy: data.approvedBy ?? null,
-    approvedAt: data.approvedAt ?? null,
-    dismissedBy: data.dismissedBy ?? null,
-    dismissedReason: data.dismissedReason ?? null,
   };
 }
 
@@ -296,14 +279,17 @@ export async function listWordUpdateRequests(
     .limit(WORD_UPDATE_REQUEST_LIST_LIMIT + 1)
     .get();
   let invalidCount = 0;
-  const requests = snapshot.docs.slice(0, WORD_UPDATE_REQUEST_LIST_LIMIT).flatMap(doc => {
-    const parsed = StoredRequestSchema.safeParse(toJson(doc.data()));
-    if (!parsed.success) {
-      invalidCount += 1;
-      return [];
-    }
-    return [toSummary(doc.id, parsed.data)];
-  });
+  const requests: VocabularyWordUpdateRequestSummary[] = snapshot.docs
+    .slice(0, WORD_UPDATE_REQUEST_LIST_LIMIT)
+    .flatMap(doc => {
+      const parsed = StoredRequestSchema.safeParse(toJson(doc.data()));
+      if (!parsed.success) {
+        invalidCount += 1;
+        return [];
+      }
+      const { summary, ...data } = parsed.data;
+      return [{ id: doc.id, ...data, ...summary }];
+    });
   requests.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.word.localeCompare(right.word));
   return { requests, truncated: snapshot.docs.length > WORD_UPDATE_REQUEST_LIST_LIMIT, invalidCount };
 }

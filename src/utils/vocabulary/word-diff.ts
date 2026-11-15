@@ -52,12 +52,12 @@ export function changedWordFields(current: Plain, proposed: Plain): string[] {
  * "indicative.active.present.singular.first". A branch that exists on one side
  * only counts every filled cell under it.
  */
-export function changedTableCells(current: unknown, proposed: unknown, path = ''): string[] {
+export function changedTableCells(current: unknown, proposed: unknown): string[] {
   const left = entryLeaves(current);
   const right = entryLeaves(proposed);
-  return [...new Set([...left.keys(), ...right.keys()])]
-    .filter(key => !sameWordValue(left.get(key)?.value, right.get(key)?.value))
-    .map(key => [path, key].filter(Boolean).join('.'));
+  return [...new Set([...left.keys(), ...right.keys()])].filter(
+    key => !sameWordValue(left.get(key)?.value, right.get(key)?.value)
+  );
 }
 
 /** What a proposal changes, for list rows and headers. */
@@ -101,7 +101,7 @@ export interface EntryComparison {
   counts: FormCounts;
 }
 
-const emptyCounts = (): FormCounts => ({ same: 0, macrons: 0, missing: 0, different: 0, total: 0 });
+export const emptyCounts = (): FormCounts => ({ same: 0, macrons: 0, missing: 0, different: 0, total: 0 });
 
 const isPrimitive = (value: unknown) =>
   value === null || ['string', 'number', 'boolean'].includes(typeof value) || value === undefined;

@@ -130,8 +130,8 @@ describe('vocabulary autocomplete run summary', () => {
 
     expect(summary).toMatchObject({ entryCount: 2, comparedCount: 1, costComparedCount: 1, identicalEntries: 1 });
     expect(summary.cheaper?.profileId).toBe('baseline');
-    expect(summary.cheaper?.ratio).toBeCloseTo(2.5, 12);
-    expect(summary.faster).toEqual({ profileId: 'baseline', ratio: 2 });
+    expect(summary.cheaper?.percent).toBeCloseTo(60, 10);
+    expect(summary.faster).toEqual({ profileId: 'baseline', percent: 50 });
     expect(summary.figures[1]).toMatchObject({
       completed: 1,
       failed: 1,

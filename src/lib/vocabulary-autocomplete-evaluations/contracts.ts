@@ -4,15 +4,13 @@ import type { VocabularyAutocompleteFailureCode } from '../../../shared/openai/a
 import type { CostBreakdown, TokenUsage } from '../../../shared/openai/types';
 import { PartOfSpeechSchema } from '../../../shared/types/vocabulary/schemas/enums';
 import type { PartOfSpeech } from '../../../shared/types/vocabulary/schemas/enums';
+import type { StoredEvaluationCase } from '../ai-evaluations/contracts';
 
 export const VOCABULARY_EVALUATION_SCHEMA_VERSION = 'vocabulary-autocomplete-evaluation-v1';
 /** Every word runs on both profiles at once, so this bounds one run's parallel requests. */
 export const VOCABULARY_EVALUATION_MAX_ENTRIES = 6;
 
-const CASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const ENTRY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
-
-const caseIdSchema = z.string().regex(CASE_ID_PATTERN, 'Invalid evaluation case id');
 
 const entryInputSchema = z
   .object({
@@ -47,27 +45,9 @@ export const vocabularyEvaluationCaseInputSchema = z
     });
   });
 
-export const vocabularyEvaluationRunRequestSchema = z
-  .object({ caseId: caseIdSchema, forceRefresh: z.boolean().default(false) })
-  .strict();
-export const vocabularyEvaluationSaveRequestSchema = z
-  .object({ caseId: caseIdSchema.optional(), input: vocabularyEvaluationCaseInputSchema })
-  .strict();
-export const vocabularyEvaluationDeleteRequestSchema = z.object({ caseId: caseIdSchema }).strict();
-
 export type VocabularyEvaluationCaseInput = z.infer<typeof vocabularyEvaluationCaseInputSchema>;
 export type VocabularyEvaluationEntry = VocabularyEvaluationCaseInput['entries'][number];
-export type VocabularyEvaluationRunRequest = z.infer<typeof vocabularyEvaluationRunRequestSchema>;
-export type VocabularyEvaluationSaveRequest = z.infer<typeof vocabularyEvaluationSaveRequestSchema>;
-export type VocabularyEvaluationDeleteRequest = z.infer<typeof vocabularyEvaluationDeleteRequestSchema>;
-
-export interface VocabularyEvaluationCase extends VocabularyEvaluationCaseInput {
-  id: string;
-  createdAt: string;
-  createdBy: string;
-  updatedAt: string;
-  updatedBy: string;
-}
+export type VocabularyEvaluationCase = StoredEvaluationCase<VocabularyEvaluationCaseInput>;
 
 /** One word autocompleted by one profile. */
 export interface VocabularyEvaluationCell {

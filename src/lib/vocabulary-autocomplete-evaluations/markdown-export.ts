@@ -9,7 +9,7 @@ import type {
   VocabularyEvaluationCell,
   VocabularyEvaluationRunResult,
 } from './contracts';
-import { markdownTable as table } from '../markdown/table';
+import { markdownCount as count, markdownSeconds as seconds, markdownTable as table } from '../markdown/table';
 
 type ProfilePair = readonly [VocabularyAutocompleteProfileId, VocabularyAutocompleteProfileId];
 
@@ -20,8 +20,6 @@ const AGREEMENT_WORDS: Record<Exclude<FormAgreement, 'same'>, string> = {
 };
 const DIFFERENCE_ORDER: FormAgreement[] = ['different', 'missing', 'macrons'];
 
-const count = (value: number) => new Intl.NumberFormat('en-US').format(Math.round(value));
-const seconds = (milliseconds: number) => `${(milliseconds / 1_000).toFixed(1)} s`;
 const dollars = (value: number) => `$${value.toFixed(5)}`;
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 const label = (profileId: VocabularyAutocompleteProfileId) => VOCABULARY_AUTOCOMPLETE_PROFILES[profileId].label;

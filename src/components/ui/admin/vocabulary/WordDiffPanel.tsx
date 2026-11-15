@@ -9,10 +9,10 @@ import { formatEnumLabel } from '@/src/utils/schema-helpers';
 import {
   changedTableCells,
   changedWordFields,
-  differingSpan,
   sameWordValue,
   summarizeWordChanges,
 } from '@/src/utils/vocabulary/word-diff';
+import { MarkedText } from './MarkedText';
 import { ArrayCellContent } from './tables/ArrayCellContent';
 import { SchemaTable } from './tables/SchemaTable';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
@@ -71,74 +71,67 @@ const humanize = (field: string) => field.replace(/_/g, ' ').replace(/^./, lette
 
 const Empty = () => <span className="text-muted-foreground">—</span>;
 
-/** A value with the letters that differ from `other` marked, so a changed macron stands out. */
-function Marked({ text, other, markClass }: { text: string; other: string; markClass: string }) {
-  if (!text) return <Empty />;
-  if (!other) return <>{text}</>;
-  const [start, changed, end] = differingSpan(text, other);
-  return (
-    <>
-      {start}
-      {changed && <mark className={cn('rounded-sm px-px text-inherit', markClass)}>{changed}</mark>}
-      {end}
-    </>
-  );
-}
-
-const SIGN = {
-  removed: { symbol: '−', label: 'Before: ', className: 'text-red-500' },
-  added: { symbol: '+', label: 'After: ', className: 'text-green-600' },
+const TONES = {
+  removed: {
+    symbol: '−',
+    label: 'Before: ',
+    sign: 'text-red-500',
+    box: 'border-red-200 bg-red-50 text-red-900',
+    mark: 'bg-red-200/80',
+  },
+  added: {
+    symbol: '+',
+    label: 'After: ',
+    sign: 'text-green-600',
+    box: 'border-green-300 bg-green-50 text-green-900',
+    mark: 'bg-green-200/80',
+  },
 } as const;
 
-function Sign({ tone }: { tone: keyof typeof SIGN }) {
+/** A changed value as its old and new version; one that is only added or only removed shows just that side. */
+function ChangedPair({ before, after, className }: { before: string; after: string; className: string }) {
   return (
-    <>
-      <span aria-hidden className={cn('mr-2 select-none font-semibold', SIGN[tone].className)}>
-        {SIGN[tone].symbol}
-      </span>
-      <span className="sr-only">{SIGN[tone].label}</span>
-    </>
+    <div className="space-y-1">
+      {(['removed', 'added'] as const).map(tone => {
+        const [text, other] = tone === 'removed' ? [before, after] : [after, before];
+        if (!text) return null;
+        const { symbol, label, sign, box, mark } = TONES[tone];
+        return (
+          <div key={tone} className={cn(className, box)}>
+            <span aria-hidden className={cn('mr-2 select-none font-semibold', sign)}>
+              {symbol}
+            </span>
+            <span className="sr-only">{label}</span>
+            {other ? <MarkedText text={text} other={other} markClass={mark} /> : text}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
 /** Looks like the editor's input; a changed value shows its old and new versions. */
 function DiffValue({ before, after, multiline = false }: { before: string; after: string; multiline?: boolean }) {
   const box = 'w-full rounded-md border px-3 py-2 text-sm';
-  if (before === after) {
-    return (
-      <div
-        className={cn(
-          box,
-          'border-input bg-background',
-          multiline ? 'min-h-[80px] whitespace-pre-wrap' : 'min-h-10 truncate'
-        )}>
-        {after || <Empty />}
-      </div>
-    );
+  if (before !== after) {
+    return <ChangedPair before={before} after={after} className={cn(box, 'min-h-10 whitespace-pre-wrap')} />;
   }
-  // A value that is only added or only removed shows just that side.
   return (
-    <div className="space-y-1">
-      {before && (
-        <div className={cn(box, 'min-h-10 whitespace-pre-wrap border-red-200 bg-red-50 text-red-900')}>
-          <Sign tone="removed" />
-          <Marked text={before} other={after} markClass="bg-red-200/80" />
-        </div>
-      )}
-      {after && (
-        <div className={cn(box, 'min-h-10 whitespace-pre-wrap border-green-300 bg-green-50 text-green-900')}>
-          <Sign tone="added" />
-          <Marked text={after} other={before} markClass="bg-green-200/80" />
-        </div>
-      )}
+    <div
+      className={cn(
+        box,
+        'border-input bg-background',
+        multiline ? 'min-h-[80px] whitespace-pre-wrap' : 'min-h-10 truncate'
+      )}>
+      {after || <Empty />}
     </div>
   );
 }
 
-function FieldLabel({ label, changed, small = false }: { label: string; changed: boolean; small?: boolean }) {
+function FieldLabel({ label, changed }: { label: string; changed: boolean }) {
   return (
     <div className="flex items-center gap-2">
-      <Label className={small ? 'text-xs' : undefined}>{label}</Label>
+      <Label>{label}</Label>
       {changed && (
         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium leading-none text-amber-800">
           Changed
@@ -148,13 +141,18 @@ function FieldLabel({ label, changed, small = false }: { label: string; changed:
   );
 }
 
-const useFieldChange = (field: string) => {
-  const { before, after, changesOnly } = useContext(DiffContext);
-  const changed = !sameWordValue(before[field], after[field]);
-  return { before: before[field], after: after[field], changed, hidden: changesOnly && !changed };
-};
+const listOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
-function ScalarField({
+const LIST_FIELDS = new Set(['definitions', 'principal_parts']);
+/** Fields whose value, or each list item, is a full and a shortened form. */
+const FORM_FIELDS = new Set(['nominative_singular', 'genitive_singular', 'principal_parts']);
+const FORM_PARTS = [
+  ['full_form', 'Full Form'],
+  ['shortened_form', 'Shortened Form'],
+] as const;
+
+/** One field of the word: a single value, a full and shortened form, or a list of either. */
+function DiffField({
   field,
   label,
   format = asText,
@@ -165,80 +163,43 @@ function ScalarField({
   format?: (value: unknown) => string;
   multiline?: boolean;
 }) {
-  const { before, after, changed, hidden } = useFieldChange(field);
-  if (hidden) return null;
+  const word = useContext(DiffContext);
+  const before = word.before[field];
+  const after = word.after[field];
+  const isList = LIST_FIELDS.has(field);
+  const rows = isList ? Math.max(listOf(before).length, listOf(after).length) : 1;
   return (
     <div className="space-y-2">
-      <FieldLabel label={label} changed={changed} />
-      <DiffValue before={format(before)} after={format(after)} multiline={multiline} />
-    </div>
-  );
-}
-
-/** A noun's nominative or genitive: full and shortened form side by side. */
-function WordFormField({ field, label }: { field: string; label: string }) {
-  const { before, after, changed, hidden } = useFieldChange(field);
-  if (hidden) return null;
-  return (
-    <div className="space-y-2">
-      <FieldLabel label={label} changed={changed} />
-      <div className="grid grid-cols-2 gap-2">
-        {(['full_form', 'shortened_form'] as const).map(part => (
-          <div key={part} className="space-y-2">
-            <Label className="text-xs">{part === 'full_form' ? 'Full Form' : 'Shortened Form'}</Label>
-            <DiffValue before={asText(valueAt(before, part))} after={asText(valueAt(after, part))} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const listOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
-
-function DefinitionsField() {
-  const { before, after, changed, hidden } = useFieldChange('definitions');
-  if (hidden) return null;
-  const length = Math.max(listOf(before).length, listOf(after).length);
-  return (
-    <div className="space-y-2">
-      <FieldLabel label={WORD_FIELDS.definitions.label} changed={changed} />
-      <div className="space-y-2">
-        {Array.from({ length }, (_, index) => (
-          <DiffValue key={index} before={asText(listOf(before)[index])} after={asText(listOf(after)[index])} />
-        ))}
-        {length === 0 && <p className="text-sm text-gray-500">No definitions.</p>}
-      </div>
-    </div>
-  );
-}
-
-function PrincipalPartsField() {
-  const { before, after, changed, hidden } = useFieldChange('principal_parts');
-  if (hidden) return null;
-  const length = Math.max(listOf(before).length, listOf(after).length);
-  return (
-    <div className="space-y-2">
-      <FieldLabel label={WORD_FIELDS.principal_parts.label} changed={changed} />
-      <div className="space-y-3">
-        {Array.from({ length }, (_, index) => (
-          <div key={index} className="grid grid-cols-2 gap-2">
-            {(['full_form', 'shortened_form'] as const).map(part => (
+      <FieldLabel label={label} changed={!sameWordValue(before, after)} />
+      {Array.from({ length: rows }, (_, row) => {
+        const [old, next] = [before, after].map(value => (isList ? listOf(value)[row] : value));
+        if (!FORM_FIELDS.has(field)) {
+          return <DiffValue key={row} before={format(old)} after={format(next)} multiline={multiline} />;
+        }
+        return (
+          <div key={row} className="grid grid-cols-2 gap-2">
+            {FORM_PARTS.map(([part, partLabel]) => (
               <div key={part} className="space-y-2">
-                <Label className="text-xs">{part === 'full_form' ? 'Full Form' : 'Shortened Form'}</Label>
-                <DiffValue
-                  before={asText(valueAt(listOf(before)[index], part))}
-                  after={asText(valueAt(listOf(after)[index], part))}
-                />
+                <Label className="text-xs">{partLabel}</Label>
+                <DiffValue before={asText(valueAt(old, part))} after={asText(valueAt(next, part))} />
               </div>
             ))}
           </div>
-        ))}
-        {length === 0 && <div className="text-sm text-gray-500">No principal parts added.</div>}
-      </div>
+        );
+      })}
+      {rows === 0 && <p className="text-sm text-gray-500">No {label.toLowerCase()}.</p>}
     </div>
   );
 }
+
+const FIELD_FORMATS: Partial<Record<WordFieldName, (value: unknown) => string>> = {
+  type: labelFrom(WORD_TYPE_LABELS),
+  case: labelFrom(CASE_LABELS),
+  gender: enumText,
+  declension: enumText,
+  pronoun_type: enumText,
+  person: enumText,
+};
 
 function ReviewFields({ section }: { section: string }) {
   const { before, after, changesOnly } = useContext(DiffContext);
@@ -246,59 +207,16 @@ function ReviewFields({ section }: { section: string }) {
     <WordFieldLayout
       section={section}
       visible={field => !changesOnly || !sameWordValue(before[field], after[field])}
-      renderField={(field: WordFieldName) => {
-        const { label, ...options } = WORD_FIELDS[field];
-        if (field === 'definitions') return <DefinitionsField />;
-        if (field === 'principal_parts') return <PrincipalPartsField />;
-        if (field === 'nominative_singular' || field === 'genitive_singular')
-          return <WordFormField field={field} label={label} />;
-        const format =
-          field === 'type'
-            ? labelFrom(WORD_TYPE_LABELS)
-            : field === 'case'
-              ? labelFrom(CASE_LABELS)
-              : ['gender', 'declension', 'pronoun_type', 'person'].includes(field)
-                ? enumText
-                : asText;
-        return <ScalarField field={field} label={label} format={format} {...options} />;
-      }}
+      renderField={field => <DiffField field={field} format={FIELD_FORMATS[field]} {...WORD_FIELDS[field]} />}
     />
   );
 }
 
 /** One table cell: the form as it is, or its old and new forms when they differ. */
 function DiffCell({ before, after, changed }: { before: unknown; after: unknown; changed: boolean }) {
-  if (!changed) {
-    return Array.isArray(after) || after == null ? <ArrayCellContent value={after} /> : <span>{asText(after)}</span>;
-  }
-  const beforeText = asText(before);
-  const afterText = asText(after);
-  return (
-    <div className="space-y-1">
-      {beforeText && (
-        <div className="rounded bg-red-50 px-1.5 py-0.5 text-red-900">
-          <Sign tone="removed" />
-          <Marked text={beforeText} other={afterText} markClass="bg-red-200/80" />
-        </div>
-      )}
-      {afterText && (
-        <div className="rounded bg-green-50 px-1.5 py-0.5 text-green-900">
-          <Sign tone="added" />
-          <Marked text={afterText} other={beforeText} markClass="bg-green-200/80" />
-        </div>
-      )}
-    </div>
-  );
+  if (changed) return <ChangedPair before={asText(before)} after={asText(after)} className="rounded px-1.5 py-0.5" />;
+  return Array.isArray(after) || after == null ? <ArrayCellContent value={after} /> : <span>{asText(after)}</span>;
 }
-
-const hasPath = (value: unknown, path: string) => {
-  let current = value;
-  for (const key of path.split('.')) {
-    if (!current || typeof current !== 'object' || !(key in current)) return false;
-    current = (current as Plain)[key];
-  }
-  return true;
-};
 
 function TableDiff() {
   const { before, after, changesOnly } = useContext(DiffContext);
@@ -316,7 +234,7 @@ function TableDiff() {
   const unshown = useMemo(() => {
     if (!schema) return [];
     const shape = buildEmptyFromSchema(schema);
-    return [...changedCells].filter(path => !hasPath(shape, path));
+    return [...changedCells].filter(path => valueAt(shape, path) === undefined);
   }, [schema, changedCells]);
 
   if (!table || !schema || (changesOnly && changedCells.size === 0)) return null;
@@ -367,7 +285,7 @@ function OtherChanges() {
     <div className="space-y-4 border-t pt-4">
       <h3 className="text-sm font-semibold text-gray-700">Other changes</h3>
       {others.map(field => (
-        <ScalarField key={field} field={field} label={humanize(field)} multiline />
+        <DiffField key={field} field={field} label={humanize(field)} multiline />
       ))}
     </div>
   );

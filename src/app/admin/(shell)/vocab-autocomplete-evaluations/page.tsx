@@ -1,39 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  ChevronDown,
-  ChevronUp,
-  Clock3,
-  CopyPlus,
-  Database,
-  DollarSign,
-  Loader2,
-  Play,
-  Plus,
-  Save,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Clock3, CopyPlus, Database, DollarSign, Trash2, X } from 'lucide-react';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
-import {
-  AdminErrorState,
-  AdminLoadingState,
-  AdminPage,
-  AdminPageHeader,
-  AdminSearchInput,
-} from '@/src/components/admin/shell';
+import { AdminSearchInput } from '@/src/components/admin/shell';
 import { Button } from '@/src/components/ui/button';
 import { CopyMarkdownButton } from '@/src/components/admin/CopyMarkdownButton';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Badge } from '@/src/components/ui/badge';
-import { Switch } from '@/src/components/ui/switch';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
-import { EvaluationCaseSidebar } from '@/src/components/admin/evaluations/EvaluationCaseSidebar';
-import { SummaryCard } from '@/src/components/admin/evaluations/SummaryCard';
-import { useEvaluationCases } from '@/src/hooks/useEvaluationCases';
+import { EvaluationWorkbench } from '@/src/components/admin/evaluations/EvaluationWorkbench';
+import { FigureRow, LeadHeadline, ProfileDot, SummaryCard } from '@/src/components/admin/evaluations/SummaryCard';
+import type { EvaluationSuite } from '@/src/hooks/useEvaluationCases';
 import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import {
   EVALUATION_VOCABULARY_AUTOCOMPLETE_PROFILE_IDS,
@@ -42,6 +21,7 @@ import {
 } from '@/shared/openai/model-registry';
 import {
   VOCABULARY_EVALUATION_MAX_ENTRIES,
+  vocabularyEvaluationCaseInputSchema,
   type VocabularyEvaluationCaseInput,
   type VocabularyEvaluationCell,
   type VocabularyEvaluationRunResult,
@@ -59,7 +39,6 @@ import {
 } from '@/src/lib/vocabulary-autocomplete-evaluations/comparison';
 import {
   compareEntryForms,
-  differingSpan,
   formMatchesQuery,
   PROSE_FIELDS,
   type FormAgreement,
@@ -67,6 +46,7 @@ import {
   type FormRow,
 } from '@/src/utils/vocabulary/word-diff';
 import { vocabularyRunToMarkdown } from '@/src/lib/vocabulary-autocomplete-evaluations/markdown-export';
+import { MarkedText } from '@/src/components/ui/admin/vocabulary/MarkedText';
 
 const PROFILES = [
   EVALUATION_VOCABULARY_AUTOCOMPLETE_PROFILE_IDS[0],
@@ -74,6 +54,7 @@ const PROFILES = [
 ] as const;
 const profileLabel = (profileId: VocabularyAutocompleteProfileId) => VOCABULARY_AUTOCOMPLETE_PROFILES[profileId].label;
 const modelName = (profileId: VocabularyAutocompleteProfileId) => profileLabel(profileId).split(' · ')[0];
+const isPrimary = (profileId: VocabularyAutocompleteProfileId) => profileId === PROFILES[1];
 
 const newEntry = (index: number) => ({
   id: `entry-${Date.now()}-${index}`,
@@ -81,10 +62,6 @@ const newEntry = (index: number) => ({
   partOfSpeech: 'noun' as PartOfSpeech,
 });
 const blankCase = (): VocabularyEvaluationCaseInput => ({ title: '', entries: [newEntry(1)] });
-const cloneCase = (value: VocabularyEvaluationCaseInput): VocabularyEvaluationCaseInput => ({
-  title: value.title,
-  entries: value.entries.map(entry => ({ ...entry })),
-});
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-US').format(Math.round(value));
 const formatDuration = (milliseconds: number) =>
@@ -104,17 +81,6 @@ const fieldLabel = (field: string) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 const posLabel = (partOfSpeech: PartOfSpeech) => fieldLabel(partOfSpeech);
-
-function isValidCase(value: VocabularyEvaluationCaseInput) {
-  const keys = value.entries.map(entry => `${entry.partOfSpeech}:${entry.word.trim().normalize('NFC')}`);
-  return (
-    value.title.trim().length > 0 &&
-    value.entries.length > 0 &&
-    value.entries.length <= VOCABULARY_EVALUATION_MAX_ENTRIES &&
-    value.entries.every(entry => entry.word.trim()) &&
-    new Set(keys).size === keys.length
-  );
-}
 
 const AGREEMENT_STYLES: Record<
   FormAgreement,
@@ -150,15 +116,6 @@ const AGREEMENT_STYLES: Record<
   },
 };
 const DIFFERENCE_KINDS: FormAgreement[] = ['different', 'missing', 'macrons'];
-
-function ProfileDot({ profileId }: { profileId: VocabularyAutocompleteProfileId }) {
-  return (
-    <span
-      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${profileId === PROFILES[0] ? 'bg-roman-stone' : 'bg-primary'}`}
-      aria-hidden="true"
-    />
-  );
-}
 
 function AgreementBar({ counts }: { counts: FormCounts }) {
   return (
@@ -224,7 +181,7 @@ function ModelPanel({ cell }: { cell: VocabularyEvaluationCell }) {
       className={`flex min-w-0 flex-col gap-3 rounded-lg border p-4 ${failed ? 'border-red-200 bg-red-50/60' : 'border-border/70 bg-white'}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <ProfileDot profileId={cell.profileId} />
+          <ProfileDot primary={isPrimary(cell.profileId)} />
           <p className="truncate text-sm font-medium">{profileLabel(cell.profileId)}</p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -247,29 +204,28 @@ function ModelPanel({ cell }: { cell: VocabularyEvaluationCell }) {
         </p>
       )}
       <dl className="grid grid-cols-3 gap-2 text-xs">
-        <div className="rounded-md bg-roman-marble/55 p-2">
-          <dt className="flex items-center gap-1 text-roman-stone">
-            <Clock3 className="h-3 w-3" aria-hidden="true" /> Time
-          </dt>
-          <dd className="mt-0.5 font-semibold tabular-nums">{formatDuration(cell.generationLatencyMs)}</dd>
-        </div>
-        <div className="rounded-md bg-roman-marble/55 p-2">
-          <dt className="flex items-center gap-1 text-roman-stone">
-            <DollarSign className="h-3 w-3" aria-hidden="true" /> Cost
-          </dt>
-          <dd className="mt-0.5 font-semibold tabular-nums">{cell.cost ? formatCost(cell.cost.totalCost) : '—'}</dd>
-        </div>
-        <div className="rounded-md bg-roman-marble/55 p-2">
-          <dt className="flex items-center gap-1 text-roman-stone">
-            <Database className="h-3 w-3" aria-hidden="true" /> Input
-          </dt>
-          <dd className="mt-0.5 font-semibold tabular-nums">
-            {usage ? formatNumber(usage.promptTokens) : '—'}
-            {(usage?.cachedInputTokens ?? 0) > 0 && (
-              <span className="font-normal text-emerald-700"> ({formatNumber(usage!.cachedInputTokens!)} cached)</span>
-            )}
-          </dd>
-        </div>
+        {(
+          [
+            [Clock3, 'Time', formatDuration(cell.generationLatencyMs)],
+            [DollarSign, 'Cost', cell.cost ? formatCost(cell.cost.totalCost) : '—'],
+            [Database, 'Input', usage ? formatNumber(usage.promptTokens) : '—'],
+          ] as const
+        ).map(([Icon, label, value]) => (
+          <div key={label} className="rounded-md bg-roman-marble/55 p-2">
+            <dt className="flex items-center gap-1 text-roman-stone">
+              <Icon className="h-3 w-3" aria-hidden="true" /> {label}
+            </dt>
+            <dd className="mt-0.5 font-semibold tabular-nums">
+              {value}
+              {label === 'Input' && (usage?.cachedInputTokens ?? 0) > 0 && (
+                <span className="font-normal text-emerald-700">
+                  {' '}
+                  ({formatNumber(usage!.cachedInputTokens!)} cached)
+                </span>
+              )}
+            </dd>
+          </div>
+        ))}
       </dl>
       {usage && <TokenBar cell={cell} />}
       <p className="text-[11px] text-roman-stone">
@@ -298,7 +254,7 @@ function ProseComparison({ cells }: { cells: [VocabularyEvaluationCell, Vocabula
           {cells.map(cell => (
             <p key={cell.profileId} className="flex min-w-0 gap-2 leading-relaxed">
               <span className="mt-1.5 md:hidden">
-                <ProfileDot profileId={cell.profileId} />
+                <ProfileDot primary={isPrimary(cell.profileId)} />
               </span>
               <span className={cell.output ? '' : 'text-roman-stone'}>
                 {cell.output ? proseText(cell.output[field]) || '—' : 'No entry'}
@@ -320,16 +276,8 @@ const MARK_STYLES: Partial<Record<FormAgreement, string>> = {
 /** A form's value with the letters that differ from the other model's value marked. */
 function FormValue({ row, index }: { row: FormRow; index: number }) {
   const text = formValue(row.values[index]);
-  const markStyle = MARK_STYLES[row.agreement];
-  if (!markStyle) return <>{text}</>;
-  const [before, changed, after] = differingSpan(text, formValue(row.values[1 - index]));
-  return (
-    <>
-      {before}
-      {changed && <mark className={`rounded-sm px-px text-inherit ${markStyle}`}>{changed}</mark>}
-      {after}
-    </>
-  );
+  const markClass = MARK_STYLES[row.agreement];
+  return markClass ? <MarkedText text={text} other={formValue(row.values[1 - index])} markClass={markClass} /> : text;
 }
 
 function FormsTable({ rows }: { rows: FormRow[] }) {
@@ -344,7 +292,7 @@ function FormsTable({ rows }: { rows: FormRow[] }) {
             {PROFILES.map(profileId => (
               <th key={profileId} scope="col" className="px-3 py-2 font-semibold">
                 <span className="flex items-center gap-1.5 normal-case tracking-normal">
-                  <ProfileDot profileId={profileId} />
+                  <ProfileDot primary={isPrimary(profileId)} />
                   {modelName(profileId)}
                 </span>
               </th>
@@ -512,31 +460,6 @@ function EntryComparison({
   );
 }
 
-function FigureRow({
-  profileId,
-  leader,
-  value,
-  detail,
-}: {
-  profileId: VocabularyAutocompleteProfileId;
-  leader: boolean;
-  value: string;
-  detail?: string;
-}) {
-  return (
-    <div className="text-sm">
-      <div className="flex items-center justify-between gap-3">
-        <span className={`flex min-w-0 items-center gap-2 ${leader ? 'font-medium' : 'text-roman-stone'}`}>
-          <ProfileDot profileId={profileId} />
-          <span className="truncate">{profileLabel(profileId)}</span>
-        </span>
-        <span className={`shrink-0 tabular-nums ${leader ? 'font-semibold' : ''}`}>{value}</span>
-      </div>
-      {detail && <p className="pl-[18px] text-[11px] tabular-nums text-roman-stone">{detail}</p>}
-    </div>
-  );
-}
-
 function RunSummary({ summary }: { summary: VocabularyRunSummary }) {
   const { forms, figures, faster, cheaper, comparedCount, entryCount } = summary;
   const budgetFailures = figures.reduce((sum, item) => sum + item.tokenBudgetFailures, 0);
@@ -572,10 +495,7 @@ function RunSummary({ summary }: { summary: VocabularyRunSummary }) {
         title="Cost"
         headline={
           cheaper ? (
-            <>
-              {modelName(cheaper.profileId)}{' '}
-              <span className="text-primary">{Number(cheaper.ratio.toPrecision(2))}× cheaper</span>
-            </>
+            <LeadHeadline name={modelName(cheaper.profileId)} percent={cheaper.percent} word="cheaper" />
           ) : summary.costComparedCount ? (
             'Same cost'
           ) : (
@@ -586,7 +506,8 @@ function RunSummary({ summary }: { summary: VocabularyRunSummary }) {
           figures.map(item => (
             <FigureRow
               key={item.profileId}
-              profileId={item.profileId}
+              label={profileLabel(item.profileId)}
+              primary={isPrimary(item.profileId)}
               leader={cheaper?.profileId === item.profileId}
               value={formatCost(item.averageCost)}
               detail={`≈ ${formatDollars(item.averageCost * 1_000)} per 1,000 words like these`}
@@ -598,10 +519,7 @@ function RunSummary({ summary }: { summary: VocabularyRunSummary }) {
         title="Speed"
         headline={
           faster ? (
-            <>
-              {modelName(faster.profileId)}{' '}
-              <span className="text-primary">{Math.round((1 - 1 / faster.ratio) * 100)}% faster</span>
-            </>
+            <LeadHeadline name={modelName(faster.profileId)} percent={faster.percent} word="faster" />
           ) : comparedCount ? (
             'Same speed'
           ) : (
@@ -612,7 +530,8 @@ function RunSummary({ summary }: { summary: VocabularyRunSummary }) {
           figures.map(item => (
             <FigureRow
               key={item.profileId}
-              profileId={item.profileId}
+              label={profileLabel(item.profileId)}
+              primary={isPrimary(item.profileId)}
               leader={faster?.profileId === item.profileId}
               value={formatDuration(item.averageMs)}
             />
@@ -633,7 +552,8 @@ function RunSummary({ summary }: { summary: VocabularyRunSummary }) {
         {figures.map(item => (
           <FigureRow
             key={item.profileId}
-            profileId={item.profileId}
+            label={profileLabel(item.profileId)}
+            primary={isPrimary(item.profileId)}
             leader={false}
             value={`${formatShare(item.peakOutputShare)} peak`}
             detail={`${item.peakOutputWord ? `on ${item.peakOutputWord} · ` : ''}${formatNumber(item.averageOutputTokens)} avg per word${item.tokenBudgetFailures ? ` · ${item.tokenBudgetFailures} out of tokens` : ''}`}
@@ -702,350 +622,139 @@ function Results({
   );
 }
 
-const EXPAND_BUTTON_CLASS =
-  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/[0.08] text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
-
 const caseSubtitle = (value: VocabularyEvaluationCaseInput) =>
   `${value.entries.length} ${value.entries.length === 1 ? 'word' : 'words'} · ${[
     ...new Set(value.entries.map(entry => entry.partOfSpeech)),
   ].join(', ')}`;
 
-function VocabAutocompleteEvaluationsPage() {
-  const [forceRefresh, setForceRefresh] = useState(false);
-  const {
-    cases,
-    selectedId,
-    form,
-    savedForm,
-    collapsed,
-    setCollapsed,
-    displayedRun,
-    loadingCases,
-    saving,
-    running,
-    addingStarterCases,
-    deleteOpen,
-    setDeleteOpen,
-    loadError,
-    dirty,
-    valid,
-    interactionLocked,
-    missingStarterCases,
-    navigationGuard,
-    applyNewCase,
-    loadCases,
-    updateForm,
-    selectCase,
-    saveCase,
-    addStarterCases,
-    deleteCase,
-    runEvaluation,
-    discardChanges,
-  } = useEvaluationCases({
-    blankCase,
-    cloneCase,
-    isValidCase,
-    hasDraft: form =>
-      Boolean(
-        form.title.trim() ||
-          form.entries.length !== 1 ||
-          form.entries[0]?.word.trim() ||
-          form.entries[0]?.partOfSpeech !== 'noun'
-      ),
-    listCases: listVocabularyEvaluationCasesInFirebase,
-    saveCaseInput: saveVocabularyEvaluationCaseInFirebase,
-    deleteCaseById: deleteVocabularyEvaluationCaseInFirebase,
-    runCase: runVocabularyEvaluationInFirebase,
-    starterCases: STARTER_VOCABULARY_EVALUATION_CASES,
-    starterLabel: 'starter',
-    validationMessage: 'Add a title and at least one word, with no word listed twice.',
-  });
-
+function CaseFields({
+  form,
+  updateForm,
+}: {
+  form: VocabularyEvaluationCaseInput;
+  updateForm: (updater: (previous: VocabularyEvaluationCaseInput) => VocabularyEvaluationCaseInput) => void;
+}) {
+  const updateEntries = (update: (entries: VocabularyEvaluationCaseInput['entries']) => typeof entries) =>
+    updateForm(previous => ({ ...previous, entries: update(previous.entries) }));
   const updateEntry = (index: number, patch: Partial<VocabularyEvaluationCaseInput['entries'][number]>) =>
-    updateForm(previous => ({
-      ...previous,
-      entries: previous.entries.map((entry, entryIndex) => (entryIndex === index ? { ...entry, ...patch } : entry)),
-    }));
-
-  if (loadingCases) {
-    return (
-      <AdminPage>
-        <AdminLoadingState label="Loading vocabulary evaluation cases" />
-      </AdminPage>
+    updateEntries(entries =>
+      entries.map((entry, entryIndex) => (entryIndex === index ? { ...entry, ...patch } : entry))
     );
-  }
-
-  const hasVerb = form.entries.some(entry => entry.partOfSpeech === 'verb');
-
-  const editor = (
-    <fieldset disabled={interactionLocked} className="min-w-0 border-0 p-0">
-      <RomanCard>
-        <RomanCardContent className="space-y-5 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-serif text-xl">{selectedId ? 'Edit case' : 'New case'}</h2>
-            <div className="flex items-center gap-2">
-              {dirty && (
-                <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">Unsaved changes</Badge>
-              )}
-              {displayedRun && !dirty && (
-                <button
-                  type="button"
-                  onClick={() => setCollapsed(true)}
-                  aria-label="Collapse case editor"
-                  aria-expanded
-                  className={EXPAND_BUTTON_CLASS}>
-                  <ChevronUp className="h-5 w-5" aria-hidden="true" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="vocabulary-evaluation-title">Case title</Label>
-            <Input
-              id="vocabulary-evaluation-title"
-              value={form.title}
-              maxLength={120}
-              placeholder="e.g. Third-conjugation verbs"
-              onChange={event => updateForm(previous => ({ ...previous, title: event.target.value }))}
-            />
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <Label>Words to autocomplete</Label>
-                <p className="mt-1 text-xs text-roman-stone">
-                  Each word runs on both models. Up to {VOCABULARY_EVALUATION_MAX_ENTRIES} per case.
-                </p>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={form.entries.length >= VOCABULARY_EVALUATION_MAX_ENTRIES}
-                onClick={() =>
-                  updateForm(previous => ({
-                    ...previous,
-                    entries: [...previous.entries, newEntry(previous.entries.length + 1)],
-                  }))
-                }>
-                <CopyPlus className="mr-2 h-4 w-4" aria-hidden="true" />
-                Add word
-              </Button>
-            </div>
-            {form.entries.map((entry, index) => (
-              <div
-                key={entry.id}
-                className="flex items-end gap-3 rounded-lg border border-border/70 bg-roman-marble/35 p-3">
-                <span className="mb-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-primary shadow-sm">
-                  {index + 1}
-                </span>
-                <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`entry-word-${entry.id}`}>Word</Label>
-                    <Input
-                      id={`entry-word-${entry.id}`}
-                      value={entry.word}
-                      maxLength={60}
-                      placeholder="e.g. ferō"
-                      className="font-serif"
-                      onChange={event => updateEntry(index, { word: event.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`entry-pos-${entry.id}`}>Part of speech</Label>
-                    <select
-                      id={`entry-pos-${entry.id}`}
-                      value={entry.partOfSpeech}
-                      onChange={event => updateEntry(index, { partOfSpeech: event.target.value as PartOfSpeech })}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      {PartOfSpeechSchema.options.map(option => (
-                        <option key={option} value={option}>
-                          {posLabel(option)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  disabled={form.entries.length <= 1}
-                  aria-label={`Remove ${entry.word || `word ${index + 1}`}`}
-                  onClick={() =>
-                    updateForm(previous => ({
-                      ...previous,
-                      entries: previous.entries.filter((_, entryIndex) => entryIndex !== index),
-                    }))
-                  }>
-                  <Trash2 className="h-4 w-4 text-roman-stone" aria-hidden="true" />
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
-            <div>
-              {selectedId && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => navigationGuard.requestNavigation(() => setDeleteOpen(true))}>
-                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Delete
-                </Button>
-              )}
-            </div>
-            <div className="flex flex-col items-stretch gap-2 sm:items-end">
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <label className="mr-1 flex cursor-pointer items-center gap-2 text-xs text-roman-stone">
-                  <Switch
-                    checked={forceRefresh}
-                    onCheckedChange={setForceRefresh}
-                    disabled={interactionLocked}
-                    aria-label="Skip cache"
-                  />
-                  Skip cache
-                </label>
-                {savedForm && dirty && (
-                  <Button type="button" variant="ghost" onClick={discardChanges}>
-                    Discard changes
-                  </Button>
-                )}
-                <Button type="button" variant="outline" disabled={!valid || !dirty} onClick={() => void saveCase()}>
-                  {saving ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" aria-hidden="true" />
-                  )}
-                  {saving ? 'Saving…' : 'Save case'}
-                </Button>
-                <Button
-                  type="button"
-                  disabled={!selectedId || dirty || !valid}
-                  onClick={() => void runEvaluation(forceRefresh)}>
-                  {running ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Play className="mr-2 h-4 w-4" aria-hidden="true" />
-                  )}
-                  {running ? 'Running…' : 'Run comparison'}
-                </Button>
-              </div>
-              {(dirty || !selectedId) && (
-                <p className="text-[11px] text-roman-stone">Save the case to run a comparison.</p>
-              )}
-            </div>
-          </div>
-        </RomanCardContent>
-      </RomanCard>
-    </fieldset>
-  );
-
-  const caseBanner = (
-    <RomanCard>
-      <RomanCardContent className="flex items-center gap-3 px-4 py-3 sm:px-5">
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate font-serif text-lg">{form.title}</h2>
-          <p className="truncate text-xs text-roman-stone">
-            {form.entries.map(entry => entry.word).join(', ')} · {profileLabel(PROFILES[0])} vs{' '}
-            {profileLabel(PROFILES[1])}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          disabled={interactionLocked}
-          aria-label="Expand case editor"
-          aria-expanded={false}
-          className={EXPAND_BUTTON_CLASS}>
-          <ChevronDown className="h-5 w-5" aria-hidden="true" />
-        </button>
-      </RomanCardContent>
-    </RomanCard>
-  );
 
   return (
-    <AdminPage>
-      <AdminPageHeader
-        title="Vocab Autocomplete Evaluation"
-        description={`Autocomplete the same words with ${modelName(PROFILES[0])} and ${modelName(PROFILES[1])}, then compare the entries, cost, speed and token use.`}
-        actions={
-          <Button
-            type="button"
-            onClick={() => !interactionLocked && navigationGuard.requestNavigation(applyNewCase)}
-            disabled={interactionLocked}>
-            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-            New case
-          </Button>
-        }
-      />
-
-      {loadError && (
-        <AdminErrorState
-          message={loadError}
-          onRetry={() => navigationGuard.requestNavigation(() => void loadCases())}
-          className="mb-6"
+    <>
+      <div className="space-y-1.5">
+        <Label htmlFor="vocabulary-evaluation-title">Case title</Label>
+        <Input
+          id="vocabulary-evaluation-title"
+          value={form.title}
+          maxLength={120}
+          placeholder="e.g. Third-conjugation verbs"
+          onChange={event => updateForm(previous => ({ ...previous, title: event.target.value }))}
         />
-      )}
-
-      <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
-        <EvaluationCaseSidebar
-          cases={cases}
-          selectedId={selectedId}
-          onSelect={selectCase}
-          subtitle={caseSubtitle}
-          locked={interactionLocked}
-          addDisabled={Boolean(loadError)}
-          canAdd={missingStarterCases.length > 0}
-          adding={addingStarterCases}
-          onAdd={() => void addStarterCases()}
-          starterLabel="starter"
-        />
-
-        <div className="min-w-0 space-y-6">
-          {collapsed ? caseBanner : editor}
-
-          {running && (
-            <div
-              className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] p-4"
-              role="status"
-              aria-live="polite">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
-              <p className="text-sm font-medium">
-                Both models are autocompleting each word…
-                {hasVerb && <span className="font-normal text-roman-stone"> Verbs can take a few minutes.</span>}
-              </p>
-            </div>
-          )}
-
-          {displayedRun && <Results result={displayedRun.result} evaluationCase={displayedRun.evaluationCase} />}
-        </div>
       </div>
 
-      <ConfirmationDialog
-        isOpen={navigationGuard.isOpen}
-        onClose={navigationGuard.stayOnPage}
-        onConfirm={navigationGuard.leavePage}
-        title="Leave without saving?"
-        description={navigationGuard.message}
-        confirmText="Leave without saving"
-        confirmVariant="destructive"
-      />
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <Label>Words to autocomplete</Label>
+            <p className="mt-1 text-xs text-roman-stone">
+              Each word runs on both models. Up to {VOCABULARY_EVALUATION_MAX_ENTRIES} per case.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={form.entries.length >= VOCABULARY_EVALUATION_MAX_ENTRIES}
+            onClick={() => updateEntries(entries => [...entries, newEntry(entries.length + 1)])}>
+            <CopyPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+            Add word
+          </Button>
+        </div>
+        {form.entries.map((entry, index) => (
+          <div
+            key={entry.id}
+            className="flex items-end gap-3 rounded-lg border border-border/70 bg-roman-marble/35 p-3">
+            <span className="mb-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-primary shadow-sm">
+              {index + 1}
+            </span>
+            <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+              <div className="space-y-1.5">
+                <Label htmlFor={`entry-word-${entry.id}`}>Word</Label>
+                <Input
+                  id={`entry-word-${entry.id}`}
+                  value={entry.word}
+                  maxLength={60}
+                  placeholder="e.g. ferō"
+                  className="font-serif"
+                  onChange={event => updateEntry(index, { word: event.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`entry-pos-${entry.id}`}>Part of speech</Label>
+                <select
+                  id={`entry-pos-${entry.id}`}
+                  value={entry.partOfSpeech}
+                  onChange={event => updateEntry(index, { partOfSpeech: event.target.value as PartOfSpeech })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  {PartOfSpeechSchema.options.map(option => (
+                    <option key={option} value={option}>
+                      {posLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              disabled={form.entries.length <= 1}
+              aria-label={`Remove ${entry.word || `word ${index + 1}`}`}
+              onClick={() => updateEntries(entries => entries.filter((_, entryIndex) => entryIndex !== index))}>
+              <Trash2 className="h-4 w-4 text-roman-stone" aria-hidden="true" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
 
-      <ConfirmationDialog
-        isOpen={deleteOpen}
-        onClose={() => setDeleteOpen(false)}
-        onConfirm={() => void deleteCase()}
-        title="Delete this evaluation case?"
-        description="This removes the saved case. Cached results are not deleted and expire after 30 days."
-        confirmText="Delete case"
-        confirmVariant="destructive"
-      />
-    </AdminPage>
+const SUITE: EvaluationSuite<VocabularyEvaluationCaseInput, VocabularyEvaluationRunResult> = {
+  blankCase,
+  inputSchema: vocabularyEvaluationCaseInputSchema,
+  listCases: listVocabularyEvaluationCasesInFirebase,
+  saveCaseInput: saveVocabularyEvaluationCaseInFirebase,
+  deleteCaseById: deleteVocabularyEvaluationCaseInFirebase,
+  runCase: runVocabularyEvaluationInFirebase,
+  starterCases: STARTER_VOCABULARY_EVALUATION_CASES,
+  starterLabel: 'starter',
+};
+
+function VocabAutocompleteEvaluationsPage() {
+  return (
+    <EvaluationWorkbench
+      suite={SUITE}
+      title="Vocab Autocomplete Evaluation"
+      description={`Autocomplete the same words with ${modelName(PROFILES[0])} and ${modelName(PROFILES[1])}, then compare the entries, cost, speed and token use.`}
+      loadingLabel="Loading vocabulary evaluation cases"
+      caseSubtitle={caseSubtitle}
+      caseSummary={form =>
+        `${form.entries.map(entry => entry.word).join(', ')} · ${profileLabel(PROFILES[0])} vs ${profileLabel(PROFILES[1])}`
+      }
+      runningMessage={form => (
+        <>
+          Both models are autocompleting each word…
+          {form.entries.some(entry => entry.partOfSpeech === 'verb') && (
+            <span className="font-normal text-roman-stone"> Verbs can take a few minutes.</span>
+          )}
+        </>
+      )}
+      renderFields={(form, updateForm) => <CaseFields form={form} updateForm={updateForm} />}
+      renderResults={run => <Results result={run.result} evaluationCase={run.evaluationCase} />}
+    />
   );
 }
 
