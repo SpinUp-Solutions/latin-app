@@ -61,7 +61,15 @@ export const useWordSelection = () => {
     dispatch(setPaginationCursor(null));
   }, [debouncedSearch, dispatch]);
 
-  const { data, isLoading, isFetching } = useGetWordsForPoolSelectionQuery({
+  // `currentData` belongs to the current filters only, so a pending or failed request never offers the previous
+  // filter's words for selection.
+  const {
+    currentData: data,
+    isLoading,
+    isFetching,
+    isError,
+    refetch,
+  } = useGetWordsForPoolSelectionQuery({
     filters: debouncedFilters,
     limit: 50,
     lastWordId: searchPending || !searchCommitted ? null : paginationCursor,
@@ -134,7 +142,10 @@ export const useWordSelection = () => {
     filtersExpanded,
     hasMore: data?.hasMore ?? false,
     isLoading,
+    isLoadingResults: isFetching && !data,
     isFetching,
+    isError: isError && !isFetching,
+    retry: refetch,
 
     addWord: handleAddWord,
     addAllVisible: handleAddAllVisible,
