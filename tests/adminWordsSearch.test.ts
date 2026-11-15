@@ -60,4 +60,23 @@ describe('admin word search', () => {
     expect(where).not.toHaveBeenCalledWith('sort_key', expect.anything(), expect.anything());
     expect(response.body.data.filters.search).toBeNull();
   });
+
+  it.each(['core', 'non-core'])('lists only %s words when asked', async coreType => {
+    const where = mockWordsQuery();
+
+    const response = await GET({ url: `http://localhost/api/admin/words?wordType=noun&coreType=${coreType}` } as never);
+
+    expect(response.status).toBe(200);
+    expect(where).toHaveBeenCalledWith('part_of_speech', '==', 'noun');
+    expect(where).toHaveBeenCalledWith('type', '==', coreType);
+  });
+
+  it.each(['', '?coreType=all', '?coreType=CORE'])('lists every word for "%s"', async query => {
+    const where = mockWordsQuery();
+
+    const response = await GET({ url: `http://localhost/api/admin/words${query}` } as never);
+
+    expect(response.status).toBe(200);
+    expect(where).not.toHaveBeenCalledWith('type', expect.anything(), expect.anything());
+  });
 });

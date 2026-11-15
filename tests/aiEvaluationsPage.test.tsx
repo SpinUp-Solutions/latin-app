@@ -283,6 +283,22 @@ describe('AI evaluation admin workspace', () => {
     expect(screen.getByText('Same grade')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Cicero case/ })).toHaveAttribute('aria-pressed', 'true');
 
+    // The Markdown copy covers both grading modes, whichever one is on screen.
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy results as Markdown' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const markdown: string = writeText.mock.calls[0][0];
+    expect(markdown).toContain('# AI evaluation: Cicero case');
+    expect(markdown).toContain('> Si quid est in me ingeni.');
+    expect(markdown).toContain('| GPT-6 Luna · Low | gpt-6-luna | low |');
+    expect(markdown).toContain('## Lesson feedback');
+    expect(markdown).toContain('### 1. Student A: close (one step or point apart)');
+    expect(markdown).toContain('#### GPT-5.4 Mini · Low: Excellent (passing)');
+    expect(markdown).toContain('Suggested text: If there is any talent in me.');
+    expect(markdown).toContain('## Test scoring (0–10)');
+    expect(markdown).toContain('Feedback: Accurate overall; check the final tense.');
+
     fireEvent.click(screen.getByRole('switch', { name: 'Show advanced details' }));
     expect(screen.getByRole('heading', { name: 'Advanced details' })).toBeInTheDocument();
     expect(screen.getByText('Cache and run behavior')).toBeInTheDocument();

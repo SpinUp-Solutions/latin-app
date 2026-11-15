@@ -1,3 +1,4 @@
+import { WORD_FIELDS } from '@/src/components/ui/admin/vocabulary/wordFields';
 import { useFormContext, useFieldArray } from 'react-hook-form';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
@@ -13,7 +14,7 @@ export const PrincipalPartsEditor = () => {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <FormLabel>Principal Parts</FormLabel>
+        <FormLabel>{WORD_FIELDS.principal_parts.label}</FormLabel>
         <Button
           type="button"
           variant="outline"

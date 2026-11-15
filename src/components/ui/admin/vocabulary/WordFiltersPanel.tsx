@@ -27,6 +27,8 @@ interface WordFiltersPanelProps {
   onReset: () => void;
   onApply?: () => void;
   isLoading?: boolean;
+  /** Extra filter controls, shown after the limit. */
+  children?: React.ReactNode;
 }
 
 const PART_OF_SPEECH_OPTIONS = ['all', ...PartOfSpeechSchema.options] as const;
@@ -68,6 +70,7 @@ export const WordFiltersPanel: React.FC<WordFiltersPanelProps> = ({
   onReset,
   onApply,
   isLoading = false,
+  children,
 }) => {
   const isAllLimit = filters.limit === 'all';
   const externalLimitValue =
@@ -170,6 +173,8 @@ export const WordFiltersPanel: React.FC<WordFiltersPanelProps> = ({
               </Label>
             </div>
           </div>
+
+          {children}
         </div>
 
         {filters.partOfSpeech === 'verb' && (

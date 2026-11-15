@@ -8,7 +8,7 @@ import {
 import { createEvaluationCacheKey } from '@/src/lib/ai-evaluations/cache-key';
 import { evaluationCaseInputSchema } from '@/src/lib/ai-evaluations/contracts';
 import { LESSON_EVALUATION_CASES } from '@/src/lib/ai-evaluations/lesson-cases';
-import { parseEvaluationCaseSnapshot } from '@/src/lib/ai-evaluations/persistence';
+import { aiEvaluationCases } from '@/src/lib/ai-evaluations/persistence';
 
 describe('AI evaluation pricing and cache contracts', () => {
   it('separates ordinary, cached, cache-write, output, and reasoning usage', () => {
@@ -37,7 +37,7 @@ describe('AI evaluation pricing and cache contracts', () => {
     expect(cost.inputCost).toBeCloseTo((700 * 0.1 + 200 * 0.01 + 100 * 0.125) / 1_000_000, 12);
     expect(cost.outputCost).toBeCloseTo((500 * 0.5) / 1_000_000, 12);
     expect(cost.totalCost).toBeCloseTo(cost.inputCost + cost.outputCost);
-    expect(cost.pricingVersion).toBe('2026-11-06');
+    expect(cost.pricingVersion).toBe('2026-11-13');
   });
 
   it('rejects malformed or inconsistent provider usage instead of billing zeroes', () => {
@@ -142,7 +142,7 @@ describe('AI evaluation pricing and cache contracts', () => {
     };
     expect(evaluationCaseInputSchema.safeParse(input).success).toBe(false);
     expect(() =>
-      parseEvaluationCaseSnapshot({
+      aiEvaluationCases.parse({
         exists: true,
         id: 'case-without-modes',
         data: () => ({

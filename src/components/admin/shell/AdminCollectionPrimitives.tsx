@@ -35,6 +35,7 @@ interface AdminSearchInputProps {
   clearLabel?: string;
   className?: string;
   inputClassName?: string;
+  type?: 'text' | 'search';
   disabled?: boolean;
   id?: string;
 }
@@ -47,6 +48,7 @@ export function AdminSearchInput({
   clearLabel = 'Clear search',
   className,
   inputClassName,
+  type = 'text',
   disabled,
   id,
 }: AdminSearchInputProps) {
@@ -57,6 +59,7 @@ export function AdminSearchInput({
         aria-hidden="true"
       />
       <Input
+        type={type}
         id={id}
         aria-label={label}
         placeholder={placeholder}

@@ -1,24 +1,25 @@
 import { genderOptions, nounDeclensionOptions } from '@/src/utils/vocabulary/formOptions';
+import { WORD_FIELDS } from '@/src/components/ui/admin/vocabulary/wordFields';
+import { WordFieldLayout } from './WordFieldLayout';
 import { AIEnumSelect } from './AIEnumSelect';
 import { WordFormInput } from './WordFormInput';
 
-export const NounForm = () => {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
-        <AIEnumSelect name="gender" label="Gender (optional)" placeholder="Select gender" options={genderOptions} />
+export const NounForm = () => (
+  <WordFieldLayout
+    section="noun"
+    renderField={name => {
+      const { label } = WORD_FIELDS[name];
+      if (name === 'nominative_singular' || name === 'genitive_singular') {
+        return <WordFormInput baseName={name} label={label} />;
+      }
+      return (
         <AIEnumSelect
-          name="declension"
-          label="Declension"
-          placeholder="Select declension"
-          options={nounDeclensionOptions}
+          name={name}
+          label={label}
+          placeholder={name === 'gender' ? 'Select gender' : 'Select declension'}
+          options={name === 'gender' ? genderOptions : nounDeclensionOptions}
         />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <WordFormInput baseName="nominative_singular" label="Nominative Singular" />
-        <WordFormInput baseName="genitive_singular" label="Genitive Singular" />
-      </div>
-    </div>
-  );
-};
+      );
+    }}
+  />
+);

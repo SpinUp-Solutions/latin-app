@@ -63,7 +63,7 @@ describe('translation grading runner', () => {
     expect(result.requestedModel).toBe('gpt-6-luna');
     expect(result.usage?.cachedInputTokens).toBe(20);
     expect(result.usage?.reasoningTokens).toBe(12);
-    expect(result.cost?.pricingVersion).toBe('2026-11-06');
+    expect(result.cost?.pricingVersion).toBe('2026-11-13');
 
     const call = createResponse.mock.calls[0][0];
     expect(call).toEqual(

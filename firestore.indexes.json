@@ -689,6 +689,85 @@
       ]
     },
     {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sort_key", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part_of_speech", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sort_key", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part_of_speech", "order": "ASCENDING" },
+        { "fieldPath": "conjugation", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sort_key", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part_of_speech", "order": "ASCENDING" },
+        { "fieldPath": "is_deponent", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sort_key", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part_of_speech", "order": "ASCENDING" },
+        { "fieldPath": "conjugation", "order": "ASCENDING" },
+        { "fieldPath": "is_deponent", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sort_key", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part_of_speech", "order": "ASCENDING" },
+        { "fieldPath": "declension", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sort_key", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part_of_speech", "order": "ASCENDING" },
+        { "fieldPath": "pronoun_type", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sort_key", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part_of_speech", "order": "ASCENDING" },
+        { "fieldPath": "pronoun_type", "order": "ASCENDING" },
+        { "fieldPath": "person", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sort_key", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "practiceCategories",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1000,6 +1079,12 @@
     },
     {
       "collectionGroup": "aiEvaluationRunThrottles",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "vocabularyAutocompleteEvaluationResultCache",
       "fieldPath": "expiresAt",
       "ttl": true,
       "indexes": []

@@ -81,21 +81,25 @@ export const evaluationCaseInputSchema = z
     });
   });
 
+/** The run, save and delete requests are the same for every evaluation suite; only the case input differs. */
 export const evaluationFunctionRunRequestSchema = z
   .object({ caseId: evaluationCaseIdSchema, forceRefresh: z.boolean().default(false) })
   .strict();
+/** `input` is checked against the suite's own case schema. */
 export const evaluationFunctionSaveRequestSchema = z
-  .object({ caseId: evaluationCaseIdSchema.optional(), input: evaluationCaseInputSchema })
+  .object({ caseId: evaluationCaseIdSchema.optional(), input: z.unknown() })
   .strict();
 export const evaluationFunctionDeleteRequestSchema = z.object({ caseId: evaluationCaseIdSchema }).strict();
 
-export interface EvaluationCase extends z.infer<typeof evaluationCaseInputSchema> {
+/** A saved case of any evaluation suite: its input plus who saved it and when. */
+export type StoredEvaluationCase<Input> = Input & {
   id: string;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
   updatedBy: string;
-}
+};
+export type EvaluationCase = StoredEvaluationCase<z.infer<typeof evaluationCaseInputSchema>>;
 
 type EvaluationAggregateCostStatus = 'measured' | 'lower-bound' | 'unavailable';
 
@@ -166,8 +170,6 @@ export interface EvaluationRunResult {
 
 export type EvaluationCaseInput = z.infer<typeof evaluationCaseInputSchema>;
 export type EvaluationFunctionRunRequest = z.infer<typeof evaluationFunctionRunRequestSchema>;
-export type EvaluationFunctionSaveRequest = z.infer<typeof evaluationFunctionSaveRequestSchema>;
-export type EvaluationFunctionDeleteRequest = z.infer<typeof evaluationFunctionDeleteRequestSchema>;
 export const emptyTokenUsage = (): TokenUsage => ({
   promptTokens: 0,
   completionTokens: 0,

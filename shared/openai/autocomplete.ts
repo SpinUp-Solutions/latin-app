@@ -1,9 +1,22 @@
 import { zodTextFormat } from 'openai/helpers/zod';
 import type { Response } from 'openai/resources/responses/responses';
-import { openai, AUTOCOMPLETE_MODEL, MAX_TOKENS } from './client';
-import { calculateModelCost } from './model-registry';
+import { openai } from './client';
+import {
+  calculateTokenUsageCost,
+  parseOpenAIUsage,
+  PRODUCTION_VOCABULARY_AUTOCOMPLETE_PROFILE,
+  VOCABULARY_AUTOCOMPLETE_PROFILES,
+  type VocabularyAutocompleteProfileId,
+} from './model-registry';
 import { getPromptForPartOfSpeech, SYSTEM_PROMPT } from './prompts';
-import { AIAutocompleteRequest, AIAutocompleteResponse, AICompletableField } from './types';
+import type {
+  AIAutocompleteRequest,
+  AIAutocompleteResponse,
+  AICompletableField,
+  CostBreakdown,
+  ErrorDetails,
+  TokenUsage,
+} from './types';
 import { PartOfSpeech } from '../types/vocabulary/schemas/enums';
 import { VocabularyWord } from '../types/vocabulary/schemas';
 import {
@@ -28,7 +41,55 @@ const OUTPUT_SCHEMAS = {
   interjection: InterjectionStructuredOutputSchema,
 } satisfies Record<PartOfSpeech, unknown>;
 
-function createTokenBudgetError(prefix: string, response: Response): AIAutocompleteResponse {
+/** Everything that decides what one autocomplete request sends to the model. */
+export function vocabularyAutocompleteRequestBody(part_of_speech: PartOfSpeech, word: string) {
+  const schema = OUTPUT_SCHEMAS[part_of_speech];
+  return {
+    schema,
+    instructions: SYSTEM_PROMPT,
+    input: getPromptForPartOfSpeech(part_of_speech, word),
+    format: zodTextFormat(schema, `${part_of_speech}_structured_output`),
+  };
+}
+
+export type VocabularyAutocompleteFailureCode =
+  | 'unsupported-part-of-speech'
+  | 'provider-error'
+  | 'token-budget'
+  | 'missing-text'
+  | 'malformed-json';
+
+interface VocabularyAutocompleteRunBase {
+  requestedModel: string;
+  model?: string;
+  maxOutputTokens: number;
+  usage?: TokenUsage;
+  cost?: CostBreakdown;
+  latencyMs: number;
+}
+
+export interface VocabularyAutocompleteRunSuccess extends VocabularyAutocompleteRunBase {
+  success: true;
+  /** Every field the part-of-speech schema asks for, exactly as the model returned it. */
+  structured: Record<string, unknown>;
+}
+
+export interface VocabularyAutocompleteRunFailure extends VocabularyAutocompleteRunBase {
+  success: false;
+  code: VocabularyAutocompleteFailureCode;
+  error: string;
+  errorDetails?: ErrorDetails;
+  /** OpenAI's reason for an incomplete response, e.g. max_output_tokens. */
+  incompleteReason?: string;
+}
+
+export type VocabularyAutocompleteRunResult = VocabularyAutocompleteRunSuccess | VocabularyAutocompleteRunFailure;
+
+function tokenBudgetFailure(
+  prefix: string,
+  response: Response,
+  base: VocabularyAutocompleteRunBase
+): VocabularyAutocompleteRunFailure {
   const usage = response.usage;
   const outputTypes = response.output.map(
     item => `${item.type}${'status' in item && item.status ? `:${item.status}` : ''}`
@@ -36,7 +97,7 @@ function createTokenBudgetError(prefix: string, response: Response): AIAutocompl
   const reason = response.incomplete_details?.reason;
   const tokenMessage =
     usage?.output_tokens !== undefined
-      ? ` Used ${usage.output_tokens}/${MAX_TOKENS} output tokens${
+      ? ` Used ${usage.output_tokens}/${base.maxOutputTokens} output tokens${
           usage.output_tokens_details?.reasoning_tokens !== undefined
             ? `, including ${usage.output_tokens_details.reasoning_tokens} reasoning tokens`
             : ''
@@ -44,22 +105,114 @@ function createTokenBudgetError(prefix: string, response: Response): AIAutocompl
       : '';
 
   return {
+    ...base,
     success: false,
+    code: 'token-budget',
     error: `${prefix}.${tokenMessage}${reason ? ` Reason: ${reason}.` : ''}`,
-    model: response.model,
-    tokensUsed: usage?.total_tokens,
+    incompleteReason: reason ?? undefined,
     errorDetails: {
       message: prefix,
       type: 'OpenAIIncompleteResponse',
       details: JSON.stringify({
         model: response.model,
-        maxOutputTokens: MAX_TOKENS,
+        maxOutputTokens: base.maxOutputTokens,
         usage,
         outputTypes,
         incompleteDetails: response.incomplete_details,
       }),
     },
   };
+}
+
+/**
+ * One autocomplete request with the given profile. The admin editor goes
+ * through `autocompleteVocabularyWord`; the evaluation suite calls this
+ * directly to compare profiles on the raw model output.
+ */
+export async function runVocabularyAutocomplete(
+  request: Pick<AIAutocompleteRequest, 'word' | 'part_of_speech'>,
+  profileId: VocabularyAutocompleteProfileId = PRODUCTION_VOCABULARY_AUTOCOMPLETE_PROFILE,
+  options?: { timeout?: number; maxRetries?: number }
+): Promise<VocabularyAutocompleteRunResult> {
+  const profile = VOCABULARY_AUTOCOMPLETE_PROFILES[profileId];
+  const startedAt = Date.now();
+  const unmeasured = { requestedModel: profile.model, maxOutputTokens: profile.maxOutputTokens };
+  if (!OUTPUT_SCHEMAS[request.part_of_speech]) {
+    return {
+      ...unmeasured,
+      success: false,
+      code: 'unsupported-part-of-speech',
+      error: `Unsupported part of speech: ${request.part_of_speech}`,
+      latencyMs: 0,
+    };
+  }
+
+  let response: Response;
+  try {
+    const body = vocabularyAutocompleteRequestBody(request.part_of_speech, request.word);
+    response = await openai.responses.create(
+      {
+        model: profile.model,
+        reasoning: { effort: profile.reasoningEffort },
+        max_output_tokens: profile.maxOutputTokens,
+        instructions: body.instructions,
+        input: body.input,
+        text: { format: body.format },
+      },
+      options
+    );
+  } catch (error) {
+    console.error('[Autocomplete] Request failed:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error while requesting autocomplete';
+    return {
+      ...unmeasured,
+      success: false,
+      code: 'provider-error',
+      error: message,
+      latencyMs: Date.now() - startedAt,
+      errorDetails: {
+        message,
+        type: error?.constructor?.name || typeof error,
+        stack: error instanceof Error ? error.stack : undefined,
+        details: String(error),
+      },
+    };
+  }
+
+  // Usage is captured before the output is checked: a truncated response is still billed.
+  const usage = parseOpenAIUsage(response.usage);
+  const base: VocabularyAutocompleteRunBase = {
+    ...unmeasured,
+    model: response.model,
+    usage,
+    cost: usage ? calculateTokenUsageCost(usage, profile.pricing) : undefined,
+    latencyMs: Date.now() - startedAt,
+  };
+
+  const messageItem = response.output.find(item => item.type === 'message');
+  if (!messageItem || messageItem.type !== 'message') {
+    return tokenBudgetFailure('OpenAI did not produce structured vocabulary JSON', response, base);
+  }
+  if (messageItem.status === 'incomplete') {
+    return tokenBudgetFailure('OpenAI started the vocabulary JSON but did not finish it', response, base);
+  }
+
+  const textContent = messageItem.content.find(c => c.type === 'output_text');
+  if (!textContent || textContent.type !== 'output_text') {
+    return { ...base, success: false, code: 'missing-text', error: 'No text content in response' };
+  }
+
+  let structured: unknown;
+  try {
+    structured = JSON.parse(textContent.text);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Malformed JSON';
+    return { ...base, success: false, code: 'malformed-json', error: message };
+  }
+  if (!structured || typeof structured !== 'object' || Array.isArray(structured)) {
+    return { ...base, success: false, code: 'missing-text', error: 'No structured output returned by the model' };
+  }
+  return { ...base, success: true, structured: structured as Record<string, unknown> };
 }
 
 function isValueEmpty(value: unknown): boolean {
@@ -139,39 +292,21 @@ function mergeValue(existingValue: unknown, incomingValue: unknown, overwriteExi
 }
 
 export async function autocompleteVocabularyWord(request: AIAutocompleteRequest): Promise<AIAutocompleteResponse> {
-  const schema = OUTPUT_SCHEMAS[request.part_of_speech];
-  if (!schema) {
-    return { success: false, error: `Unsupported part of speech: ${request.part_of_speech}` };
+  const result = await runVocabularyAutocomplete(request);
+  if (!result.success) {
+    return {
+      success: false,
+      error: result.error,
+      errorDetails: result.errorDetails,
+      model: result.model,
+      tokensUsed: result.usage?.totalTokens,
+      cost: result.cost,
+    };
   }
 
   try {
-    const response = await openai.responses.create({
-      model: AUTOCOMPLETE_MODEL,
-      reasoning: { effort: 'low' },
-      max_output_tokens: MAX_TOKENS,
-      instructions: SYSTEM_PROMPT,
-      input: getPromptForPartOfSpeech(request.part_of_speech, request.word),
-      text: { format: zodTextFormat(schema, `${request.part_of_speech}_structured_output`) },
-    });
-
-    const messageItem = response.output.find(item => item.type === 'message');
-    if (!messageItem || messageItem.type !== 'message') {
-      return createTokenBudgetError('OpenAI did not produce structured vocabulary JSON', response);
-    }
-    if (messageItem.status === 'incomplete') {
-      return createTokenBudgetError('OpenAI started the vocabulary JSON but did not finish it', response);
-    }
-
-    const textContent = messageItem.content.find(c => c.type === 'output_text');
-    if (!textContent || textContent.type !== 'output_text') {
-      return { success: false, error: 'No text content in response' };
-    }
-
-    const structured = JSON.parse(textContent.text) as Record<string, unknown> | null;
-    if (!structured) {
-      return { success: false, error: 'No structured output returned by the model' };
-    }
-
+    const { structured } = result;
+    const schema = OUTPUT_SCHEMAS[request.part_of_speech];
     const existing: Record<string, unknown> = request.existingData ?? {};
     const schemaFields = schema.keyof().options as AICompletableField[];
     const selectedFields = request.fieldsToComplete?.length
@@ -205,9 +340,9 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     return {
       success: true,
       data: data as Partial<VocabularyWord>,
-      tokensUsed: response.usage?.total_tokens,
-      model: response.model,
-      cost: response.usage ? calculateModelCost(response.usage, AUTOCOMPLETE_MODEL) : undefined,
+      tokensUsed: result.usage?.totalTokens,
+      model: result.model,
+      cost: result.cost,
       fieldStatus,
     };
   } catch (error) {

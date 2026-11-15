@@ -1,5 +1,7 @@
 'use client';
 
+import { AdminPillPicker } from '@/src/components/admin/shell/AdminPillPicker';
+
 import React from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, CalendarDays, Eye, FileCheck2, Layers3, Users } from 'lucide-react';
@@ -175,26 +177,13 @@ export function TestManager() {
           placeholder="Search tests by title or description"
           className="max-w-lg"
         />
-        <div
-          className="flex w-full gap-1.5 overflow-x-auto rounded-xl border border-border/80 bg-white/80 p-1.5 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          role="group"
-          aria-label="Test filters">
-          {filters.map(([value, label]) => (
-            <Button
-              key={value}
-              size="sm"
-              variant={filter === value ? 'default' : 'ghost'}
-              aria-pressed={filter === value}
-              className={
-                filter === value
-                  ? 'h-9 shrink-0 rounded-lg px-3.5 text-xs font-semibold shadow-[0_2px_6px_hsl(var(--primary)/0.22)]'
-                  : 'h-9 shrink-0 rounded-lg px-3.5 text-xs font-medium text-roman-stone hover:bg-roman-parchment hover:text-foreground'
-              }
-              onClick={() => setFilter(value)}>
-              {label}
-            </Button>
-          ))}
-        </div>
+        <AdminPillPicker
+          label="Test filters"
+          value={filter}
+          onValueChange={setFilter}
+          className="w-full"
+          options={filters.map(([value, label]) => ({ value, label }))}
+        />
         <p className="text-xs text-roman-stone" role="status" aria-live="polite">
           Showing {visibleItems.length} of {inventory.length} {inventory.length === 1 ? 'test' : 'tests'}
         </p>

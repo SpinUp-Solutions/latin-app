@@ -1,21 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { z } from 'zod';
 import { Button } from '@/src/components/ui/button';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue } from '@/src/utils/vocabUtils';
 import { SchemaTable } from './tables/SchemaTable';
-import {
-  DeclensionTableSchema,
-  AdjectiveDeclensionTableSchema,
-  PersonalPronounDeclensionTableSchema,
-} from '@/shared/types/vocabulary/schemas/declension';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 import type { PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
-import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
-import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
 import { BookOpen } from 'lucide-react';
 import {
   BaseWordForm,
@@ -27,6 +19,7 @@ import {
   VocabularyFormValues,
 } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
+import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
 import {
   toFormDefaultValues,
   applyFormValuesToWord,
@@ -39,6 +32,13 @@ interface WordEditPanelProps {
   word: VocabularyWordWithId | null;
   onSave: (updates: Partial<VocabularyWord>) => Promise<boolean>;
   updating: boolean;
+  /** Label of the save button. */
+  saveLabel?: string;
+  /** Buttons shown before the save button. */
+  actions?: React.ReactNode;
+  allowAIAutocomplete?: boolean;
+  /** Told whether the word has edits that have not been saved; false again when the panel goes away. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 type TableData = Record<string, unknown>;
@@ -56,43 +56,6 @@ const EMPTY_FORM_VALUES: VocabularyFormValues = {
   sort_key: '',
   random_index: 0,
 };
-
-/** The one inflection table each part of speech edits; pronoun schema and title depend on type and person. */
-const EDITABLE_TABLES: Partial<
-  Record<string, { field: string; tableType: string; title: string; color: string; schema: z.ZodTypeAny }>
-> = {
-  noun: {
-    field: 'declension_table',
-    tableType: 'declension',
-    title: 'Declension Table',
-    color: 'text-blue-700',
-    schema: DeclensionTableSchema,
-  },
-  pronoun: {
-    field: 'declension_table',
-    tableType: 'declension',
-    title: 'Pronoun Declension Table',
-    color: 'text-indigo-700',
-    schema: AdjectiveDeclensionTableSchema,
-  },
-  adjective: {
-    field: 'degrees_table',
-    tableType: 'adjective-declension',
-    title: 'Degrees of Comparison',
-    color: 'text-purple-700',
-    schema: DegreesTableSchema,
-  },
-  verb: {
-    field: 'conjugation_table',
-    tableType: 'conjugation',
-    title: 'Conjugation Table',
-    color: 'text-green-700',
-    schema: ConjugationTableSchema,
-  },
-};
-
-const getEditableTable = (word: VocabularyWordWithId | null) =>
-  word ? EDITABLE_TABLES[word.part_of_speech] : undefined;
 
 const EmptyState: React.FC = () => (
   <div className="flex items-center justify-center h-full p-8">
@@ -147,33 +110,6 @@ const tableFromWord = (word: VocabularyWordWithId | null): TableData => {
   return table ? cloneTableData((word as unknown as TableData)[table.field]) : {};
 };
 
-const getPronounTableSchema = (pronounType: PronounType | null, person: PronounPerson | null) => {
-  if (pronounType === 'personal' && (person === '1st' || person === '2nd')) {
-    return PersonalPronounDeclensionTableSchema;
-  }
-  return AdjectiveDeclensionTableSchema;
-};
-
-const getPronounTableTitle = (pronounType: PronounType | null, person: PronounPerson | null): string => {
-  if (!pronounType) return 'Pronoun Declension Table';
-
-  if (pronounType === 'personal' && person) {
-    return `${person} Person Personal Pronoun Declension Table`;
-  }
-
-  const typeLabels: Record<PronounType, string> = {
-    personal: 'Personal',
-    reflexive: 'Reflexive',
-    demonstrative: 'Demonstrative',
-    intensive: 'Intensive',
-    relative: 'Relative',
-    interrogative: 'Interrogative',
-    indefinite: 'Indefinite',
-    possessive: 'Possessive',
-  };
-  return `${typeLabels[pronounType]} Pronoun Declension Table`;
-};
-
 const findNullPaths = (obj: unknown, path = ''): string[] => {
   if (obj === null || obj === undefined) {
     return [path];
@@ -224,7 +160,15 @@ const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown =
   return existing === '' ? aiGenerated : existing;
 };
 
-export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, updating }) => {
+export const WordEditPanel: React.FC<WordEditPanelProps> = ({
+  word,
+  onSave,
+  updating,
+  saveLabel = 'Apply',
+  actions,
+  allowAIAutocomplete = true,
+  onDirtyChange,
+}) => {
   const form = useForm<VocabularyFormValues>({
     resolver: zodResolver(VocabularyFormSchema) as Resolver<VocabularyFormValues>,
     defaultValues: word ? toFormDefaultValues(word) : EMPTY_FORM_VALUES,
@@ -395,6 +339,13 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
 
   const isSubmitting = form.formState.isSubmitting;
 
+  const savedTable = useMemo(() => JSON.stringify(tableFromWord(word)), [word]);
+  const dirty = form.formState.isDirty || JSON.stringify(table) !== savedTable;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
+
   if (!word) {
     return <EmptyState />;
   }
@@ -412,16 +363,19 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
                 <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
               </div>
               <div className="flex items-center gap-2">
-                <AIAutocompleteButton
-                  wordId={word.id}
-                  word={watchedWord || word.word}
-                  partOfSpeech={word.part_of_speech}
-                  existingData={form.getValues() as Partial<VocabularyWord>}
-                  onAutocomplete={handleAIAutocomplete}
-                  disabled={updating || isSubmitting}
-                />
+                {actions}
+                {allowAIAutocomplete && (
+                  <AIAutocompleteButton
+                    wordId={word.id}
+                    word={watchedWord || word.word}
+                    partOfSpeech={word.part_of_speech}
+                    existingData={form.getValues() as Partial<VocabularyWord>}
+                    onAutocomplete={handleAIAutocomplete}
+                    disabled={updating || isSubmitting}
+                  />
+                )}
                 <Button type="submit" disabled={updating || isSubmitting}>
-                  {updating || isSubmitting ? 'Saving...' : 'Apply'}
+                  {updating || isSubmitting ? 'Saving...' : saveLabel}
                 </Button>
               </div>
             </div>

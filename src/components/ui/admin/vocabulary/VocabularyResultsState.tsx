@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 import { Loader2, Search } from 'lucide-react';
 import { AdminEmptyState } from '@/src/components/admin/shell';
+import { Button } from '@/src/components/ui/button';
 import { cn } from '@/src/lib/utils';
 
 export function VocabularyEmptyState({ description }: { description: string }) {
@@ -11,6 +12,24 @@ export function VocabularyEmptyState({ description }: { description: string }) {
       description={description}
       className="rounded-lg border bg-white"
     />
+  );
+}
+
+export function VocabularyLoadError({ onRetry, className }: { onRetry?: () => void; className?: string }) {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        'flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800',
+        className
+      )}>
+      <span>Couldn&apos;t load words for these filters.</span>
+      {onRetry && (
+        <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+    </div>
   );
 }
 

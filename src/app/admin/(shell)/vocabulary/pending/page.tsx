@@ -1,6 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import {
+  VocabularyReviewLayout,
+  VocabularyReviewRow,
+} from '@/src/components/ui/admin/vocabulary/VocabularyReviewLayout';
+
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle, Clock, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,13 +13,19 @@ import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { getApiErrorMessage } from '@/src/store/api/baseQuery';
+import { AdminPillPicker } from '@/src/components/admin/shell';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
+import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import {
   useApproveVocabularyWordRequestMutation,
   useDismissVocabularyWordRequestMutation,
   useGetVocabularyWordRequestsQuery,
   useUpdateVocabularyWordRequestMutation,
 } from '@/src/store/api/vocabularyWordRequestsApi';
+import { useGetVocabularyWordUpdateRequestsQuery } from '@/src/store/api/vocabularyWordUpdateRequestsApi';
 import type { VocabularyWordRequestStatus } from '@/shared/types/vocabulary/requests';
 import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
 
@@ -30,33 +41,8 @@ const statusIcon = {
   dismissed: XCircle,
 };
 
-const getRequestErrorMessage = (error: unknown): string | null => {
-  if (!error) return null;
-
-  if (typeof error === 'object' && error !== null) {
-    if ('data' in error) {
-      const data = (error as { data?: unknown }).data;
-      if (typeof data === 'object' && data !== null && 'error' in data) {
-        const message = (data as { error?: unknown }).error;
-        if (typeof message === 'string') return message;
-      }
-      if (typeof data === 'string') return data;
-    }
-
-    if ('error' in error) {
-      const message = (error as { error?: unknown }).error;
-      if (typeof message === 'string') return message;
-    }
-
-    if ('status' in error) {
-      return `Request failed with status ${(error as { status: unknown }).status}`;
-    }
-  }
-
-  return 'Could not load vocabulary requests';
-};
-
-function PendingVocabularyPage() {
+/** AI-generated drafts of words that do not exist yet. */
+function NewWordRequestsReview() {
   const [status, setStatus] = useState<VocabularyWordRequestStatus>('pending');
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
@@ -69,22 +55,10 @@ function PendingVocabularyPage() {
   const [updateRequest, { isLoading: updating }] = useUpdateVocabularyWordRequestMutation();
   const [approveRequest, { isLoading: approving }] = useApproveVocabularyWordRequestMutation();
   const [dismissRequest, { isLoading: dismissing }] = useDismissVocabularyWordRequestMutation();
-  const requestErrorMessage = useMemo(() => getRequestErrorMessage(requestError), [requestError]);
-
-  useEffect(() => {
-    setSelectedRequestId(null);
-  }, [status]);
-
-  useEffect(() => {
-    if (!selectedRequestId && requests.length > 0) {
-      setSelectedRequestId(requests[0].id);
-    }
-  }, [requests, selectedRequestId]);
-
-  const selectedRequest = useMemo(
-    () => requests.find(request => request.id === selectedRequestId) || null,
-    [requests, selectedRequestId]
-  );
+  const requestErrorMessage = requestError
+    ? getApiErrorMessage(requestError, 'Could not load vocabulary requests')
+    : null;
+  const selectedRequest = requests.find(request => request.id === selectedRequestId) ?? requests[0] ?? null;
 
   const editorWord: VocabularyWordWithId | null = selectedRequest
     ? ({ id: selectedRequest.id, ...selectedRequest.draftWord } as VocabularyWordWithId)
@@ -102,8 +76,7 @@ function PendingVocabularyPage() {
       return true;
     } catch (error) {
       console.error('Save pending draft error:', error);
-      const message = error instanceof Error ? error.message : 'Could not save pending draft';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Could not save pending draft'));
       return false;
     }
   };
@@ -117,8 +90,7 @@ function PendingVocabularyPage() {
       setSelectedRequestId(null);
     } catch (error) {
       console.error('Approve vocabulary request error:', error);
-      const message = error instanceof Error ? error.message : 'Could not approve request';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Could not approve request'));
     }
   };
 
@@ -131,25 +103,14 @@ function PendingVocabularyPage() {
       setSelectedRequestId(null);
     } catch (error) {
       console.error('Dismiss vocabulary request error:', error);
-      const message = error instanceof Error ? error.message : 'Could not dismiss request';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Could not dismiss request'));
     }
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-roman-marble">
-      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <div>
-          <h1 className="text-xl font-serif tracking-wide">Pending Vocabulary</h1>
-          <p className="text-sm text-roman-stone">Review AI-generated vocabulary drafts</p>
-        </div>
-        <Button asChild size="sm" variant="outline">
-          <Link href="/admin/vocabulary">View All Words</Link>
-        </Button>
-      </header>
-
-      <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,42%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[34%_66%] lg:grid-rows-none">
-        <aside className="min-h-0 overflow-y-auto border-b border-gray-200 bg-white lg:border-b-0 lg:border-r">
+    <VocabularyReviewLayout
+      list={
+        <>
           <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <Select value={status} onValueChange={value => setStatus(value as VocabularyWordRequestStatus)}>
@@ -178,18 +139,13 @@ function PendingVocabularyPage() {
             <div className="divide-y divide-gray-100">
               {requests.map(request => {
                 const Icon = statusIcon[request.status];
-                const isSelected = request.id === selectedRequestId;
+                const isSelected = request.id === selectedRequest?.id;
 
                 return (
-                  <button
+                  <VocabularyReviewRow
                     key={request.id}
-                    type="button"
-                    onClick={() => setSelectedRequestId(request.id)}
-                    className={`w-full p-4 text-left transition-colors ${
-                      isSelected
-                        ? 'border-l-2 border-primary bg-primary/5'
-                        : 'border-l-2 border-transparent hover:bg-roman-parchment/60'
-                    }`}>
+                    selected={isSelected}
+                    onSelect={() => setSelectedRequestId(request.id)}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate">{request.draftWord.word}</p>
@@ -201,41 +157,96 @@ function PendingVocabularyPage() {
                       <Badge variant="outline">{request.draftWord.part_of_speech}</Badge>
                       <span className="text-xs text-gray-500">{new Date(request.updatedAt).toLocaleString()}</span>
                     </div>
-                  </button>
+                  </VocabularyReviewRow>
                 );
               })}
             </div>
           )}
-        </aside>
-
-        <section className="min-h-0 flex flex-col overflow-hidden bg-white">
-          {selectedRequest && (
-            <div className="border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm text-gray-500 truncate">Source: {selectedRequest.sourceText}</p>
-                <p className="text-xs text-gray-400 truncate">
-                  Candidate: {selectedRequest.selectedCandidate.word} ({selectedRequest.selectedCandidate.confidence})
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {selectedRequest.status === 'pending' && (
-                  <>
-                    <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>
-                      {dismissing ? 'Dismissing...' : 'Dismiss'}
-                    </Button>
-                    <Button onClick={handleApprove} disabled={approving || dismissing || updating}>
-                      {approving ? 'Approving...' : 'Approve'}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} />
+        </>
+      }>
+      {selectedRequest && (
+        <div className="border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm text-gray-500 truncate">Source: {selectedRequest.sourceText}</p>
+            <p className="text-xs text-gray-400 truncate">
+              Candidate: {selectedRequest.selectedCandidate.word} ({selectedRequest.selectedCandidate.confidence})
+            </p>
           </div>
-        </section>
-      </main>
+          <div className="flex items-center gap-2">
+            {selectedRequest.status === 'pending' && (
+              <>
+                <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>
+                  {dismissing ? 'Dismissing...' : 'Dismiss'}
+                </Button>
+                <Button onClick={handleApprove} disabled={approving || dismissing || updating}>
+                  {approving ? 'Approving...' : 'Approve'}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} />
+      </div>
+    </VocabularyReviewLayout>
+  );
+}
+
+type PendingTab = 'new' | 'updates';
+
+function PendingVocabularyPage() {
+  const [tab, setTab] = useState<PendingTab>('new');
+  const [proposalDirty, setProposalDirty] = useState(false);
+  const navigationGuard = useUnsavedNavigationGuard(
+    proposalDirty,
+    'You have unsaved edits to this proposal. Leave it without saving?'
+  );
+  const { data: newWords } = useGetVocabularyWordRequestsQuery({ status: 'pending' });
+  const { data: updates } = useGetVocabularyWordUpdateRequestsQuery({ status: 'pending' });
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-roman-marble">
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between gap-4 flex-shrink-0">
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-xl font-serif tracking-wide">Pending Vocabulary</h1>
+            <p className="text-sm text-roman-stone">Review new words and changes to existing words</p>
+          </div>
+          <AdminPillPicker<PendingTab>
+            label="Pending vocabulary"
+            value={tab}
+            onValueChange={next => navigationGuard.requestNavigation(() => setTab(next))}
+            options={[
+              { value: 'new', label: 'New words', count: newWords?.length },
+              {
+                value: 'updates',
+                label: 'Updates',
+                count: updates && `${updates.requests.length}${updates.truncated ? '+' : ''}`,
+              },
+            ]}
+          />
+        </div>
+        <Button asChild size="sm" variant="outline">
+          <Link href="/admin/vocabulary">View All Words</Link>
+        </Button>
+      </header>
+
+      {tab === 'new' ? (
+        <NewWordRequestsReview />
+      ) : (
+        <WordUpdateReview requestNavigation={navigationGuard.requestNavigation} onDirtyChange={setProposalDirty} />
+      )}
+
+      <ConfirmationDialog
+        isOpen={navigationGuard.isOpen}
+        onClose={navigationGuard.stayOnPage}
+        onConfirm={navigationGuard.leavePage}
+        title="Leave without saving?"
+        description={navigationGuard.message}
+        confirmText="Leave without saving"
+        confirmVariant="destructive"
+      />
     </div>
   );
 }

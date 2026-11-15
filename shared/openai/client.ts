@@ -12,6 +12,3 @@ export const openai = {
 };
 
 export const DEFAULT_MODEL = 'gpt-5.4-mini';
-export const AUTOCOMPLETE_MODEL = 'gpt-5.4-mini';
-
-export const MAX_TOKENS = 32000;

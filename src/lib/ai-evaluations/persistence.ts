@@ -1,6 +1,7 @@
 import type { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
+import type { z } from 'zod';
 import { AI_EVALUATION_CASES_COLLECTION } from '../../../shared/constants/firestore';
-import { evaluationCaseInputSchema, type EvaluationCase, type EvaluationCaseInput } from './contracts';
+import { evaluationCaseInputSchema, type StoredEvaluationCase } from './contracts';
 
 export class AIEvaluationServiceError extends Error {
   constructor(
@@ -13,88 +14,63 @@ export class AIEvaluationServiceError extends Error {
   }
 }
 
-const casesCollection = (db: Firestore) => db.collection(AI_EVALUATION_CASES_COLLECTION);
+/**
+ * The saved cases of one evaluation suite. Every suite lists, reads, saves and
+ * deletes its cases the same way; only the collection and the case input differ.
+ */
+export function evaluationCaseStore<Schema extends z.ZodObject>(collectionName: string, inputSchema: Schema) {
+  type Input = z.infer<Schema>;
+  type Case = StoredEvaluationCase<Input>;
+  const cases = (db: Firestore) => db.collection(collectionName);
 
-export const parseEvaluationCaseSnapshot = (snapshot: DocumentSnapshot): EvaluationCase => {
-  if (!snapshot.exists) {
-    throw new AIEvaluationServiceError('AI_EVALUATION_CASE_NOT_FOUND', 'Evaluation case not found', 404);
-  }
-
-  const data = snapshot.data();
-  const parsed = evaluationCaseInputSchema.safeParse({
-    title: data?.title,
-    direction: data?.direction,
-    sourceText: data?.sourceText,
-    answers: data?.answers,
-    modes: data?.modes,
-  });
-  const metadata = data as Partial<EvaluationCase> | undefined;
-  if (!parsed.success || !metadata?.createdAt || !metadata.createdBy || !metadata.updatedAt || !metadata.updatedBy) {
-    throw new AIEvaluationServiceError(
-      'AI_EVALUATION_CASE_INVALID',
-      `Evaluation case ${snapshot.id} contains invalid persisted data`,
-      409
+  const parse = (snapshot: DocumentSnapshot): Case => {
+    if (!snapshot.exists) {
+      throw new AIEvaluationServiceError('AI_EVALUATION_CASE_NOT_FOUND', 'Evaluation case not found', 404);
+    }
+    const data = snapshot.data() ?? {};
+    const { createdAt, createdBy, updatedAt, updatedBy } = data;
+    // The input schema is strict, so it is given its own fields only.
+    const parsed = inputSchema.safeParse(
+      Object.fromEntries(Object.keys(inputSchema.shape).map(field => [field, data[field]]))
     );
-  }
+    if (!parsed.success || !createdAt || !createdBy || !updatedAt || !updatedBy) {
+      throw new AIEvaluationServiceError(
+        'AI_EVALUATION_CASE_INVALID',
+        `Evaluation case ${snapshot.id} contains invalid persisted data`,
+        409
+      );
+    }
+    return { ...parsed.data, id: snapshot.id, createdAt, createdBy, updatedAt, updatedBy };
+  };
+
+  const get = async (id: string, db: Firestore) => parse(await cases(db).doc(id).get());
 
   return {
-    ...parsed.data,
-    id: snapshot.id,
-    createdAt: metadata.createdAt,
-    createdBy: metadata.createdBy,
-    updatedAt: metadata.updatedAt,
-    updatedBy: metadata.updatedBy,
+    inputSchema,
+    parse,
+    get,
+    list: async (db: Firestore) => (await cases(db).orderBy('updatedAt', 'desc').limit(100).get()).docs.map(parse),
+    /** Creates a case, or replaces the input of the saved case `caseId`. */
+    async save(caseId: string | undefined, input: Input, actorId: string, db: Firestore): Promise<Case> {
+      const existing = caseId ? await get(caseId, db) : undefined;
+      const reference = existing ? cases(db).doc(existing.id) : cases(db).doc();
+      const timestamp = new Date().toISOString();
+      const metadata = {
+        createdAt: existing?.createdAt ?? timestamp,
+        createdBy: existing?.createdBy ?? actorId,
+        updatedAt: timestamp,
+        updatedBy: actorId,
+      };
+      await reference.set({ ...input, ...metadata });
+      return { ...input, ...metadata, id: reference.id };
+    },
+    async remove(id: string, db: Firestore): Promise<void> {
+      const existing = await get(id, db);
+      await cases(db).doc(existing.id).delete();
+    },
   };
-};
-
-export async function listEvaluationCases(db: Firestore): Promise<EvaluationCase[]> {
-  const snapshot = await casesCollection(db).orderBy('updatedAt', 'desc').limit(100).get();
-  return snapshot.docs.map(parseEvaluationCaseSnapshot);
 }
 
-export async function getEvaluationCase(id: string, db: Firestore): Promise<EvaluationCase> {
-  return parseEvaluationCaseSnapshot(await casesCollection(db).doc(id).get());
-}
+export type EvaluationCaseStore<Schema extends z.ZodObject> = ReturnType<typeof evaluationCaseStore<Schema>>;
 
-export async function createEvaluationCase(
-  input: EvaluationCaseInput,
-  actorId: string,
-  db: Firestore,
-  now: () => string = () => new Date().toISOString()
-): Promise<EvaluationCase> {
-  const timestamp = now();
-  const reference = casesCollection(db).doc();
-  const value = {
-    ...input,
-    createdAt: timestamp,
-    createdBy: actorId,
-    updatedAt: timestamp,
-    updatedBy: actorId,
-  } satisfies Omit<EvaluationCase, 'id'>;
-  await reference.set(value);
-  return { ...value, id: reference.id };
-}
-
-export async function updateEvaluationCase(
-  id: string,
-  input: EvaluationCaseInput,
-  actorId: string,
-  db: Firestore,
-  now: () => string = () => new Date().toISOString()
-): Promise<EvaluationCase> {
-  const existing = await getEvaluationCase(id, db);
-  const persisted = {
-    ...input,
-    createdAt: existing.createdAt,
-    createdBy: existing.createdBy,
-    updatedAt: now(),
-    updatedBy: actorId,
-  } satisfies Omit<EvaluationCase, 'id'>;
-  await casesCollection(db).doc(existing.id).set(persisted);
-  return { ...persisted, id: existing.id };
-}
-
-export async function deleteEvaluationCase(id: string, db: Firestore): Promise<void> {
-  const existing = await getEvaluationCase(id, db);
-  await casesCollection(db).doc(existing.id).delete();
-}
+export const aiEvaluationCases = evaluationCaseStore(AI_EVALUATION_CASES_COLLECTION, evaluationCaseInputSchema);

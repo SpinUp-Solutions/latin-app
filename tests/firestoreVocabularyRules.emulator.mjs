@@ -22,6 +22,7 @@ try {
     'vocabulary_words_v4',
     'vocabulary_words_v6',
     'vocabulary_word_requests',
+    'vocabulary_word_update_requests',
     'deleted_vocabulary_pools',
     'vocabulary_pool_archives',
     'vocabulary_pool_deletion_challenges',

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { generatedUniqueWordCountSchema, generatedWordCountSchema } from '@/src/lib/tests/generated-preview-schema';
+import { WordTypeSchema } from '@/shared/types/vocabulary/schemas/enums';
 import { PARADIGM_AVAILABLE_STEPS } from '@/src/config/paradigmDefinitions';
 import { validateSentenceDiagramDocument } from '@/src/features/sentence-diagramming/validation';
 import type { SentenceDiagramDocument } from '@/src/features/sentence-diagramming/model';
@@ -149,6 +150,7 @@ const generatorConfigSchema = z
     poolId: z.string().trim().min(1).nullable().optional(),
     count: generatedWordCountSchema,
     uniqueWordCount: generatedUniqueWordCountSchema.optional(),
+    coreType: WordTypeSchema.nullable().optional(),
     filters: looseObjectSchema.optional(),
     formSelection: formSelectionSchema.optional(),
   })

@@ -1,5 +1,6 @@
 import type {
   PartOfSpeech,
+  WordType,
   PronounType,
   PronounPerson,
   NounDeclension,
@@ -9,6 +10,8 @@ import type { VerbConjugation } from '@/shared/types/vocabulary/schemas/verb-con
 
 export interface PoolFilters {
   partOfSpeech: PartOfSpeech | 'all';
+  /** Missing or null matches both core and non-core words. */
+  coreType?: WordType | null;
   search: string;
   verbConjugation: VerbConjugation[] | 'all';
   isDeponent: 'true' | 'false' | 'both';

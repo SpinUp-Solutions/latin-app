@@ -2,6 +2,7 @@ export { AdminEmptyState } from './AdminEmptyState';
 export { AdminErrorState, AdminLoadingState, AdminMetric, AdminSearchInput } from './AdminCollectionPrimitives';
 export { AdminIconChip } from './AdminIconChip';
 export { AdminPage } from './AdminPage';
+export { AdminPillPicker, type AdminPillOption } from './AdminPillPicker';
 export { AdminPageHeader } from './AdminPageHeader';
 export { AdminShell } from './AdminShell';
 export { AdminStatusBadge, type AdminStatusTone } from './AdminStatusBadge';
