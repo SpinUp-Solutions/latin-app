@@ -382,10 +382,8 @@ function participleCells(prefix, base) {
   return out;
 }
 
-/** Present participle, 3rd declension i-stem with one nominative for all genders. */
-function presentParticipleCells(prefix, stem, conjugation) {
-  const nom = `${stem}${{ 1: 'āns', 2: 'ēns', 3: 'ēns', '3io': 'iēns', 4: 'iēns' }[conjugation]}`;
-  const oblique = `${stem}${{ 1: 'ant', 2: 'ent', 3: 'ent', '3io': 'ient', 4: 'ient' }[conjugation]}`;
+/** Present participle, 3rd declension i-stem with one nominative for all genders: amāns, amant-. */
+function presentParticipleCells(prefix, nom, oblique) {
   const out = {};
   for (const gender of ['masculine', 'feminine', 'neuter']) {
     const neuter = gender === 'neuter';
@@ -417,8 +415,77 @@ function supineBase(principalParts, isDeponent) {
 
 const one = (stem, ending) => ({ stem, ending });
 
-export function verbCells({ conjugation, principalParts, isDeponent }) {
-  if (!ACTIVE_LEMMA_ENDING[conjugation]) return { skip: `conjugation ${conjugation} not checked` };
+const gerundCells = nd => ({
+  'gerund.genitive': [one(nd, 'ī')],
+  'gerund.dative': [one(nd, 'ō')],
+  'gerund.accusative': [one(nd, 'um')],
+  'gerund.ablative': [one(nd, 'ō')],
+});
+
+/**
+ * The forms every verb builds regularly from its third and fourth principal parts, whatever
+ * its conjugation: the perfect active system, and everything on the supine stem.
+ */
+function principalPartCells(principalParts, isDeponent) {
+  const cells = {};
+  const perfect = principalParts?.[2]?.full_form;
+  if (!isDeponent && perfect && endsWith(perfect, 'ī')) {
+    const perfectStem = perfect.slice(0, -1);
+    for (const [prefix, spec] of Object.entries(PERFECT_ACTIVE))
+      Object.assign(cells, personCells(prefix, perfectStem, spec));
+    cells['nonFinite.infinitive.perfect.active'] = [one(perfectStem, 'isse')];
+  }
+  const base = supineBase(principalParts, isDeponent);
+  if (!base) return cells;
+  // Compound infinitives. Deponents store theirs under active.
+  cells[`nonFinite.infinitive.perfect.${isDeponent ? 'active' : 'passive'}`] = alts('us esse|um esse|a esse').map(e =>
+    one(base, e)
+  );
+  cells['nonFinite.infinitive.future.active'] = alts('ūrus esse|ūrum esse|ūra esse').map(e => one(base, e));
+  if (!isDeponent) cells['nonFinite.infinitive.future.passive'] = [one(base, 'um īrī')];
+  for (const [prefix, spec] of Object.entries(PERFECT_PASSIVE))
+    spec.split(',').forEach((auxiliary, i) => {
+      const [number, person] = PERSONS[i];
+      cells[`${prefix}.${number}.${person}`] = (number === 'singular' ? ['us', 'um', 'a'] : ['ī', 'a', 'ae']).map(
+        ending => one(base, `${ending} ${auxiliary}`)
+      );
+    });
+  cells['supine.accusative'] = [one(base, 'um')];
+  cells['supine.ablative'] = [one(base, 'ū')];
+  Object.assign(cells, participleCells('nonFinite.participle.perfect.passive', base));
+  Object.assign(cells, participleCells('nonFinite.participle.future.active', `${base}ūr`));
+  return cells;
+}
+
+/**
+ * For a verb without a regular conjugation: the present participle, gerundive and gerund
+ * are still declined regularly, so each is checked against its own first form.
+ */
+function selfDeclinedCells(table) {
+  const cells = {};
+  const first = (path, kase) => {
+    const cell = path.split('.').reduce((node, key) => node?.[key], table)?.[kase];
+    return (cell?.masculine?.singular ?? cell)?.[0];
+  };
+  const nom = first('nonFinite.participle.present.active', 'nominative');
+  const gen = first('nonFinite.participle.present.active', 'genitive');
+  if (nom && gen && endsWith(nom, 'ns') && endsWith(gen, 'ntis'))
+    Object.assign(cells, presentParticipleCells('nonFinite.participle.present.active', nom, gen.slice(0, -2)));
+  const gerundive = first('nonFinite.participle.future.passive', 'nominative');
+  if (gerundive && endsWith(gerundive, 'ndus'))
+    Object.assign(cells, participleCells('nonFinite.participle.future.passive', gerundive.slice(0, -2)));
+  const gerund = table?.gerund?.genitive?.[0];
+  if (gerund && endsWith(gerund, 'ndī')) Object.assign(cells, gerundCells(gerund.slice(0, -1)));
+  return cells;
+}
+
+/** `table` is the stored conjugation table; it is only read for verbs without a regular conjugation. */
+export function verbCells({ conjugation, principalParts, isDeponent, table }) {
+  if (!ACTIVE_LEMMA_ENDING[conjugation])
+    return {
+      cells: { ...principalPartCells(principalParts, isDeponent), ...selfDeclinedCells(table) },
+      notes: [`conjugation ${conjugation}: only the perfect system, supine forms and participle endings are checked`],
+    };
   const lemma = principalParts?.[0]?.full_form;
   if (!lemma) return { skip: 'no first principal part' };
   const lemmaEnding = (isDeponent ? DEPONENT_LEMMA_ENDING : ACTIVE_LEMMA_ENDING)[conjugation];
@@ -434,14 +501,6 @@ export function verbCells({ conjugation, principalParts, isDeponent }) {
   for (const [prefix, byConj] of Object.entries(PRESENT_PASSIVE))
     Object.assign(cells, personCells(prefix, stem, byConj[conjugation]));
 
-  const perfect = principalParts?.[2]?.full_form;
-  if (!isDeponent && perfect && endsWith(perfect, 'ī')) {
-    const perfectStem = perfect.slice(0, -1);
-    for (const [prefix, spec] of Object.entries(PERFECT_ACTIVE))
-      Object.assign(cells, personCells(prefix, perfectStem, spec));
-    cells['nonFinite.infinitive.perfect.active'] = [one(perfectStem, 'isse')];
-  }
-
   // Imperatives. Deponents store their (passive-form) imperatives under both voices.
   if (!isDeponent)
     for (const [path, byConj] of Object.entries(IMPERATIVE))
@@ -450,47 +509,26 @@ export function verbCells({ conjugation, principalParts, isDeponent }) {
     for (const [path, byConj] of Object.entries(IMPERATIVE_PASSIVE))
       cells[`imperative.${voice}.${path}`] = [one(stem, byConj[conjugation])];
 
-  // Infinitives. Deponents store theirs under active.
-  const base = supineBase(principalParts, isDeponent);
+  // Present infinitives. Deponents store theirs under active.
   const infinitive = principalParts?.[1]?.full_form;
   if (isDeponent) {
     if (infinitive) cells['nonFinite.infinitive.present.active'] = [one(stem, PRESENT_PASSIVE_INFINITIVE[conjugation])];
-    if (base) {
-      cells['nonFinite.infinitive.perfect.active'] = alts('us esse|um esse|a esse').map(e => one(base, e));
-      cells['nonFinite.infinitive.future.active'] = alts('ūrus esse|ūrum esse|ūra esse').map(e => one(base, e));
-    }
   } else {
     if (infinitive) cells['nonFinite.infinitive.present.active'] = [one('', infinitive)];
     cells['nonFinite.infinitive.present.passive'] = [one(stem, PRESENT_PASSIVE_INFINITIVE[conjugation])];
-    if (base) {
-      cells['nonFinite.infinitive.perfect.passive'] = alts('us esse|um esse|a esse').map(e => one(base, e));
-      cells['nonFinite.infinitive.future.active'] = alts('ūrus esse|ūrum esse|ūra esse').map(e => one(base, e));
-      cells['nonFinite.infinitive.future.passive'] = [one(base, 'um īrī')];
-    }
   }
 
-  // Gerund, supine, participles.
+  // Gerund, present participle, gerundive.
   const nd = `${stem}${THEME[conjugation]}nd`;
-  Object.assign(cells, {
-    'gerund.genitive': [one(nd, 'ī')],
-    'gerund.dative': [one(nd, 'ō')],
-    'gerund.accusative': [one(nd, 'um')],
-    'gerund.ablative': [one(nd, 'ō')],
-  });
-  Object.assign(cells, presentParticipleCells('nonFinite.participle.present.active', stem, conjugation));
+  Object.assign(cells, gerundCells(nd));
+  Object.assign(
+    cells,
+    presentParticipleCells(
+      'nonFinite.participle.present.active',
+      `${stem}${{ 1: 'āns', 2: 'ēns', 3: 'ēns', '3io': 'iēns', 4: 'iēns' }[conjugation]}`,
+      `${stem}${{ 1: 'ant', 2: 'ent', 3: 'ent', '3io': 'ient', 4: 'ient' }[conjugation]}`
+    )
+  );
   Object.assign(cells, participleCells('nonFinite.participle.future.passive', nd));
-  if (base) {
-    for (const [prefix, spec] of Object.entries(PERFECT_PASSIVE))
-      spec.split(',').forEach((auxiliary, i) => {
-        const [number, person] = PERSONS[i];
-        cells[`${prefix}.${number}.${person}`] = (number === 'singular' ? ['us', 'um', 'a'] : ['ī', 'a', 'ae']).map(
-          ending => one(base, `${ending} ${auxiliary}`)
-        );
-      });
-    cells['supine.accusative'] = [one(base, 'um')];
-    cells['supine.ablative'] = [one(base, 'ū')];
-    Object.assign(cells, participleCells('nonFinite.participle.perfect.passive', base));
-    Object.assign(cells, participleCells('nonFinite.participle.future.active', `${base}ūr`));
-  }
-  return { cells };
+  return { cells: { ...cells, ...principalPartCells(principalParts, isDeponent) } };
 }

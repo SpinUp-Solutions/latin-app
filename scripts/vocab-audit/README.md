@@ -29,7 +29,7 @@ The project is `latin-app-prod` unless `VOCAB_AUDIT_PROJECT` says otherwise. Wit
 `plan.mjs` does two things, without AI:
 
 - **Pre-pass.** Applies the fixes that need no knowledge of the word and logs them to `out/prepass.json`:
-  - alternate forms that a general rule yields for any word: `-ēre` for `-ērunt`, `-re` for `-ris`, `-īs` for `-ēs`, syncopated perfects (`amāstī`), and the feminine and neuter variants of compound forms (`amāta est`). The client wants one form per cell, the regular one.
+  - alternate forms that a general rule yields for any word: `-ēre` for `-ērunt`, `-re` for `-ris`, `-īs` for `-ēs`, `-ī` for `-e` in the ablative of present participles, syncopated perfects (`amāstī`), and the feminine and neuter variants of compound forms (`amāta est`). The client wants one form per cell, the regular one.
   - placeholder text in a cell (`—`, `null`, `(not used)`), which becomes an empty cell;
   - participle locatives, which are emptied.
 - **Batches.** A batch holds one part of speech only. Batches are sized by how much text their words take to review, not by count, so a batch of adverbs holds about 30 words and a batch of verbs far fewer. Verbs are the hardest, so they also have their own cap (`--max-verbs`, 8 by default). Writes `out/batches.json`.
@@ -84,7 +84,9 @@ With `--yes` it writes the rest the way the app's own word update does: only the
   - Verbs of conjugations 1–4, active and deponent: every finite tense in both voices, imperatives, infinitives, gerunds, supines, and present, perfect and future participles and gerundives.
 - **One form per cell**: the alternates, placeholders and participle locatives listed under the pre-pass, and any other cell with more than one form.
 
-The rules don't check irregular or defective verbs, pronoun tables, words whose stored label is itself wrong, or meanings, etymology and pronunciation. That is why agents review every word, not only the flagged ones.
+Verbs without a regular conjugation get the checks that hold for any verb: the perfect active system from the third principal part, everything built on the supine stem, and the endings of the present participle, gerundive and gerund.
+
+The rules don't check the present system of irregular verbs, defective verbs, pronoun tables, words whose stored label is itself wrong, or meanings, etymology and pronunciation. That is why agents review every word, not only the flagged ones.
 
 ## Optional: dictionary and stress check
 

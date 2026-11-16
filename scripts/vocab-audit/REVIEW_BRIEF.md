@@ -4,7 +4,7 @@ You are a Latin expert checking one batch of a Latin learning app's vocabulary. 
 
 - Fix everything you can tell is wrong. Knowing that a form is wrong and leaving a note about it is not a review.
 - Change a value only when you are sure of the correction. If you are not, look it up; if it is still in doubt, leave the value and say why in a `note`.
-- Don't restyle what is already correct.
+- Don't restyle what is already correct. A change needs a reason you could state: this form is wrong, this field is empty, this is debris.
 
 ## Tools
 
@@ -49,14 +49,14 @@ A word with many findings usually has one wrong label or stem. Work in this orde
 - **Lemma, labels, dictionary entry.** Lemma and its macrons, part of speech, gender, declension or conjugation, `is_deponent`, `pronoun_type`, `person`, and `dictionary_entry`. Label values: conjugation `1`, `2`, `3`, `3io` (capiō, patior), `4`, `irregular`; noun declension `1`, `2`, `3`, `3-istem`, `4`, `5`; adjective declension `1-2`, `3`; gender `masculine`, `feminine`, `neuter`, `masculine-feminine`.
 - **Principal parts and dictionary forms.** Correct, fully macronized, as in standard dictionaries (Lewis & Short, OLD). Every entry after the first has a `shortened_form` (`-ere`, `-vertī`, `-a`, `-um`, `-is`).
 - **Every form shown.** Stems, endings and macrons, including hidden quantities where standard dictionaries mark them. Irregular, defective and impersonal verbs and pronouns are not covered by the rules: check each form.
-- **One form per cell.** Each cell holds the one regular form. Remove alternates that a general rule gives for any word: `-ēre` for `-ērunt`, `-re` for `-ris`, `-īs` for `-ēs`, syncopated perfects, `-um` for `-ium` and the like. Compound forms take the masculine only (`amātus est`). Keep a second form, written `a / b`, only when this particular word has two standard forms and no general rule gives one from the other (`nostrī / nostrum`).
+- **One form per cell.** Each cell holds the one regular form. Remove alternates that a general rule gives for any word: `-ēre` for `-ērunt`, `-re` for `-ris`, `-īs` for `-ēs`, `-ī` for `-e` in the ablative of a present participle, syncopated perfects, `-um` for `-ium` and the like. Compound forms take the masculine only (`amātus est`). Keep a second form, written `a / b`, only when this particular word has two standard forms and no general rule gives one from the other (`nostrī / nostrum`).
 - **Cells that don't exist** for the word (no comparative, no passive of an intransitive verb, no participle without a supine stem, a locative the word doesn't have) are `null`, never an invented form and never a placeholder such as `—`. Participles have no locative.
 - **Only Latin letters and macron vowels** in Latin forms: no letters from other scripts, no breves (ĭ), no accents (é), no stray punctuation.
-- **English fields.**
-  - `translation`: the main meanings, short. Verbs start with "to".
-  - `definitions`: not empty, accurate, and free of pasted quotations, citations and reference marks (`[1]`).
-  - `etymology`: never invent one; remove reference marks; if it is wrong and you are unsure of the right one, keep it short and general.
-  - `pronunciation`: consistent with the macrons; keep the stored notation.
+- **English fields.** These are what students read and are tested on, and the teacher wrote or approved much of it. Leave them as they are unless one of the reasons below applies, and then change as little as you can. Never shorten, reorder or reword a field that is correct.
+  - `translation`: change it only when it is empty, belongs to a different word or part of speech, or is a verb's and does not start with "to" (then add "to").
+  - `definitions`: must not be empty. Remove pasted dictionary debris (lists of synonyms and antonyms, quotations, citations, usage examples, `[1]` marks) and keep the definition text itself as written. Don't reword or drop a definition that is correct.
+  - `etymology`: leave it as it is, including cognates quoted in other scripts. Remove only reference marks (`[1]`). Replace it only when it is plainly about a different word. If it is empty, leave it empty.
+  - `pronunciation`: fix it only where it contradicts the lemma's vowel lengths; keep the stored notation.
 
 Conventions to keep:
 

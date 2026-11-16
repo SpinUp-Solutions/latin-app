@@ -58,6 +58,13 @@ const ENDING_RULES = [
     alternate: 're',
   },
   { note: '-īs for -ēs', path: /\.accusative(\.(masculine|feminine))?\.plural$/, regular: 'ēs', alternate: 'īs' },
+  // A present participle used as a participle has -e; -ī is its adjectival use. Most stored verbs have -e.
+  {
+    note: '-ī for -e in the participle',
+    path: /\.participle\.present\.active\.ablative\.(masculine|feminine|neuter)\.singular$/,
+    regular: 'e',
+    alternate: 'ī',
+  },
 ];
 const PERFECT_ACTIVE_PATH = /\.active\.(perfect|pluperfect|future_perfect)\.|\.infinitive\.perfect\.active$/;
 /** Cells where the first expected form is the one to store, so a cell equal to it needs no review. */
@@ -223,6 +230,7 @@ function paradigmFor(d) {
       conjugation: conjugationOf(d),
       principalParts: d.principal_parts,
       isDeponent: d.is_deponent,
+      table: d.conjugation_table,
     });
   } else return { notes: [] };
   return {
@@ -259,9 +267,9 @@ export function checkWord(d) {
   for (const [path, value] of strings(d, '')) {
     const top = path.split(/[.[]/)[0];
     if (ENGLISH_FIELDS.has(top)) {
-      const bad = [...value].filter(
-        ch => FOREIGN_SCRIPT.test(ch) || (top !== 'etymology' && /\p{Script=Greek}/u.test(ch))
-      );
+      // An etymology may quote cognates in any script (Greek, Sanskrit, Armenian).
+      if (top === 'etymology') continue;
+      const bad = [...value].filter(ch => FOREIGN_SCRIPT.test(ch) || /\p{Script=Greek}/u.test(ch));
       if (bad.length) add('error', 'foreign-script', { path, actual: value, chars: [...new Set(bad)].join('') });
     } else if (!LATIN_FORM.test(value)) {
       // Prepositions note their case as "per (+ Acc)".
@@ -320,6 +328,8 @@ export function checkWord(d) {
 
   if (pos === 'verb' && conjugationOf(d) !== d.conjugation)
     add('error', 'conjugation-label', { path: 'conjugation', actual: d.conjugation, expected: conjugationOf(d) });
+  if (pos === 'verb' && !d.conjugation)
+    add('error', 'conjugation-label', { path: 'conjugation', note: 'empty: set 1, 2, 3, 3io, 4 or irregular' });
 
   // Lemma consistency
   const lemmaForms =

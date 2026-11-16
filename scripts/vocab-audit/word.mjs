@@ -95,6 +95,19 @@ function printNext(n) {
   );
 }
 
+// A mistyped path must not add a key to the stored word. The only keys an edit may add are
+// those of a new entry in a list of forms (principal_parts, dictionary_forms).
+const FORM_KEYS = new Set(['full_form', 'shortened_form']);
+function newKey(doc, path) {
+  let node = doc;
+  for (const key of keys(path)) {
+    if (typeof key === 'string' && !FORM_KEYS.has(key) && (node == null || typeof node !== 'object' || !(key in node)))
+      return key;
+    node = node?.[key];
+  }
+  return null;
+}
+
 function parseValue(raw, path, existing) {
   try {
     const value = JSON.parse(raw);
@@ -199,6 +212,8 @@ switch (command) {
       const top = keys(path)[0];
       if (!(top in original(id).data))
         fail(`Unknown field "${top}". Only existing fields can be set (the lemma is the field "word").`);
+      const unknown = newKey(doc, path);
+      if (unknown) fail(`"${unknown}" in ${path} is not a key of this word. Nothing was set.`);
       put(doc, path, nfc(parseValue(pair.slice(at + 1), path, get(doc, path))));
     }
     save(id, doc);
