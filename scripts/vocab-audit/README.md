@@ -89,6 +89,35 @@ Verbs without a regular conjugation get the checks that hold for any verb: the p
 
 The rules don't check the present system of irregular verbs, defective verbs, pronoun tables, words whose stored label is itself wrong, or meanings, etymology and pronunciation. That is why agents review every word, not only the flagged ones.
 
+## Running it on another machine, with Codex as orchestrator
+
+`ORCHESTRATOR.md` is a brief for a Codex session that runs every step above, checks the agents' work with `summary.mjs`, and stops before the write: it hands you the `apply.mjs --yes` command to run yourself.
+
+On the new machine (macOS or Linux):
+
+```
+git clone <repo> latin-app && cd latin-app
+git checkout claude/vocab-audit-codex-pipeline
+npm ci
+gcloud auth login                      # an account that can read latin-app-prod (and write, for step 5)
+codex login                            # the Codex CLI: npm i -g @openai/codex, or the copy in ChatGPT.app
+codex -m gpt-6.1-sol -c model_reasoning_effort="high" -s danger-full-access -a never \
+  "Read scripts/vocab-audit/ORCHESTRATOR.md and follow it."
+```
+
+The orchestrator needs `danger-full-access` because it starts Codex sessions of its own and runs gcloud, and both need the network and files outside the repository. The review sessions it starts still run in the workspace-write sandbox, without the gcloud sign-in. Use the interactive `codex` rather than `codex exec`, so the orchestrator can report to you and wait for your answer.
+
+To carry on a run started elsewhere rather than start a new one, copy its state over first, then start the orchestrator as above. It sees the progress and continues:
+
+```
+rsync -a old-machine:<repo>/scripts/vocab-audit/out/ scripts/vocab-audit/out/
+rsync -a old-machine:latin-app-vocab-backups/ ~/latin-app-vocab-backups/
+```
+
+`out/index.json` records the backup's path on the old machine, so on the new one pass `restore.mjs --backup <file>`.
+
+`summary.mjs` can also be run on its own: it writes `out/summary.md` with the edits most worth reading (labels, rewritten translations, etymologies and definitions, impersonal verbs, notes).
+
 ## Optional: dictionary and stress check
 
 `wiktionary-fetch.mjs` saves the Latin section of each word's English Wiktionary page to `out/wiktionary/` (about 2 s per page, to stay under Wiktionary's rate limit). `wiktionary-compare.mjs` then compares every word, edited version when there is one, with it and writes `out/wiktionary-report.json` and `out/wiktionary-summary.txt`:
