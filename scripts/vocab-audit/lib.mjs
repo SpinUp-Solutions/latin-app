@@ -69,7 +69,7 @@ function dedupeCells(data) {
 // ---------- rule fixes ----------
 export const CELL_FIXES = ['paradigm', 'paradigm-missing', 'ending-macron', 'stem-macron'];
 /** Fixes that need no knowledge of the word; plan.mjs applies them to every word up front. */
-export const PREPASS_FIXES = ['placeholder', 'participle-locative', 'alternate-form'];
+export const PREPASS_FIXES = ['lemma-macron', 'placeholder', 'participle-locative', 'alternate-form'];
 export const ALL_FIXES = [...CELL_FIXES, 'pronoun-person', 'genitive-mismatch', 'conjugation-label', ...PREPASS_FIXES];
 
 function applyFix(doc, issue) {

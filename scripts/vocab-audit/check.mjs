@@ -332,6 +332,18 @@ export function checkWord(d) {
   if (pos === 'verb' && !d.conjugation)
     add('error', 'conjugation-label', { path: 'conjugation', note: 'empty: set 1, 2, 3, 3io, 4 or irregular' });
 
+  // A vowel before another vowel is short: no verb ends in -ēō or -ēor (audeō, not audēō).
+  if (pos === 'verb')
+    for (const [path, value] of [
+      ['word', d.word],
+      ['principal_parts[0].full_form', d.principal_parts?.[0]?.full_form],
+      ['principal_parts[0].shortened_form', d.principal_parts?.[0]?.shortened_form],
+      ['dictionary_entry', d.dictionary_entry],
+    ]) {
+      const fixed = typeof value === 'string' ? value.normalize('NFC').replace(/ē(ō|or)(?=$|,)/, 'e$1') : value;
+      if (fixed !== value?.normalize?.('NFC')) add('error', 'lemma-macron', { path, actual: value, expected: fixed });
+    }
+
   // Lemma consistency
   const lemmaForms =
     {

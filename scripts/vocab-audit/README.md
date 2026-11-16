@@ -31,6 +31,7 @@ The project is `latin-app-prod` unless `VOCAB_AUDIT_PROJECT` says otherwise. Wit
 - **Pre-pass.** Applies the fixes that need no knowledge of the word and logs them to `out/prepass.json`:
   - alternate forms that a general rule yields for any word: `-ēre` for `-ērunt`, `-re` for `-ris`, `-īs` for `-ēs`, `-ī` for `-e` in the ablative of present participles, syncopated perfects (`amāstī`), and the feminine and neuter variants of compound forms (`amāta est`). The client wants one form per cell, the regular one.
   - placeholder text in a cell (`—`, `null`, `(not used)`), which becomes an empty cell;
+  - a verb lemma written with `-ēō` or `-ēor` (`audēō`), which becomes `-eō`, `-eor`;
   - participle locatives, which are emptied.
 - **Batches.** A batch holds one part of speech only. Batches are sized by how much text their words take to review, not by count, so a batch of adverbs holds about 30 words and a batch of verbs far fewer. Verbs are the hardest, so they also have their own cap (`--max-verbs`, 8 by default). Writes `out/batches.json`.
 
