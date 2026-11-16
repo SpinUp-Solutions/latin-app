@@ -92,7 +92,7 @@ const ZERO = { input_tokens: 0, cached_input_tokens: 0, output_tokens: 0, reason
 const add = (a, b) => Object.fromEntries(Object.keys(ZERO).map(k => [k, (a[k] ?? 0) + (b?.[k] ?? 0)]));
 
 /** One `codex exec` session on a batch. Resolves with its token usage and how it ended. */
-function session(batch, attempt) {
+function session(batch) {
   return new Promise(done => {
     const base = join(RUNS, `batch-${batch.n}`);
     const args = [
@@ -120,7 +120,9 @@ function session(batch, attempt) {
     ];
     const child = spawn(codexBin, args, { stdio: ['pipe', 'pipe', 'pipe'], env: sessionEnv });
     running.add(child);
-    const log = createWriteStream(`${base}.attempt-${attempt}.jsonl`);
+    // One transcript per session, named by its start time so a later run never overwrites it.
+    const transcript = `${base}.${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`;
+    const log = createWriteStream(transcript);
     let usage = ZERO;
     let calls = 0;
     let buffer = '';
@@ -149,7 +151,7 @@ function session(batch, attempt) {
       running.delete(child);
       clearTimeout(timer);
       log.end();
-      done({ usage, calls, exit: signal ? `stopped (${signal})` : code });
+      done({ usage, calls, transcript, exit: signal ? `stopped (${signal})` : code });
     });
     child.stdin.end(prompt(batch.n));
   });
@@ -171,7 +173,7 @@ async function review(batch) {
   for (let attempt = 1; attempt <= attempts && left(batch) > 0 && !stop; attempt++) {
     const sessionStarted = Date.now();
     const leftBefore = left(batch);
-    const result = await session(batch, attempt);
+    const result = await session(batch);
     const reviewed = leftBefore - left(batch);
     usage = add(usage, result.usage);
     calls += result.calls;
@@ -195,7 +197,7 @@ async function review(batch) {
     );
     stalled = reviewed ? 0 : stalled + 1;
     if (stalled >= STALL_LIMIT || (typeof result.exit === 'string' && result.exit.startsWith('could not start')))
-      stop = `${stalled} sessions in a row reviewed nothing (last exit: ${result.exit}). See ${relative(ROOT, RUNS)}/batch-${batch.n}.attempt-${attempt}.jsonl`;
+      stop = `${stalled} sessions in a row reviewed nothing (last exit: ${result.exit}). See ${relative(ROOT, result.transcript ?? RUNS)}`;
   }
   const record = {
     batch: batch.n,

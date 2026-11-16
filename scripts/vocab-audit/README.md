@@ -42,7 +42,7 @@ The project is `latin-app-prod` unless `VOCAB_AUDIT_PROJECT` says otherwise. Wit
 - A session gets `REVIEW_BRIEF.md` and one tool, `word.mjs`. Its edits go to `out/edited/`, its review marks to `out/progress/`, its notes to `out/notes/`.
 - **Stopping and continuing.** The run can stop at any point (Ctrl-C, Codex usage running out, a closed laptop). Run the same command again and it continues: every reviewed word is recorded in `out/progress/`, finished batches are skipped, and an unfinished batch starts at its first unreviewed word. Only the few words a session was looking at when it stopped are seen twice. When sessions start failing without reviewing anything, the run stops by itself after three of them.
 - **Progress.** `node scripts/vocab-audit/status.mjs` shows the words and batches reviewed, per part of speech, the Codex tokens spent across every run so far, and an estimate of what is left.
-- `out/runs/sessions.ndjson` records the tokens, the time and the number of commands of every session; `out/runs/batch-<n>.attempt-<k>.jsonl` is a session's full transcript.
+- `out/runs/sessions.ndjson` records the tokens, the time and the number of commands of every session; `out/runs/batch-<n>.<time>.jsonl` is a session's full transcript.
 
 What keeps the token count down:
 
