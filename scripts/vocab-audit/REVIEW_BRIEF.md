@@ -60,7 +60,7 @@ A word with many findings usually has one wrong label or stem. Work in this orde
 - **Cells that don't exist** for the word (no comparative, no passive of an intransitive verb, no participle without a supine stem, a locative the word doesn't have) are `null`, never an invented form and never a placeholder such as `—`. Participles have no locative.
 - **Only Latin letters and macron vowels** in Latin forms: no letters from other scripts, no breves (ĭ), no accents (é), no stray punctuation.
 - **English fields.** These are what students read and are tested on, and the teacher wrote or approved much of it. Leave them as they are unless one of the reasons below applies, and then change as little as you can. Never shorten, reorder or reword a field that is correct.
-  - `translation`: change it only when it is empty, belongs to a different word or part of speech, or is a verb's and does not start with "to" (then add "to").
+  - `translation`: change it only when it is empty, belongs to a different word or part of speech, or is a verb's and does not start with "to" (then add "to"; an impersonal verb keeps "it …": "it pleases").
   - `definitions`: must not be empty. Remove pasted dictionary debris (lists of synonyms and antonyms, quotations, citations, usage examples, `[1]` marks) and keep the definition text itself as written. Don't reword or drop a definition that is correct.
   - `etymology`: leave it as it is, including cognates quoted in other scripts. Remove only reference marks (`[1]`). Replace it only when it is plainly about a different word. If it is empty, leave it empty.
   - `pronunciation`: fix it only where it contradicts the lemma's vowel lengths; keep the stored notation.

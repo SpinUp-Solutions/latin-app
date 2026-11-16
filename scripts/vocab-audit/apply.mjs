@@ -66,8 +66,10 @@ console.log(
   `${TARGET}: ${plans.length} words to update, ${held.length} held back${yes ? '' : ' (dry run; pass --yes to write)'}`
 );
 const reasons = {};
-for (const h of held)
-  reasons[h.reason.replace(/:.*|\d+/g, '').trim()] = (reasons[h.reason.replace(/:.*|\d+/g, '').trim()] ?? 0) + 1;
+for (const h of held) {
+  const kind = h.reason.startsWith('rule errors') ? 'more rule errors' : h.reason.replace(/:.*/, '');
+  reasons[kind] = (reasons[kind] ?? 0) + 1;
+}
 for (const [reason, n] of Object.entries(reasons)) console.log(`  held, ${reason}: ${n}`);
 
 if (!yes) {
