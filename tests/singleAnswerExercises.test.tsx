@@ -113,7 +113,7 @@ describe('single-answer exercises in practice', () => {
         ],
       },
     });
-    const cells = () => screen.getAllByPlaceholderText('Enter answer...');
+    const cells = () => screen.getAllByRole('textbox');
     const submitOneRightOneWrong = () => {
       fireEvent.change(cells()[0], { target: { value: 'water' } });
       fireEvent.change(cells()[1], { target: { value: 'smoke' } });
@@ -128,6 +128,14 @@ describe('single-answer exercises in practice', () => {
       expect(screen.getAllByText('Incorrect')).toHaveLength(1);
       expect(cells()[0]).not.toHaveAttribute('aria-invalid');
       expect(cells()[1]).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('status')).toHaveTextContent('1 of 2 correct.');
+    });
+
+    it('names each blank by its row and column', () => {
+      render(<TableFillExercise exercise={chart(false)} />);
+
+      expect(screen.getByRole('textbox', { name: 'aqua, English' })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'ignis, English' })).toBeInTheDocument();
     });
 
     it('keeps the answers hidden when the feedback level does not show them', () => {
@@ -143,10 +151,11 @@ describe('single-answer exercises in practice', () => {
 
       const revealed = screen.getAllByText(/correct answer:/i);
       expect(revealed).toHaveLength(1);
-      expect(revealed[0]).toHaveTextContent('Correct answer: fire');
+      expect(revealed[0].parentElement).toHaveTextContent('Correct answer: fire');
+      expect(screen.getByRole('status')).toHaveTextContent(/shows the correct answer beneath it/i);
     });
 
-    it('keeps the right cells and the revealed answers on Try Again, and completes once corrected', () => {
+    it('keeps the right cells, locked and still marked, and the revealed answers on Try Again', () => {
       const onComplete = jest.fn();
       const onCompletionAccepted = jest.fn();
       render(
@@ -156,9 +165,15 @@ describe('single-answer exercises in practice', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /try again/i }));
       expect(cells()[0]).toHaveValue('water');
+      expect(cells()[0]).toHaveAttribute('readonly');
+      expect(screen.getAllByText('Correct')).toHaveLength(1);
       expect(cells()[1]).toHaveValue('');
-      expect(screen.getByText(/correct answer:/i)).toHaveTextContent('Correct answer: fire');
+      expect(cells()[1]).not.toHaveAttribute('readonly');
+      expect(screen.getByText(/correct answer:/i).parentElement).toHaveTextContent('Correct answer: fire');
       expect(screen.queryByText('Incorrect')).not.toBeInTheDocument();
+
+      fireEvent.change(cells()[0], { target: { value: 'changed' } });
+      expect(cells()[0]).toHaveValue('water');
 
       fireEvent.change(cells()[1], { target: { value: 'fire' } });
       fireEvent.click(screen.getByRole('button', { name: /submit answers/i }));
