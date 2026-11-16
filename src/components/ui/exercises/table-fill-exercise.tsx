@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Check, X } from 'lucide-react';
 import { TableFillExercise } from '@/src/types/exercise';
 import { useSingleAnswerExercise } from '@/src/hooks/useSingleAnswerExercise';
 import { FeedbackDisplay } from '../feedback';
@@ -49,6 +50,8 @@ const TableFillExerciseComponent: React.FC<Props> = ({
     requiredCellKeys.length > 0 && requiredCellKeys.every(cellKey => Boolean(answers[cellKey]?.trim()));
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>(restoredAnswers);
   const [cellResults, setCellResults] = useState<Record<string, boolean>>({});
+  // Answers revealed by a Show Answer feedback level stay visible while the student corrects the missed cells.
+  const [answersStayRevealed, setAnswersStayRevealed] = useState(false);
   const {
     testAnswerMode,
     hasSubmitted,
@@ -77,6 +80,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
     startOver();
     setUserAnswers({});
     setCellResults({});
+    setAnswersStayRevealed(false);
   };
 
   const handleInputChange = (cellKey: string, value: string) => {
@@ -90,6 +94,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
 
   const handleSubmit = () => {
     if (isProcessing || !hasAllRequiredAnswers(userAnswers) || resetRequired) return;
+    setAnswersStayRevealed(false);
     submit({ type: 'table-fill', answers: userAnswers }, () => {
       const validation = validateTableFillExercise(userAnswers, exercise);
       setCellResults(validation.cellResults);
@@ -97,16 +102,23 @@ const TableFillExerciseComponent: React.FC<Props> = ({
     });
   };
 
+  /** Keeps the cells the student got right, so a retry only asks for the missed ones again. */
   const handleReset = () => {
-    setUserAnswers({});
-    setCellResults({});
+    setUserAnswers(prev => Object.fromEntries(Object.entries(prev).filter(([cellKey]) => cellResults[cellKey])));
+    setAnswersStayRevealed(Boolean(level?.showAnswer));
     tryAgain();
   };
+
+  const isGraded = (cellKey: string) => !testAnswerMode && hasSubmitted && cellKey in cellResults;
+  const revealsAnswer = (cellKey: string) =>
+    !testAnswerMode &&
+    cellResults[cellKey] === false &&
+    (answersStayRevealed || (hasSubmitted && isCorrect === false && Boolean(level?.showAnswer)));
 
   const getCellClassName = (cellKey: string, isBlank: boolean) => {
     if (!isBlank) return '';
 
-    if (!testAnswerMode && hasSubmitted && cellKey in cellResults) {
+    if (isGraded(cellKey)) {
       return cellResults[cellKey] ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300';
     }
 
@@ -146,18 +158,41 @@ const TableFillExerciseComponent: React.FC<Props> = ({
                       key={cellKey}
                       className={cn(column.className, getCellClassName(cellKey, cell?.isBlank || false))}>
                       {cell?.isBlank ? (
-                        <textarea
-                          value={userAnswers[cellKey] || ''}
-                          onChange={e => handleInputChange(cellKey, e.target.value)}
-                          disabled={hasSubmitted || isProcessing || resetRequired}
-                          placeholder="Enter answer..."
-                          className={cn(
-                            'w-full min-h-[2rem] p-2 border rounded resize-none bg-transparent',
-                            'focus:outline-none focus:ring-2 focus:ring-roman-red focus:border-transparent',
-                            (hasSubmitted || isProcessing || resetRequired) && 'cursor-not-allowed opacity-60'
+                        <>
+                          <div className="flex items-center gap-2">
+                            <textarea
+                              value={userAnswers[cellKey] || ''}
+                              onChange={e => handleInputChange(cellKey, e.target.value)}
+                              disabled={hasSubmitted || isProcessing || resetRequired}
+                              placeholder="Enter answer..."
+                              aria-invalid={isGraded(cellKey) && !cellResults[cellKey] ? true : undefined}
+                              className={cn(
+                                'w-full min-h-[2rem] p-2 border rounded resize-none bg-transparent',
+                                'focus:outline-none focus:ring-2 focus:ring-roman-red focus:border-transparent',
+                                (hasSubmitted || isProcessing || resetRequired) && 'cursor-not-allowed opacity-60'
+                              )}
+                              rows={1}
+                            />
+                            {/* Shape and text mark the result, so it does not depend on telling red from green. */}
+                            {isGraded(cellKey) &&
+                              (cellResults[cellKey] ? (
+                                <span className="flex-shrink-0 text-green-700" title="Correct">
+                                  <Check className="h-5 w-5" aria-hidden="true" />
+                                  <span className="sr-only">Correct</span>
+                                </span>
+                              ) : (
+                                <span className="flex-shrink-0 text-red-700" title="Incorrect">
+                                  <X className="h-5 w-5" aria-hidden="true" />
+                                  <span className="sr-only">Incorrect</span>
+                                </span>
+                              ))}
+                          </div>
+                          {revealsAnswer(cellKey) && cell.answer && (
+                            <p className="mt-1 text-sm text-blue-800">
+                              Correct answer: <span className="font-semibold">{cell.answer}</span>
+                            </p>
                           )}
-                          rows={1}
-                        />
+                        </>
                       ) : (
                         <SimpleRichDisplay content={cell?.content || ''} />
                       )}
