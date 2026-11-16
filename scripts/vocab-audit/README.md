@@ -37,7 +37,7 @@ The project is `latin-app-prod` unless `VOCAB_AUDIT_PROJECT` says otherwise. Wit
 
 ## 3. Review
 
-`run-codex.mjs` starts one `codex exec` session per batch, with the Codex CLI on this machine, several at a time. Defaults: `gpt-6.1-terra` at high effort, three sessions at once, web search and network on. `--dry-run` lists what it would run; `--batches 1-5`, `--pos verb` and `--limit 3` narrow it.
+`run-codex.mjs` starts one `codex exec` session per batch, with the Codex CLI on this machine, several at a time. Defaults: `gpt-6.1-sol` at high effort, three sessions at once, web search and network on. `--dry-run` lists what it would run; `--batches 1-5`, `--pos verb` and `--limit 3` narrow it.
 
 - Each session runs in Codex's workspace-write sandbox, without your Codex settings file and without this machine's gcloud sign-in. It can write only under the repository.
 - A session gets `REVIEW_BRIEF.md` and one tool, `word.mjs`. Its edits go to `out/edited/`, its review marks to `out/progress/`, its notes to `out/notes/`.
@@ -50,7 +50,7 @@ What keeps the token count down:
 - The pre-pass removes thousands of mechanical fixes before any agent starts.
 - Cells that already equal the regular paradigm built from the word's labels and stems are not shown. The agent checks the labels and stems, and the cells that are shown.
 - Findings of the same kind on one word are summed up in one line.
-- `next` shows several short words at once, and the agent chains its commands, so a page costs one or two calls. Every call resends the whole session, so calls are what cost.
+- `next` shows several short words at once (verbs one at a time), and the agent can chain its commands. Every call resends the whole session, so calls are what cost. The brief puts accuracy ahead of this: lookups and second looks are not to be skipped.
 - Every batch is a fresh session, sized by text, so no session grows large.
 
 `node scripts/vocab-audit/word.mjs` prints the tool's commands.

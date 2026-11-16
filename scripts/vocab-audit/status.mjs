@@ -60,6 +60,20 @@ if (sessions.length) {
   if (failed) console.log(`         ${failed} sessions reviewed nothing (out/runs/sessions.ndjson)`);
 }
 
+// Who reviewed what, when more than one model has been used.
+const reviewers = {};
+for (const b of all)
+  for (const id of b.ids) {
+    const mark = progress(id);
+    if (mark) reviewers[mark.by ?? 'unrecorded'] = (reviewers[mark.by ?? 'unrecorded'] ?? 0) + 1;
+  }
+if (Object.keys(reviewers).length)
+  console.log(
+    `By:      ${Object.entries(reviewers)
+      .map(([by, n]) => `${by} ${n}`)
+      .join(', ')}`
+  );
+
 if (process.argv.includes('--batches'))
   for (const b of all.filter(b => left(b)))
     console.log(`  batch ${b.n}: ${b.part_of_speech}, ${left(b)} of ${b.ids.length} words left`);

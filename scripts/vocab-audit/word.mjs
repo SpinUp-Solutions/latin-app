@@ -45,7 +45,8 @@ import {
 } from './lib.mjs';
 import { checkWord } from './check.mjs';
 
-// How much text `next` prints at once. Several short words share a page; a long one gets its own.
+// How much text `next` prints at once. Several short words share a page; a long one gets its own,
+// and so does every verb.
 const PAGE_CHARS = Number(process.env.VOCAB_AUDIT_PAGE_CHARS ?? 8000);
 
 function fail(message) {
@@ -85,6 +86,8 @@ function printNext(n) {
       if (page.length && chars + size > PAGE_CHARS) break;
       page.push(id);
       chars += size;
+      // A verb gets the reviewer's whole attention.
+      if (current(id).data.part_of_speech === 'verb') break;
     }
     mkdirSync(PROGRESS, { recursive: true });
     writeFileSync(pageFile(n), JSON.stringify({ ids: page }));
@@ -178,6 +181,7 @@ switch (command) {
           batch: Number(ref),
           note: existsSync(noteFile) ? readJson(noteFile).note : null,
           at: new Date().toISOString(),
+          by: process.env.VOCAB_AUDIT_REVIEWER ?? null,
           edited: isEdited(id),
         })
       );

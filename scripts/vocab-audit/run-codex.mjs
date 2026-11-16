@@ -19,7 +19,7 @@
 //   --pos verb           only batches of this part of speech
 //   --limit 3            at most this many batches
 //   --concurrency 3      sessions at once
-//   --model gpt-6.1-terra  Codex model
+//   --model gpt-6.1-sol  Codex model
 //   --effort high        reasoning effort
 //   --no-network         no web search and no network for the session's commands
 //   --attempts 3         sessions per batch before giving up on it
@@ -44,7 +44,7 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > -1 ? process.argv[i + 1] : fallback;
 };
-const model = arg('model', 'gpt-6.1-terra');
+const model = arg('model', 'gpt-6.1-sol');
 const effort = arg('effort', 'high');
 const network = !process.argv.includes('--no-network');
 const concurrency = Number(arg('concurrency', '3'));
@@ -75,7 +75,12 @@ const prompt = n =>
 // The sessions get an empty gcloud configuration and no service-account file, so a command
 // they run cannot obtain this machine's Google credentials.
 const { GOOGLE_APPLICATION_CREDENTIALS: _, ...inherited } = process.env;
-const sessionEnv = { ...inherited, CLOUDSDK_CONFIG: mkdtempSync(join(tmpdir(), 'vocab-audit-gcloud-')) };
+const sessionEnv = {
+  ...inherited,
+  CLOUDSDK_CONFIG: mkdtempSync(join(tmpdir(), 'vocab-audit-gcloud-')),
+  // word.mjs records who reviewed each word.
+  VOCAB_AUDIT_REVIEWER: `${model} ${effort}`,
+};
 
 // Stopping the run stops its sessions too; what they reviewed so far is already on disk.
 const running = new Set();

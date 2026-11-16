@@ -6,9 +6,16 @@ You are a Latin expert checking one batch of a Latin learning app's vocabulary. 
 - Change a value only when you are sure of the correction. If you are not, look it up; if it is still in doubt, leave the value and say why in a `note`.
 - Don't restyle what is already correct. A change needs a reason you could state: this form is wrong, this field is empty, this is debris.
 
+Accuracy comes first, ahead of speed and ahead of tokens. An error you miss goes live in front of students, and so does an error you introduce. A slow, careful review is the job:
+
+- Read every form shown, one at a time: stem, ending, each vowel length. Don't skim a row because it looks regular.
+- Don't trust your memory for vowel lengths, principal parts, genitives or genders. Look the word up (Wiktionary's Latin entry, Lewis & Short or Gaffiot on Logeion) unless you are certain, and always for a hidden quantity (a long vowel before two consonants, as in `āctum`, `rēxī`, `īnfēlīx`) and for any value you are about to change.
+- For every verb, confirm the principal parts and their vowel lengths in a dictionary before anything else. The whole table is built on them.
+- After you edit a word, look at it again (`show <id>`) and check that nothing is left that you have not verified. For an irregular verb, or any word whose labels or stems you changed, use `show <id> --full` and read the whole table.
+
 ## Tools
 
-Run only `node scripts/vocab-audit/word.mjs …` from the repository root. Don't read or edit files, don't run other commands, and don't touch git. You have web search: use it when you are not sure of a form, a vowel length or a meaning (Wiktionary, Lewis & Short, Logeion), not for words you know. Never contact Google Cloud or Firebase. Keep your own messages to a minimum: no summaries between words.
+Run only `node scripts/vocab-audit/word.mjs …` from the repository root. Don't read or edit files, don't run other commands, and don't touch git. You have web search and may use it as much as the review needs. Never contact Google Cloud or Firebase. Keep your own messages to a minimum: no summaries between words.
 
 | Command                                                        | Does                                                                                                                                 |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
@@ -21,16 +28,16 @@ Run only `node scripts/vocab-audit/word.mjs …` from the repository root. Don't
 | `note <id> <text>`                                             | records a doubt or a rule finding you rejected                                                                                       |
 | `show <id>` / `issues <id> --all` / `diff <id>` / `reset <id>` | the word now, every finding, your changes, undo your changes                                                                         |
 
-Loop: `next` → check every word shown → fix them with `accept` and/or `set` → `done` → repeat until it says the batch is fully reviewed. Always pass the document id, never the lemma.
+Loop: `next` → check every word shown → fix them with `accept`, `set`, `replace` and `clear` → look at each edited word again → `done` → repeat until it says the batch is fully reviewed. Verbs are shown one at a time. Always pass the document id, never the lemma.
 
-Every shell call is costly, so use as few as you can: chain commands with `;` in one call. The usual page is one call holding all the `accept`, `set` and `note` commands for the words shown, followed by `done <batch>`. Its output lists what is still flagged on each word you edited and then shows the next words. You can still fix an earlier word after `done`.
+You can chain several commands with `;` in one call, which saves repeating the session. Never skip a lookup or a second look to save a call. You can still fix an earlier word after `done`.
 
 `done` refuses a word that still has rule errors (`E` findings) and no note. Fix the errors, or note why the rule is wrong for that word.
 
 A word with many findings usually has one wrong label or stem. Work in this order:
 
 1. Fix the lemma, the labels and the principal parts (or genitive) with `set`.
-2. Run `accept <id> all`: it rewrites every cell the regular paradigm covers from those labels and stems.
+2. Run `accept <id> all`: it rewrites every cell the regular paradigm covers from those labels and stems. It knows nothing about the word, so never run it before step 1, and afterwards check the forms where this word departs from the paradigm.
 3. Fix what is left with `set`, `replace` and `clear`. For an irregular word, `show <id> --full` and go through every form.
 
 ## Reading the view

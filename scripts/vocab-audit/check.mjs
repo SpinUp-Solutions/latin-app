@@ -340,8 +340,9 @@ export function checkWord(d) {
       ['principal_parts[0].shortened_form', d.principal_parts?.[0]?.shortened_form],
       ['dictionary_entry', d.dictionary_entry],
     ]) {
-      const fixed = typeof value === 'string' ? value.normalize('NFC').replace(/ē(ō|or)(?=$|,)/, 'e$1') : value;
-      if (fixed !== value?.normalize?.('NFC')) add('error', 'lemma-macron', { path, actual: value, expected: fixed });
+      if (typeof value !== 'string') continue;
+      const fixed = value.normalize('NFC').replace(/ē(ō|or)(?=$|,)/, 'e$1');
+      if (fixed !== value.normalize('NFC')) add('error', 'lemma-macron', { path, actual: value, expected: fixed });
     }
 
   // Lemma consistency
