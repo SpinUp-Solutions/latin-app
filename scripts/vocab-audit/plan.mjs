@@ -11,7 +11,7 @@
 //
 // Usage: node scripts/vocab-audit/plan.mjs [--batch-chars 30000] [--max-words 40] [--max-verbs 8] [--force]
 //   --force   plan again although a review is already under way
-import { existsSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { strip } from './paradigms.mjs';
 import { OUT } from './paths.mjs';
@@ -50,7 +50,10 @@ const words = [...index()].sort(
 );
 
 // 1. Pre-pass
-const prepass = [];
+// The log keeps what earlier plan runs fixed.
+const prepassFile = join(OUT, 'prepass.json');
+const prepass = existsSync(prepassFile) ? JSON.parse(readFileSync(prepassFile, 'utf8')) : [];
+const before = prepass.length;
 for (const { id } of words) {
   const doc = nfc(structuredClone(current(id).data));
   const applied = applyFixes(doc, PREPASS_FIXES);
@@ -62,7 +65,7 @@ for (const { id } of words) {
     fixes: applied.map(i => ({ path: i.path, from: show(i.actual), to: show(i.expected), rule: i.note ?? i.check })),
   });
 }
-writeFileSync(join(OUT, 'prepass.json'), JSON.stringify(prepass, null, 2));
+writeFileSync(prepassFile, JSON.stringify(prepass, null, 2));
 
 // 2. Batches
 const batches = [];
@@ -86,10 +89,11 @@ writeFileSync(
   JSON.stringify({ createdAt: new Date().toISOString(), batchChars, maxWords, maxVerbs, batches }, null, 2)
 );
 
-const fixes = prepass.reduce((n, p) => n + p.fixes.length, 0);
+const fresh = prepass.slice(before);
+const fixes = fresh.reduce((n, p) => n + p.fixes.length, 0);
 const byRule = {};
-for (const { fixes: list } of prepass) for (const f of list) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
-console.log(`pre-pass: ${fixes} cells fixed in ${prepass.length} words (out/prepass.json)`);
+for (const { fixes: list } of fresh) for (const f of list) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
+console.log(`pre-pass: ${fixes} cells fixed in ${fresh.length} words by this run (out/prepass.json keeps every run)`);
 for (const [rule, n] of Object.entries(byRule).sort((a, b) => b[1] - a[1])) console.log(`  ${rule}: ${n}`);
 console.log(
   `batches:  ${batches.length} for ${words.length} words, ${batches.reduce((n, b) => n + b.chars, 0)} characters to review`
