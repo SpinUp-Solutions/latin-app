@@ -25,17 +25,31 @@ const completed = (model: string, text: string) => ({
 describe('vocabulary autocomplete profiles', () => {
   beforeEach(() => create.mockReset());
 
-  it('keeps the admin editor on GPT-5.4 Mini at low effort', async () => {
-    create.mockResolvedValue(completed('gpt-5.4-mini', JSON.stringify({ translation: 'king' })) as never);
+  it('runs the admin editor on GPT-6.1 Terra at medium effort', async () => {
+    create.mockResolvedValue(completed('gpt-6.1-terra', JSON.stringify({ translation: 'king' })) as never);
 
     const result = await autocompleteVocabularyWord({ word: 'rēx', part_of_speech: 'noun' });
+
+    expect(create.mock.calls[0][0]).toMatchObject({
+      model: 'gpt-6.1-terra',
+      reasoning: { effort: 'medium' },
+      max_output_tokens: 32_000,
+    });
+    expect(result).toMatchObject({ success: true, model: 'gpt-6.1-terra', data: { translation: 'king' } });
+    // 1,000 input at $1/M plus 4,000 output at $5/M.
+    expect(result.cost?.totalCost).toBeCloseTo(0.021, 12);
+  });
+
+  it('still runs the baseline on GPT-5.4 Mini at low effort for evaluations', async () => {
+    create.mockResolvedValue(completed('gpt-5.4-mini', JSON.stringify({ translation: 'king' })) as never);
+
+    const result = await runVocabularyAutocomplete({ word: 'rēx', part_of_speech: 'noun' }, 'baseline');
 
     expect(create.mock.calls[0][0]).toMatchObject({
       model: 'gpt-5.4-mini',
       reasoning: { effort: 'low' },
       max_output_tokens: 32_000,
     });
-    expect(result).toMatchObject({ success: true, model: 'gpt-5.4-mini', data: { translation: 'king' } });
     // 1,000 input at $0.75/M plus 4,000 output at $4.50/M.
     expect(result.cost?.totalCost).toBeCloseTo(0.01875, 12);
   });
