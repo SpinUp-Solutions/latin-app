@@ -408,8 +408,9 @@ function supineBase(principalParts, isDeponent) {
     return perfect && endsWith(perfect, 'us') ? perfect.slice(0, -2) : null;
   }
   const supine = principalParts?.[3]?.full_form;
+  // A verb without a supine lists its future participle instead (āfutūrus, adfutūrum).
+  if (supine && (endsWith(supine, 'ūrus') || endsWith(supine, 'ūrum'))) return supine.slice(0, -4);
   if (supine && endsWith(supine, 'um')) return supine.slice(0, -2);
-  if (supine && endsWith(supine, 'ūrus')) return supine.slice(0, -4);
   return null;
 }
 

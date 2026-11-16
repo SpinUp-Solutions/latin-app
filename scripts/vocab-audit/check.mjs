@@ -292,7 +292,8 @@ export function checkWord(d) {
   if (!Array.isArray(d.definitions) || !d.definitions.some(x => x?.trim())) add('error', 'empty-definitions', {});
   if (['noun', 'verb', 'adjective'].includes(pos) && !d.dictionary_entry?.trim())
     add('error', 'missing-dictionary-entry', {});
-  if (pos === 'verb' && d.translation && !/^to\s/i.test(d.translation.trim()))
+  // A note in brackets may come first: "(intr.) to be present".
+  if (pos === 'verb' && d.translation && !/^(\([^)]*\)\s*)*to\s/i.test(d.translation.trim()))
     add('error', 'verb-translation-to', { actual: d.translation });
   for (const [field, from] of [
     ['principal_parts', 1],
