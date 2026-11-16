@@ -200,7 +200,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
                             </span>
                           )}
                           {revealsAnswer(cellKey) && cell.answer && (
-                            <p className="mt-1 rounded border border-gray-400 bg-white px-2 py-1 text-sm font-semibold text-gray-900">
+                            <p className="mt-1.5 px-2 font-semibold text-gray-900">
                               <span className="sr-only">Correct answer: </span>
                               {cell.answer}
                             </p>
