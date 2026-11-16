@@ -247,10 +247,11 @@ console.log(
       : '.')
 );
 if (stop) console.log(`Stopped early: ${stop}`);
-if (unfinished) {
+// The exit code speaks for the batches of this run only; other batches may simply not have been asked for.
+if (stop || records.some(r => r.unreviewed)) process.exitCode = 1;
+if (unfinished)
   console.log(
-    `${unfinished} batches still have words to review. Run the same command again to continue; reviewed words are not reviewed twice.`
+    `${unfinished} batches still have words to review. Run node scripts/vocab-audit/run-codex.mjs to continue; reviewed words are not reviewed twice.`
   );
-  process.exitCode = 1;
-} else console.log('Every batch is reviewed. Next: node scripts/vocab-audit/apply.mjs');
+else console.log('Every batch is reviewed. Next: node scripts/vocab-audit/apply.mjs');
 console.log('Progress: node scripts/vocab-audit/status.mjs');
