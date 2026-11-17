@@ -95,6 +95,136 @@ describe('single-answer exercises in practice', () => {
     expectCompletion(onComplete, onCompletionAccepted);
   });
 
+  describe('table fill with several blanks', () => {
+    const chart = (showAnswer: boolean): TableFillExerciseType => ({
+      ...tableFill,
+      feedbackConfig: { ...feedbackConfig, escalationLevels: [{ message: 'Not quite', showAnswer }] },
+      data: {
+        columns: tableFill.data.columns,
+        rows: [
+          tableFill.data.rows[0],
+          {
+            id: 'row2',
+            cells: {
+              latin: { content: 'ignis', isBlank: false },
+              english: { content: '', isBlank: true, answer: 'fire' },
+            },
+          },
+        ],
+      },
+    });
+    const cells = () => screen.getAllByRole('textbox');
+    const submitOneRightOneWrong = () => {
+      fireEvent.change(cells()[0], { target: { value: 'water' } });
+      fireEvent.change(cells()[1], { target: { value: 'smoke' } });
+      fireEvent.click(screen.getByRole('button', { name: /submit answers/i }));
+    };
+
+    it('marks each graded cell in words, not only by colour', () => {
+      render(<TableFillExercise exercise={chart(false)} />);
+      submitOneRightOneWrong();
+
+      expect(screen.getAllByText('Correct')).toHaveLength(1);
+      expect(screen.getAllByText('Incorrect')).toHaveLength(1);
+      expect(cells()[0]).not.toHaveAttribute('aria-invalid');
+      expect(cells()[1]).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('status')).toHaveTextContent('1 of 2 correct.');
+    });
+
+    it('names each blank by its row and column', () => {
+      render(<TableFillExercise exercise={chart(false)} />);
+
+      expect(screen.getByRole('textbox', { name: 'aqua, English' })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'ignis, English' })).toBeInTheDocument();
+    });
+
+    it('keeps the answers hidden when the feedback level does not show them', () => {
+      render(<TableFillExercise exercise={chart(false)} />);
+      submitOneRightOneWrong();
+
+      expect(screen.queryByText(/correct answer:/i)).not.toBeInTheDocument();
+    });
+
+    it('shows the correct answer for each missed cell when the feedback level shows answers', () => {
+      render(<TableFillExercise exercise={chart(true)} />);
+      submitOneRightOneWrong();
+
+      const revealed = screen.getAllByText(/correct answer:/i);
+      expect(revealed).toHaveLength(1);
+      expect(revealed[0].parentElement).toHaveTextContent('Correct answer: fire');
+      expect(screen.getByRole('status')).toHaveTextContent(/shows the correct answer beneath it/i);
+    });
+
+    it('keeps the right cells, locked and still marked, and the revealed answers on Try Again', () => {
+      const onComplete = jest.fn();
+      const onCompletionAccepted = jest.fn();
+      render(
+        <TableFillExercise exercise={chart(true)} onComplete={onComplete} onCompletionAccepted={onCompletionAccepted} />
+      );
+      submitOneRightOneWrong();
+
+      fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+      expect(cells()[0]).toHaveValue('water');
+      expect(cells()[0]).toHaveAttribute('readonly');
+      expect(screen.getAllByText('Correct')).toHaveLength(1);
+      expect(cells()[1]).toHaveValue('');
+      expect(cells()[1]).not.toHaveAttribute('readonly');
+      expect(screen.getByText(/correct answer:/i).parentElement).toHaveTextContent('Correct answer: fire');
+      expect(screen.queryByText('Incorrect')).not.toBeInTheDocument();
+
+      fireEvent.change(cells()[0], { target: { value: 'changed' } });
+      expect(cells()[0]).toHaveValue('water');
+
+      fireEvent.change(cells()[1], { target: { value: 'fire' } });
+      fireEvent.click(screen.getByRole('button', { name: /submit answers/i }));
+      expect(screen.queryByText(/correct answer:/i)).not.toBeInTheDocument();
+      expectCompletion(onComplete, onCompletionAccepted);
+    });
+
+    it('names a blank by its row number when the row has no heading', () => {
+      const exercise = chart(false);
+      exercise.data.rows[1].cells.latin = { content: '', isBlank: false };
+      render(<TableFillExercise exercise={exercise} />);
+
+      expect(screen.getByRole('textbox', { name: 'aqua, English' })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Row 2, English' })).toBeInTheDocument();
+    });
+
+    it('clears every cell, marker and revealed answer on Start over after too many misses', () => {
+      const exercise = chart(true);
+      exercise.feedbackConfig = { ...exercise.feedbackConfig, maxLevelFailures: 2 };
+      render(<TableFillExercise exercise={exercise} />);
+      submitOneRightOneWrong();
+      fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+      fireEvent.change(cells()[1], { target: { value: 'ash' } });
+      fireEvent.click(screen.getByRole('button', { name: /submit answers/i }));
+
+      expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /start over/i }));
+
+      for (const cell of cells()) {
+        expect(cell).toHaveValue('');
+        expect(cell).not.toHaveAttribute('readonly');
+        expect(cell).not.toBeDisabled();
+      }
+      expect(screen.queryByText('Correct')).not.toBeInTheDocument();
+      expect(screen.queryByText('Incorrect')).not.toBeInTheDocument();
+      expect(screen.queryByText(/correct answer:/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/shown beneath the cells you missed/i)).not.toBeInTheDocument();
+    });
+
+    it('shows no grading, markers or answers in test mode', () => {
+      render(<TableFillExercise exercise={chart(true)} runtimeMode="test" />);
+      submitOneRightOneWrong();
+
+      expect(screen.queryByText('Correct')).not.toBeInTheDocument();
+      expect(screen.queryByText('Incorrect')).not.toBeInTheDocument();
+      expect(screen.queryByText(/correct answer:/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      for (const cell of cells()) expect(cell).not.toHaveAttribute('aria-invalid');
+    });
+  });
+
   it('lets click-on-words retry a wrong selection and completes on the right one', () => {
     const onComplete = jest.fn();
     const onCompletionAccepted = jest.fn();

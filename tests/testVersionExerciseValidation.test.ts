@@ -4,6 +4,7 @@ import {
   tokenizeDiagramSentence,
 } from '@/src/features/sentence-diagramming/model';
 import { testVersionDraftInputSchema, testVersionInputSchema } from '@/src/lib/tests/schemas';
+import { MAX_GENERATED_WORD_COUNT } from '@/src/config/generatedExerciseLimits';
 
 const diagramTokens = tokenizeDiagramSentence('amat');
 const diagramSpan = { startTokenIndex: 0, endTokenIndex: 0, startCharOffset: 0, endCharOffset: 4 };
@@ -265,7 +266,7 @@ describe('active test exercise validation', () => {
 
   it('rejects generated word counts above the shared authoring ceiling', () => {
     const translation = copyItem(validItems['generated-translation']);
-    (translation.data.generatorConfig as { count: number }).count = 201;
+    (translation.data.generatorConfig as { count: number }).count = MAX_GENERATED_WORD_COUNT + 1;
 
     expect(activeVersionResult(translation).success).toBe(false);
   });
@@ -279,7 +280,7 @@ describe('active test exercise validation', () => {
     generator.uniqueWordCount = null;
     expect(activeVersionResult(morphology).success).toBe(true);
 
-    for (const invalid of [0, -1, 1.5, 201, '10']) {
+    for (const invalid of [0, -1, 1.5, MAX_GENERATED_WORD_COUNT + 1, '10']) {
       generator.uniqueWordCount = invalid;
       expect(activeVersionResult(morphology).success).toBe(false);
     }

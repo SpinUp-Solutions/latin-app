@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Check, X } from 'lucide-react';
 import { TableFillExercise } from '@/src/types/exercise';
+import type { TableFillColumn, TableFillRow } from '@/src/types/exercises/table-fill';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import { useSingleAnswerExercise } from '@/src/hooks/useSingleAnswerExercise';
 import { FeedbackDisplay } from '../feedback';
 import { validateTableFillExercise } from '@/src/utils/exercises/tableFillExercise';
@@ -49,6 +52,8 @@ const TableFillExerciseComponent: React.FC<Props> = ({
     requiredCellKeys.length > 0 && requiredCellKeys.every(cellKey => Boolean(answers[cellKey]?.trim()));
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>(restoredAnswers);
   const [cellResults, setCellResults] = useState<Record<string, boolean>>({});
+  // Answers revealed by a Show Answer feedback level stay visible while the student corrects the missed cells.
+  const [answersStayRevealed, setAnswersStayRevealed] = useState(false);
   const {
     testAnswerMode,
     hasSubmitted,
@@ -77,10 +82,11 @@ const TableFillExerciseComponent: React.FC<Props> = ({
     startOver();
     setUserAnswers({});
     setCellResults({});
+    setAnswersStayRevealed(false);
   };
 
   const handleInputChange = (cellKey: string, value: string) => {
-    if (hasSubmitted || isProcessing || resetRequired) return;
+    if (isLocked(cellKey)) return;
     setUserAnswers(prev => ({ ...prev, [cellKey]: value }));
     if (testAnswerMode) onAnswer?.({ type: 'table-fill', answers: { ...userAnswers, [cellKey]: value } });
     if (isCorrect !== null) {
@@ -90,6 +96,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
 
   const handleSubmit = () => {
     if (isProcessing || !hasAllRequiredAnswers(userAnswers) || resetRequired) return;
+    setAnswersStayRevealed(false);
     submit({ type: 'table-fill', answers: userAnswers }, () => {
       const validation = validateTableFillExercise(userAnswers, exercise);
       setCellResults(validation.cellResults);
@@ -97,18 +104,35 @@ const TableFillExerciseComponent: React.FC<Props> = ({
     });
   };
 
+  /** Keeps the cells the student got right, so a retry only asks for the missed ones again. */
   const handleReset = () => {
-    setUserAnswers({});
-    setCellResults({});
+    setUserAnswers(prev => Object.fromEntries(Object.entries(prev).filter(([cellKey]) => cellResults[cellKey])));
+    setAnswersStayRevealed(Boolean(level?.showAnswer));
     tryAgain();
+  };
+
+  // A cell graded correct stays marked and locked through later attempts; a miss is marked until Try Again.
+  const isMarkedCorrect = (cellKey: string) => !testAnswerMode && cellResults[cellKey] === true;
+  const isMarkedIncorrect = (cellKey: string) => !testAnswerMode && hasSubmitted && cellResults[cellKey] === false;
+  const isLocked = (cellKey: string) => hasSubmitted || isProcessing || resetRequired || isMarkedCorrect(cellKey);
+  const answersAreRevealed =
+    !testAnswerMode && (answersStayRevealed || (hasSubmitted && isCorrect === false && Boolean(level?.showAnswer)));
+  const revealsAnswer = (cellKey: string) => answersAreRevealed && cellResults[cellKey] === false;
+  const gradedCount = Object.keys(cellResults).length;
+  const correctCount = Object.values(cellResults).filter(Boolean).length;
+  // Names a blank by its row heading and column header; a row without a heading falls back to its number.
+  const cellLabel = (row: TableFillRow, rowIndex: number, column: TableFillColumn) => {
+    const rowHeader = row.cells[exercise.data.columns[0]?.id];
+    const rowName =
+      (rowHeader && !rowHeader.isBlank ? richTextToPlainText(rowHeader.content).trim() : '') || `Row ${rowIndex + 1}`;
+    return [rowName, richTextToPlainText(column.header).trim()].filter(Boolean).join(', ');
   };
 
   const getCellClassName = (cellKey: string, isBlank: boolean) => {
     if (!isBlank) return '';
 
-    if (!testAnswerMode && hasSubmitted && cellKey in cellResults) {
-      return cellResults[cellKey] ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300';
-    }
+    if (isMarkedCorrect(cellKey)) return 'bg-green-50 border-green-300';
+    if (isMarkedIncorrect(cellKey)) return 'bg-red-50 border-red-300';
 
     return 'bg-blue-50';
   };
@@ -135,7 +159,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
             </RomanTableRow>
           </RomanTableHeader>
           <RomanTableBody>
-            {exercise.data.rows.map(row => (
+            {exercise.data.rows.map((row, rowIndex) => (
               <RomanTableRow key={row.id}>
                 {exercise.data.columns.map(column => {
                   const cell = row.cells[column.id];
@@ -144,20 +168,46 @@ const TableFillExerciseComponent: React.FC<Props> = ({
                   return (
                     <RomanTableCell
                       key={cellKey}
-                      className={cn(column.className, getCellClassName(cellKey, cell?.isBlank || false))}>
+                      className={cn('relative', column.className, getCellClassName(cellKey, cell?.isBlank || false))}>
                       {cell?.isBlank ? (
-                        <textarea
-                          value={userAnswers[cellKey] || ''}
-                          onChange={e => handleInputChange(cellKey, e.target.value)}
-                          disabled={hasSubmitted || isProcessing || resetRequired}
-                          placeholder="Enter answer..."
-                          className={cn(
-                            'w-full min-h-[2rem] p-2 border rounded resize-none bg-transparent',
-                            'focus:outline-none focus:ring-2 focus:ring-roman-red focus:border-transparent',
-                            (hasSubmitted || isProcessing || resetRequired) && 'cursor-not-allowed opacity-60'
+                        <>
+                          <textarea
+                            value={userAnswers[cellKey] || ''}
+                            onChange={e => handleInputChange(cellKey, e.target.value)}
+                            // Read-only rather than disabled: a graded answer stays at full contrast to compare.
+                            readOnly={isLocked(cellKey)}
+                            disabled={isProcessing || resetRequired}
+                            placeholder={isLocked(cellKey) ? undefined : 'Enter answer...'}
+                            aria-label={cellLabel(row, rowIndex, column)}
+                            aria-invalid={isMarkedIncorrect(cellKey) ? true : undefined}
+                            className={cn(
+                              'w-full min-w-[5rem] min-h-[2rem] p-2 border rounded resize-none bg-transparent',
+                              'focus:outline-none focus:ring-2 focus:ring-roman-red focus:border-transparent',
+                              isLocked(cellKey) && 'cursor-default',
+                              (isProcessing || resetRequired) && 'cursor-not-allowed opacity-60'
+                            )}
+                            rows={1}
+                          />
+                          {/* Shape and text mark the result, so it does not depend on telling red from green. */}
+                          {isMarkedCorrect(cellKey) && (
+                            <span className="absolute top-0.5 right-0.5 text-green-700" title="Correct">
+                              <Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" />
+                              <span className="sr-only">Correct</span>
+                            </span>
                           )}
-                          rows={1}
-                        />
+                          {isMarkedIncorrect(cellKey) && (
+                            <span className="absolute top-0.5 right-0.5 text-red-700" title="Incorrect">
+                              <X className="h-4 w-4" strokeWidth={3} aria-hidden="true" />
+                              <span className="sr-only">Incorrect</span>
+                            </span>
+                          )}
+                          {revealsAnswer(cellKey) && cell.answer && (
+                            <p className="mt-1.5 px-2 font-semibold text-gray-900">
+                              <span className="sr-only">Correct answer: </span>
+                              {cell.answer}
+                            </p>
+                          )}
+                        </>
                       ) : (
                         <SimpleRichDisplay content={cell?.content || ''} />
                       )}
@@ -186,6 +236,22 @@ const TableFillExerciseComponent: React.FC<Props> = ({
             </RomanTableBody>
           )}
         </RomanTable>
+
+        {!testAnswerMode && hasSubmitted && isCorrect === false && gradedCount > 0 && (
+          <p role="status" className="mt-4 text-center text-sm text-roman-stone">
+            <span className="font-semibold">
+              {correctCount} of {gradedCount} correct.
+            </span>{' '}
+            {answersAreRevealed
+              ? 'Each cell marked ✗ shows the correct answer beneath it.'
+              : 'Cells marked ✗ need another look.'}
+          </p>
+        )}
+        {!testAnswerMode && !hasSubmitted && answersStayRevealed && (
+          <p className="mt-4 text-center text-sm text-roman-stone">
+            The correct answers are shown beneath the cells you missed. Fill those in and submit again.
+          </p>
+        )}
 
         <div className="mt-6 flex justify-center gap-4">
           {!hasSubmitted && !resetRequired && (

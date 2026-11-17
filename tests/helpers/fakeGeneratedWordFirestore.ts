@@ -105,15 +105,12 @@ class FakeQuery {
 
 export function createFakeGeneratedWordDb(options: {
   words?: FakeDocument[];
-  pools?: Array<{ id: string; wordDocIds: string[] }>;
+  pools?: Array<{ id: string; wordDocIds: string[] } & Record<string, unknown>>;
   limitCalls?: number[];
 }) {
   const collections: Record<string, FakeDocument[]> = {
     vocabulary_words_v5: options.words ?? [],
-    vocabulary_pools: (options.pools ?? []).map(pool => ({
-      id: pool.id,
-      data: { wordDocIds: pool.wordDocIds },
-    })),
+    vocabulary_pools: (options.pools ?? []).map(({ id, ...data }) => ({ id, data })),
   };
 
   const collection = (name: string) => {

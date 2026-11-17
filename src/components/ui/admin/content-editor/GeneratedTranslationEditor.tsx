@@ -19,6 +19,7 @@ import { GeneratedVocabularyFilters } from './GeneratedVocabularyFilters';
 import { GeneratedPoolSourceFields } from './GeneratedPoolSourceFields';
 import { GeneratedExerciseSummary } from './GeneratedExerciseSummary';
 import { GeneratedPreviewPanel } from './GeneratedPreviewPanel';
+import { getWordSourceUpdate } from '@/src/utils/exercises/generatorConfigDefaults';
 
 export const GeneratedTranslationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -128,7 +129,7 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
 
       <WordSourceSection
         value={editor.config.wordSource}
-        onChange={value => editor.updateConfig({ wordSource: value })}
+        onChange={value => editor.updateConfig(getWordSourceUpdate(value, editor.config.count))}
         coreType={editor.config.coreType}
         onCoreTypeChange={coreType => editor.updateConfig({ coreType })}
         filtersContent={filtersContent}
