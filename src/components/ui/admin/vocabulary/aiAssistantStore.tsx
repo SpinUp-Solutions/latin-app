@@ -101,7 +101,10 @@ export interface AIAssistantStore {
   update: (key: string, change: (chat: AIChat) => AIChat) => void;
   newTurnId: () => number;
   send: (key: string, request: SendToAI) => Promise<void>;
-  /** Stops waiting for a reply: the message goes back into the box, and a late answer is ignored. */
+  /**
+   * Stops waiting for a reply: the message goes back into the box, and a late answer is ignored. The
+   * Function cannot be cancelled from here, so the AI may still finish, and that call is still charged.
+   */
   stop: (key: string) => void;
   /** Replies still running for other words that the admin has not chosen to let finish. */
   runningElsewhere: (key: string) => { key: string; word: string }[];
@@ -111,6 +114,9 @@ export interface AIAssistantStore {
 }
 
 const OPEN_KEY = 'vocabulary-ai-assistant-open';
+/** What "Stop waiting" does, said on the button and again in the conversation once it has. */
+export const STOP_WAITING_HINT = 'This stops waiting for the answer. Generation may continue and still incur charges.';
+const STOPPED_NOTE = 'You stopped waiting for this answer. Generation may continue and still incur charges.';
 const isCompletable = (field: string): field is AICompletableField => AICompletableFieldSchema.safeParse(field).success;
 const draftValue = (draft: Partial<VocabularyWord>, field: AICompletableField): unknown =>
   (draft as Record<string, unknown>)[field];
@@ -262,7 +268,12 @@ function useAIAssistantState(): AIAssistantStore {
     const pending = chats[key]?.pending;
     if (!pending) return;
     active.current.delete(key);
-    update(key, current => (current.pending ? withdraw(current, current.pending) : current));
+    const id = newTurnId();
+    update(key, current => {
+      if (!current.pending) return current;
+      const withdrawn = withdraw(current, current.pending);
+      return { ...withdrawn, turns: [...withdrawn.turns, { id, from: 'event', text: STOPPED_NOTE }] };
+    });
   };
 
   const runningElsewhere = (key: string) =>

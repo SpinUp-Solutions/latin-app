@@ -42,7 +42,7 @@ import {
   type AcceptedAIReply,
   type AIReviewContextValue,
 } from './VocabularyAIReview';
-import { useAIAssistant } from './aiAssistantStore';
+import { snapshotValue, useAIAssistant } from './aiAssistantStore';
 import { aiFieldLabel } from './wordFields';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
 import {
@@ -266,7 +266,8 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     aiData: Partial<VocabularyWord>,
     apiFieldStatus: Record<string, 'filled' | 'missing'> | undefined,
     requestWordId: string,
-    uncertainties: VocabularyAIUncertainty[] = []
+    allUncertainties: VocabularyAIUncertainty[] = [],
+    asked?: Partial<VocabularyWord>
   ) => {
     // Ignore a response that arrives after the admin switched to another word.
     if (requestWordId !== word?.id) return;
@@ -274,9 +275,37 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     const fieldStatus = new Map<string, 'filled' | 'missing'>(Object.entries(apiFieldStatus || {}));
 
     const current = form.getValues() as unknown as TableData;
+    // Without the draft it was given, the answer is taken as being about the draft as it is now.
+    const askedData = asked
+      ? (asked as unknown as TableData)
+      : { ...current, ...(editableTable ? { [editableTable.field]: table } : {}) };
+    // The admin kept working while the AI ran. A field they changed meanwhile keeps their value, and the
+    // AI's answer and question about it are left out: they were about a value that is no longer there.
+    const edited = new Set<string>(
+      AICompletableFieldSchema.options.filter(
+        field =>
+          field !== editableTable?.field &&
+          field in current &&
+          snapshotValue(askedData[field]) !== snapshotValue(current[field])
+      )
+    );
+    const kept = AICompletableFieldSchema.options.filter(
+      field =>
+        edited.has(field) &&
+        field in aiData &&
+        snapshotValue((aiData as TableData)[field]) !== snapshotValue(askedData[field])
+    );
+    const uncertainties = allUncertainties.filter(item => !edited.has(item.field));
     const filled: AICompletableField[] = [];
     Object.entries(aiData).forEach(([key, value]) => {
-      if (key === 'part_of_speech' || key === 'ai_review' || key === editableTable?.field || !(key in current)) return;
+      if (
+        key === 'part_of_speech' ||
+        key === 'ai_review' ||
+        key === editableTable?.field ||
+        !(key in current) ||
+        edited.has(key)
+      )
+        return;
       const merged = deepMergeNullValues(current[key], value);
       if (JSON.stringify(merged) !== JSON.stringify(current[key])) {
         form.setValue(key as keyof VocabularyFormValues, merged as never, { shouldValidate: false, shouldDirty: true });
@@ -293,7 +322,17 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       }
     }
 
-    const aiTable = editableTable && (aiData as TableData)[editableTable.field];
+    let aiTable = editableTable && (aiData as TableData)[editableTable.field];
+    if (editableTable && aiTable) {
+      // A cell the admin emptied while the AI ran stays empty: the AI's value there is the one they removed.
+      const emptyWhenAsked = new Set(findNullPaths(askedData[editableTable.field]));
+      const emptied = findNullPaths(table).filter(path => !emptyWhenAsked.has(path));
+      if (emptied.length > 0) {
+        const withoutEmptied = cloneTableData(aiTable);
+        for (const path of emptied) setNestedValue(withoutEmptied, path, null);
+        aiTable = withoutEmptied;
+      }
+    }
     if (editableTable && aiTable) {
       const missingBefore = findNullPaths(table);
       const missingAfter = new Set(findNullPaths(deepMergeNullValues(table, aiTable)));
@@ -321,7 +360,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
           : after[item.field],
       ])
     );
-    const report = autocompleteMessage({ filled, questions: uncertainties.length }, watchedWord || word.word);
+    const report = autocompleteMessage({ filled, questions: uncertainties.length, kept }, watchedWord || word.word);
     const reportId = assistant.newTurnId();
     assistant.update(chatKey, chat => ({
       ...chat,
@@ -463,7 +502,6 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     ...watchedValues,
     ...(editableTable ? { [editableTable.field]: table } : {}),
   } as Partial<VocabularyWord>;
-  const snapshotKey = JSON.stringify([aiSnapshot, editingCell, editingCellValue]);
 
   const renderPosForm = () => {
     switch (word?.part_of_speech) {
@@ -542,7 +580,6 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
                       word={watchedWord || word.word}
                       partOfSpeech={word.part_of_speech}
                       existingData={aiSnapshot}
-                      snapshotKey={snapshotKey}
                       onAutocomplete={handleAIAutocomplete}
                       disabled={updating || isSubmitting || !!editingCell}
                     />

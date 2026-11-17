@@ -280,6 +280,8 @@ export async function runVocabularyAutocomplete(
         model: profile.model,
         reasoning: { effort: profile.reasoningEffort },
         max_output_tokens: profile.maxOutputTokens,
+        // Nothing reads a response back later, so OpenAI need not keep a copy of the word or the conversation.
+        store: false,
         instructions: body.instructions,
         input: body.input,
         text: { format: body.format },

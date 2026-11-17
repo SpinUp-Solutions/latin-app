@@ -41,6 +41,7 @@ import { changedTableCells, sameWordValue, WORD_TABLE_FIELDS } from '@/src/utils
 import { aiFieldLabel, WORD_FIELDS } from './wordFields';
 import {
   snapshotValue as snapshot,
+  STOP_WAITING_HINT,
   type AIAssistantStore,
   type AITurn,
   type ProposedChange,
@@ -141,19 +142,24 @@ const listLabels = (labels: string[]) =>
 export interface AIAutocompleteRun {
   filled: AICompletableField[];
   questions: number;
+  /** Fields the AI would have changed but left alone, because the admin changed them while it worked. */
+  kept?: AICompletableField[];
 }
 
 /** The assistant's report on an autocomplete: all good, or what it still asks. */
 export function autocompleteMessage(run: AIAutocompleteRun, word: string): string {
   const filled = run.filled.length > 4 ? plural(run.filled.length, 'field') : listLabels(run.filled.map(aiFieldLabel));
+  const kept = run.kept?.length
+    ? ` I left ${listLabels(run.kept.map(aiFieldLabel))} as you changed it while I was working.`
+    : '';
   // No questions means the model raised none, not that its answers were checked, so it says only that.
   if (run.questions === 0) {
     return filled
-      ? `All good! No questions from me about ${word}. I filled ${filled}. If anything looks off, tell me below.`
-      : `All good! No questions from me about ${word}, and there was nothing left to fill. If anything looks off, tell me below.`;
+      ? `All good! No questions from me about ${word}. I filled ${filled}.${kept} If anything looks off, tell me below.`
+      : `All good! No questions from me about ${word}, and there was nothing left to fill.${kept} If anything looks off, tell me below.`;
   }
   const asks = `I have ${plural(run.questions, 'question')} for you above.`;
-  return filled ? `Done. I filled ${filled} in ${word}. ${asks}` : `Done. ${asks}`;
+  return filled ? `Done. I filled ${filled} in ${word}.${kept} ${asks}` : `Done.${kept} ${asks}`;
 }
 
 /** The AI's proposed value next to the current one; for a table, only the cells that change. */
@@ -822,6 +828,7 @@ export function AIAssistantDock() {
                 type="button"
                 className="font-medium underline-offset-2 hover:underline"
                 aria-label={`Stop waiting for the answer about ${elsewhere.word}`}
+                title={STOP_WAITING_HINT}
                 onClick={() => assistant.stop(elsewhere.key)}>
                 Stop waiting
               </button>
@@ -907,6 +914,7 @@ export function AIAssistantDock() {
                       <button
                         type="button"
                         className="rounded px-1.5 text-xs font-medium text-gray-700 underline-offset-2 hover:underline"
+                        title={STOP_WAITING_HINT}
                         onClick={() => assistant.stop(key)}>
                         Stop waiting
                       </button>

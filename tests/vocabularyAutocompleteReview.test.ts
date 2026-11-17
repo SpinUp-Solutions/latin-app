@@ -118,6 +118,8 @@ it('sends rules for all words and notes on this word as trusted guidance, apart 
     [{ id: 'global-rule', instruction: 'Use Classical Latin.' }]
   );
   const body = create.mock.calls[0][0];
+  // OpenAI keeps no copy of the request: nothing reads a stored response back.
+  expect(body.store).toBe(false);
   // The admin's message a note came from is for people reviewing the note; the model gets the note.
   expect(JSON.stringify(body)).not.toContain('the message the note was drawn from');
   expect(body.instructions).toContain('Rules for all words: ["Use Classical Latin."]');

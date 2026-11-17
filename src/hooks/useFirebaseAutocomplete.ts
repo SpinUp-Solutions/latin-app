@@ -61,11 +61,6 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
     []
   );
 
-  const invalidate = () => {
-    generation.current += 1;
-    setIsLoading(false);
-  };
-
   const requestAutocomplete = async (request: AIAutocompleteRequest): Promise<AIAutocompleteResponse | null> => {
     const requestGeneration = ++generation.current;
     setIsLoading(true);
@@ -83,5 +78,5 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
     }
   };
 
-  return { requestAutocomplete, invalidate, isLoading, cost };
+  return { requestAutocomplete, isLoading, cost };
 }

@@ -7,7 +7,7 @@ import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { Loader2, Sparkles, XCircle, Copy, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { VocabularyAIUncertainty } from '@/shared/types/vocabulary/ai-review';
 
 interface AIAutocompleteButtonProps {
@@ -15,12 +15,13 @@ interface AIAutocompleteButtonProps {
   word: string;
   partOfSpeech: PartOfSpeech;
   existingData?: Partial<VocabularyWord>;
-  snapshotKey?: string;
+  /** `asked` is the draft the AI was given, so edits made while it worked can be told apart. */
   onAutocomplete: (
     data: Partial<VocabularyWord>,
     fieldStatus: Record<string, 'filled' | 'missing'> | undefined,
     wordId: string,
-    uncertainties: VocabularyAIUncertainty[]
+    uncertainties: VocabularyAIUncertainty[],
+    asked: Partial<VocabularyWord>
   ) => void;
   disabled?: boolean;
 }
@@ -30,24 +31,25 @@ export function AIAutocompleteButton({
   word,
   partOfSpeech,
   existingData,
-  snapshotKey,
   onAutocomplete,
   disabled = false,
 }: AIAutocompleteButtonProps) {
   const [errorDetails, setErrorDetails] = useState<ErrorInfo | null>(null);
 
-  const { requestAutocomplete, invalidate, isLoading, cost } = useFirebaseAutocomplete({
+  const { requestAutocomplete, isLoading, cost } = useFirebaseAutocomplete({
     onError: (error, errorInfo) => {
       setErrorDetails(errorInfo || null);
       toast.error('AI Autocomplete Failed', { description: error });
     },
   });
 
-  const invalidateEditingSnapshot = useEffectEvent(() => invalidate());
-  const fingerprint = snapshotKey ?? JSON.stringify(existingData);
+  // A run can take minutes and the admin keeps working meanwhile, so the answer goes to the editor as it
+  // is when the run finishes, which then leaves alone what the admin changed. Switching words unmounts
+  // this button, and the hook then ignores the answer.
+  const latestOnAutocomplete = useRef(onAutocomplete);
   useEffect(() => {
-    invalidateEditingSnapshot();
-  }, [fingerprint, wordId]);
+    latestOnAutocomplete.current = onAutocomplete;
+  });
 
   const handleAutocomplete = async () => {
     if (!word || !partOfSpeech) {
@@ -55,15 +57,16 @@ export function AIAutocompleteButton({
       return;
     }
     setErrorDetails(null);
+    const asked = existingData ?? {};
     const result = await requestAutocomplete({
       word,
       part_of_speech: partOfSpeech,
-      existingData,
+      existingData: asked,
       overwriteExisting: false,
     });
     if (!result?.data) return;
     const uncertainties = result.uncertainties ?? [];
-    onAutocomplete(result.data, result.fieldStatus, wordId, uncertainties);
+    latestOnAutocomplete.current(result.data, result.fieldStatus, wordId, uncertainties, asked);
     const costMessage = result.cost
       ? `Cost: $${result.cost.totalCost.toFixed(4)} (${result.cost.tokens.totalTokens.toLocaleString()} tokens)`
       : '';

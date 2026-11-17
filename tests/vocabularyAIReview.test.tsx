@@ -569,8 +569,19 @@ it('stops a reply on request, from its own word or another, and ignores the late
   const late = pending();
   const view = render(<OnPage word={cloneNoun()} />);
   say('First try.');
-  fireEvent.click(within(assistant()).getByRole('button', { name: 'Stop waiting' }));
+  const stopButton = within(assistant()).getByRole('button', { name: 'Stop waiting' });
+  // The Function cannot be cancelled, so the button says the AI may still finish, and be charged.
+  expect(stopButton).toHaveAttribute(
+    'title',
+    'This stops waiting for the answer. Generation may continue and still incur charges.'
+  );
+  fireEvent.click(stopButton);
   expect(composer()).toHaveValue('First try.');
+  expect(
+    within(assistant()).getByText(
+      'You stopped waiting for this answer. Generation may continue and still incur charges.'
+    )
+  ).toBeInTheDocument();
   await late(reply({ etymology: 'late' }, { message: 'Too late.' }));
   expect(screen.queryByText('Too late.')).toBeNull();
 
@@ -766,6 +777,72 @@ it('adds new questions from autocomplete without replacing open ones, filling on
   const payload = await saveWord(onSave);
   expect(payload.translation).toBe('rose');
   expect(payload.ai_review.uncertainties).toEqual([question, pronunciation]);
+});
+
+describe('when the admin keeps working while autocomplete runs', () => {
+  it('still applies the answer after a question is answered in the assistant meanwhile', async () => {
+    const finish = pending();
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(within(questionCard('Etymology')!).getByRole('button', { name: 'Keep as is' }));
+    await finish(answer({ pronunciation: 'ˈro.sa' }));
+
+    expect(screen.getByLabelText('Pronunciation')).toHaveValue('ˈro.sa');
+    expect(screen.getByRole('button', { name: 'AI Autocomplete' })).toBeEnabled();
+    const payload = await saveWord(onSave);
+    expect(payload.pronunciation).toBe('ˈro.sa');
+    expect(payload.ai_review.uncertainties).toEqual([]);
+  });
+
+  it('keeps a field the admin changed meanwhile, drops the question about it, and says so', async () => {
+    const finish = pending();
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.change(screen.getByLabelText('Pronunciation'), { target: { value: 'mine' } });
+    await finish(
+      answer(
+        { pronunciation: 'ˈro.sa', alternate_form: 'rhoda' },
+        { uncertainties: [{ field: 'pronunciation', question: 'Is the o long?', explanation: 'Unclear.' }] }
+      )
+    );
+
+    expect(screen.getByLabelText('Pronunciation')).toHaveValue('mine');
+    expect(questionCard('Pronunciation')).toBeNull();
+    expect(
+      within(assistant()).getByText(
+        'All good! No questions from me about rosa. I filled Alternate Form. I left Pronunciation as you changed it while I was working. If anything looks off, tell me below.'
+      )
+    ).toBeInTheDocument();
+    const payload = await saveWord(onSave);
+    expect(payload.pronunciation).toBe('mine');
+    expect(payload.alternate_form).toBe('rhoda');
+  });
+
+  it('leaves a table cell empty that the admin emptied meanwhile, and fills the other empty cells', async () => {
+    const finish = pending();
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.doubleClick(screen.getByText('rosam'));
+    const input = screen.getByPlaceholderText('Enter value...');
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    // The server sends back the table merged with the draft it was given, so the emptied cell comes back filled.
+    await finish(
+      answer({
+        declension_table: {
+          ...(noun as { declension_table: object }).declension_table,
+          locative: row(['rosae'], null),
+        },
+      })
+    );
+
+    const payload = await saveWord(onSave);
+    expect(payload.declension_table.accusative).toEqual(row(null, ['rosās']));
+    expect(payload.declension_table.locative).toEqual(row(['rosae'], null));
+  });
 });
 
 it('discards an autocomplete result that arrives after switching words', async () => {
