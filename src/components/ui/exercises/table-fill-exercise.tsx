@@ -120,10 +120,12 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   const revealsAnswer = (cellKey: string) => answersAreRevealed && cellResults[cellKey] === false;
   const gradedCount = Object.keys(cellResults).length;
   const correctCount = Object.values(cellResults).filter(Boolean).length;
-  const cellLabel = (row: TableFillRow, column: TableFillColumn) => {
+  // Names a blank by its row heading and column header; a row without a heading falls back to its number.
+  const cellLabel = (row: TableFillRow, rowIndex: number, column: TableFillColumn) => {
     const rowHeader = row.cells[exercise.data.columns[0]?.id];
-    const rowName = rowHeader && !rowHeader.isBlank ? richTextToPlainText(rowHeader.content) : '';
-    return [rowName, richTextToPlainText(column.header)].filter(Boolean).join(', ') || 'Answer';
+    const rowName =
+      (rowHeader && !rowHeader.isBlank ? richTextToPlainText(rowHeader.content).trim() : '') || `Row ${rowIndex + 1}`;
+    return [rowName, richTextToPlainText(column.header).trim()].filter(Boolean).join(', ');
   };
 
   const getCellClassName = (cellKey: string, isBlank: boolean) => {
@@ -157,7 +159,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
             </RomanTableRow>
           </RomanTableHeader>
           <RomanTableBody>
-            {exercise.data.rows.map(row => (
+            {exercise.data.rows.map((row, rowIndex) => (
               <RomanTableRow key={row.id}>
                 {exercise.data.columns.map(column => {
                   const cell = row.cells[column.id];
@@ -176,7 +178,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
                             readOnly={isLocked(cellKey)}
                             disabled={isProcessing || resetRequired}
                             placeholder={isLocked(cellKey) ? undefined : 'Enter answer...'}
-                            aria-label={cellLabel(row, column)}
+                            aria-label={cellLabel(row, rowIndex, column)}
                             aria-invalid={isMarkedIncorrect(cellKey) ? true : undefined}
                             className={cn(
                               'w-full min-w-[5rem] min-h-[2rem] p-2 border rounded resize-none bg-transparent',

@@ -180,6 +180,49 @@ describe('single-answer exercises in practice', () => {
       expect(screen.queryByText(/correct answer:/i)).not.toBeInTheDocument();
       expectCompletion(onComplete, onCompletionAccepted);
     });
+
+    it('names a blank by its row number when the row has no heading', () => {
+      const exercise = chart(false);
+      exercise.data.rows[1].cells.latin = { content: '', isBlank: false };
+      render(<TableFillExercise exercise={exercise} />);
+
+      expect(screen.getByRole('textbox', { name: 'aqua, English' })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Row 2, English' })).toBeInTheDocument();
+    });
+
+    it('clears every cell, marker and revealed answer on Start over after too many misses', () => {
+      const exercise = chart(true);
+      exercise.feedbackConfig = { ...exercise.feedbackConfig, maxLevelFailures: 2 };
+      render(<TableFillExercise exercise={exercise} />);
+      submitOneRightOneWrong();
+      fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+      fireEvent.change(cells()[1], { target: { value: 'ash' } });
+      fireEvent.click(screen.getByRole('button', { name: /submit answers/i }));
+
+      expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /start over/i }));
+
+      for (const cell of cells()) {
+        expect(cell).toHaveValue('');
+        expect(cell).not.toHaveAttribute('readonly');
+        expect(cell).not.toBeDisabled();
+      }
+      expect(screen.queryByText('Correct')).not.toBeInTheDocument();
+      expect(screen.queryByText('Incorrect')).not.toBeInTheDocument();
+      expect(screen.queryByText(/correct answer:/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/shown beneath the cells you missed/i)).not.toBeInTheDocument();
+    });
+
+    it('shows no grading, markers or answers in test mode', () => {
+      render(<TableFillExercise exercise={chart(true)} runtimeMode="test" />);
+      submitOneRightOneWrong();
+
+      expect(screen.queryByText('Correct')).not.toBeInTheDocument();
+      expect(screen.queryByText('Incorrect')).not.toBeInTheDocument();
+      expect(screen.queryByText(/correct answer:/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      for (const cell of cells()) expect(cell).not.toHaveAttribute('aria-invalid');
+    });
   });
 
   it('lets click-on-words retry a wrong selection and completes on the right one', () => {
