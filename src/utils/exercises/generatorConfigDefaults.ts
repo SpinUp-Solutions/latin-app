@@ -35,7 +35,7 @@ export const getWordSourceUpdate = (
     ? { wordSource, count: 'all' }
     : { wordSource, count: count === 'all' ? DEFAULT_GENERATOR_CONFIG.count : count };
 
-export const ensureGeneratorConfig =(config?: Partial<GeneratorConfigBase>): EnsuredGeneratorConfig => {
+export const ensureGeneratorConfig = (config?: Partial<GeneratorConfigBase>): EnsuredGeneratorConfig => {
   const normalized = {
     ...DEFAULT_GENERATOR_CONFIG,
     ...config,
