@@ -38,9 +38,10 @@ export class VocabularyPoolArchiveIntegrityError extends DomainError {
 export async function getReadableVocabularyPool(db: Firestore, poolId: string): Promise<ReadableVocabularyPool | null> {
   const active = await db.collection(VOCABULARY_POOL_COLLECTION).doc(poolId).get();
   if (active.exists) {
-    if (isVocabularyPoolCreationPending(active.data())) return null;
+    const activeData = active.data();
+    if (isVocabularyPoolCreationPending(activeData) || activeData?._deletionPending) return null;
     return {
-      data: await resolveVocabularyPool(db, poolId, active.data() ?? {}),
+      data: await resolveVocabularyPool(db, poolId, activeData ?? {}),
       source: 'active',
       words: db.collection(VOCABULARY_WORDS_COLLECTION),
     };
