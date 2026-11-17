@@ -4,21 +4,22 @@ import { Button } from '@/src/components/ui/button';
 import { useFirebaseAutocomplete, ErrorInfo } from '@/src/hooks/useFirebaseAutocomplete';
 import { VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
-import { Loader2, Sparkles, XCircle, Copy, RotateCcw, Info } from 'lucide-react';
+import { Loader2, Sparkles, XCircle, Copy, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
-import { useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 
 interface AIAutocompleteButtonProps {
   wordId: string;
   word: string;
   partOfSpeech: PartOfSpeech;
   existingData?: Partial<VocabularyWord>;
+  snapshotKey?: string;
   onAutocomplete: (
     data: Partial<VocabularyWord>,
     fieldStatus?: Record<string, 'filled' | 'missing'>,
     wordId?: string
-  ) => void;
+  ) => void | boolean;
   disabled?: boolean;
 }
 
@@ -27,46 +28,56 @@ export function AIAutocompleteButton({
   word,
   partOfSpeech,
   existingData,
+  snapshotKey,
   onAutocomplete,
   disabled = false,
 }: AIAutocompleteButtonProps) {
   const [errorDetails, setErrorDetails] = useState<ErrorInfo | null>(null);
-  const [notesContent, setNotesContent] = useState<string | null>(null);
-  const [notesTimestamp, setNotesTimestamp] = useState<string | null>(null);
 
-  const { autocomplete, isLoading, cost } = useFirebaseAutocomplete({
-    onSuccess: (data, costInfo, fieldStatus, notes) => {
-      onAutocomplete(data, fieldStatus, wordId);
-      setErrorDetails(null);
-      setNotesContent(notes || null);
-      setNotesTimestamp(notes ? new Date().toISOString() : null);
-      const costMessage = costInfo
-        ? `Cost: $${costInfo.totalCost.toFixed(4)} (${costInfo.tokens.totalTokens.toLocaleString()} tokens)`
-        : '';
-      toast.success('AI Autocomplete Successful', {
-        description: `Form fields have been populated. Review and apply changes. ${costMessage}`,
-      });
-    },
+  const { requestAutocomplete, invalidate, isLoading, cost } = useFirebaseAutocomplete({
     onError: (error, errorInfo) => {
       setErrorDetails(errorInfo || null);
       toast.error('AI Autocomplete Failed', { description: error });
     },
   });
 
+  const invalidateEditingSnapshot = useEffectEvent(() => invalidate());
+  const fingerprint = snapshotKey ?? JSON.stringify(existingData);
+  useEffect(() => {
+    invalidateEditingSnapshot();
+  }, [fingerprint, wordId]);
+
   const handleAutocomplete = async () => {
     if (!word || !partOfSpeech) {
       toast.error('Missing Information', { description: 'Word and part of speech are required for AI autocomplete.' });
       return;
     }
-
     setErrorDetails(null);
-    setNotesContent(null);
-    setNotesTimestamp(null);
-    await autocomplete({
+    const result = await requestAutocomplete({
       word,
       part_of_speech: partOfSpeech,
       existingData,
       overwriteExisting: false,
+    });
+    if (!result?.data) return;
+    const review = result.data.ai_review;
+    const accepted = onAutocomplete(
+      {
+        ...result.data,
+        ai_review: {
+          uncertainties: result.uncertainties ?? review?.uncertainties ?? [],
+          guidance: review?.guidance ?? [],
+        },
+      },
+      result.fieldStatus,
+      wordId
+    );
+    if (accepted === false) return;
+    const costMessage = result.cost
+      ? `Cost: $${result.cost.totalCost.toFixed(4)} (${result.cost.tokens.totalTokens.toLocaleString()} tokens)`
+      : '';
+    toast.success('AI Autocomplete Successful', {
+      description: `Empty fields have been filled. Review the suggestions and save your changes. ${costMessage}`,
     });
   };
 
@@ -178,28 +189,6 @@ ${errorDetails.details.stack ? `\nStack Trace:\n${errorDetails.details.stack}` :
                     <RotateCcw className="h-3 w-3" />
                     Retry
                   </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
-        {notesContent && !isLoading && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <Info className="h-4 w-4 text-blue-600" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-96 max-h-80 overflow-y-auto bg-white">
-              <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <h4 className="font-medium text-sm text-blue-600">AI Notes</h4>
-                  <span className="text-xs text-gray-500">
-                    {notesTimestamp ? new Date(notesTimestamp).toLocaleTimeString() : ''}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-900 whitespace-pre-wrap">{notesContent}</p>
                 </div>
               </div>
             </PopoverContent>

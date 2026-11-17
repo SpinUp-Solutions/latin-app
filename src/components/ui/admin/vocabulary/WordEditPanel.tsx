@@ -1,4 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useEffectEvent, useState } from 'react';
+import { toast } from 'sonner';
+import type { AICompletableField } from '@/shared/openai/types';
+import type { VocabularyAIReview, VocabularyAIUncertainty } from '@/shared/types/vocabulary/ai-review';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
@@ -19,6 +22,8 @@ import {
   VocabularyFormValues,
 } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
+import { VocabularyAIReviewPanel } from './VocabularyAIReviewPanel';
+import { VocabularyAIGlobalGuidance } from './VocabularyAIGlobalGuidance';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
 import {
   toFormDefaultValues,
@@ -110,21 +115,14 @@ const tableFromWord = (word: VocabularyWordWithId | null): TableData => {
   return table ? cloneTableData((word as unknown as TableData)[table.field]) : {};
 };
 
-const findNullPaths = (obj: unknown, path = ''): string[] => {
-  if (obj === null || obj === undefined) {
-    return [path];
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.length === 0 || obj.every(item => item === null || item === undefined) ? [path] : [];
-  }
-
-  if (typeof obj === 'object') {
-    return Object.entries(obj as TableData).flatMap(([key, value]) =>
-      findNullPaths(value, path ? `${path}.${key}` : key)
+const findNullPaths = (value: unknown, path = ''): string[] => {
+  if (value === null || value === undefined) return [path];
+  if (Array.isArray(value)) return value.length === 0 || value.every(item => item == null) ? [path] : [];
+  if (typeof value === 'object') {
+    return Object.entries(value as TableData).flatMap(([key, child]) =>
+      findNullPaths(child, path ? `${path}.${key}` : key)
     );
   }
-
   return [];
 };
 
@@ -160,7 +158,7 @@ const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown =
   return existing === '' ? aiGenerated : existing;
 };
 
-export const WordEditPanel: React.FC<WordEditPanelProps> = ({
+const WordEditor: React.FC<WordEditPanelProps> = ({
   word,
   onSave,
   updating,
@@ -176,6 +174,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
   });
 
   const [table, setTable] = useState<TableData>(() => tableFromWord(word));
+  const [savedTable, setSavedTable] = useState(() => JSON.stringify(tableFromWord(word)));
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editingCellValue, setEditingCellValue] = useState('');
   const [tableExpanded, setTableExpanded] = useState(true);
@@ -184,18 +183,6 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
   const [prevPronounSchema, setPrevPronounSchema] = useState<ReturnType<typeof getPronounTableSchema> | null>(null);
 
   const editableTable = getEditableTable(word);
-
-  useEffect(() => {
-    form.reset(word ? toFormDefaultValues(word) : EMPTY_FORM_VALUES, { keepDefaultValues: false });
-    setTable(tableFromWord(word));
-    if (word) setTableExpanded(true);
-    setEditingCell(null);
-    setEditingCellValue('');
-    setTableErrors([]);
-    setAiFieldStatus(new Map());
-    setPrevPronounSchema(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [word?.id]);
 
   const pronounType = form.watch('pronoun_type') as PronounType | null;
   const pronounPerson = form.watch('person') as PronounPerson | null;
@@ -251,31 +238,72 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
 
     const fieldStatus = new Map<string, 'filled' | 'missing'>(Object.entries(apiFieldStatus || {}));
 
+    const review = form.getValues('ai_review') ?? { uncertainties: [], guidance: [] };
+    const mergedIssues = [...review.uncertainties];
+    for (const issue of aiData.ai_review?.uncertainties ?? []) {
+      if (!mergedIssues.some(existing => existing.field === issue.field && existing.explanation === issue.explanation))
+        mergedIssues.push(issue);
+    }
+    if (mergedIssues.length > 20) {
+      toast.error(
+        'The result exceeds 20 open AI issues. Resolve some saved issues before requesting another review. No suggestions were applied.'
+      );
+      return false;
+    }
+    const current = form.getValues() as unknown as TableData;
     Object.entries(aiData).forEach(([key, value]) => {
-      if (key === 'part_of_speech') return;
-      if (value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0)) {
-        form.setValue(key as keyof VocabularyFormValues, value as never, { shouldValidate: false, shouldDirty: true });
+      if (key === 'part_of_speech' || key === 'ai_review' || key === editableTable?.field || !(key in current)) return;
+      const merged = deepMergeNullValues(current[key], value);
+      if (JSON.stringify(merged) !== JSON.stringify(current[key])) {
+        form.setValue(key as keyof VocabularyFormValues, merged as never, { shouldValidate: false, shouldDirty: true });
       }
     });
+    if (aiData.ai_review) {
+      // AI output cannot erase open issues or author remembered instructions.
+      form.setValue('ai_review', { ...review, uncertainties: mergedIssues }, { shouldDirty: true });
+    }
 
     const aiTable = editableTable && (aiData as TableData)[editableTable.field];
     if (editableTable && aiTable) {
-      const nullPathsBefore = findNullPaths(table);
-      const mergedTable = deepMergeNullValues(table, aiTable);
-      const nullPathsAfter = findNullPaths(mergedTable);
-      setTable(cloneTableData(mergedTable));
-
-      const nullPathsBeforeSet = new Set(nullPathsBefore);
-      const nullPathsAfterSet = new Set(nullPathsAfter);
-      for (const path of nullPathsBefore) {
-        if (!nullPathsAfterSet.has(path)) fieldStatus.set(`${editableTable.field}.${path}`, 'filled');
+      const missingBefore = findNullPaths(table);
+      const missingAfter = new Set(findNullPaths(deepMergeNullValues(table, aiTable)));
+      for (const path of missingBefore) {
+        fieldStatus.set(`${editableTable.field}.${path}`, missingAfter.has(path) ? 'missing' : 'filled');
       }
-      for (const path of nullPathsAfter) {
-        if (nullPathsBeforeSet.has(path)) fieldStatus.set(`${editableTable.field}.${path}`, 'missing');
-      }
+      setTable(previous => {
+        const mergedTable = deepMergeNullValues(previous, aiTable);
+        return cloneTableData(mergedTable);
+      });
     }
 
     setAiFieldStatus(fieldStatus);
+  };
+
+  const handleReviewChange = (review: VocabularyAIReview) => {
+    form.setValue('ai_review', review, { shouldDirty: true, shouldValidate: false });
+  };
+
+  const handleApplyAnswer = (field: AICompletableField, value: unknown, issue: VocabularyAIUncertainty) => {
+    if (editableTable?.field === field) {
+      const schema =
+        word?.part_of_speech === 'pronoun'
+          ? getPronounTableSchema(
+              form.getValues('pronoun_type') as PronounType | null,
+              form.getValues('person') as PronounPerson | null
+            )
+          : editableTable.schema;
+      setTable(value === null ? buildEmptyFromSchema(schema) : cloneTableData(value));
+    } else {
+      form.setValue(field as keyof VocabularyFormValues, value as never, { shouldDirty: true, shouldValidate: false });
+    }
+    const review = form.getValues('ai_review') ?? { uncertainties: [], guidance: [] };
+    handleReviewChange({
+      ...review,
+      uncertainties: review.uncertainties.filter(
+        item => item.field !== issue.field || item.explanation !== issue.explanation
+      ),
+    });
+    toast.success(`Answer applied to the draft. Save the word with ${saveLabel}.`);
   };
 
   const handleSubmit = form.handleSubmit(
@@ -310,6 +338,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
       if (success) {
         form.reset(toFormDefaultValues(updatedWord));
         setTable(tableFromWord(updatedWord));
+        setSavedTable(JSON.stringify(tableFromWord(updatedWord)));
         setEditingCell(null);
         setEditingCellValue('');
         setAiFieldStatus(new Map());
@@ -318,7 +347,15 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
     () => setTableErrors([])
   );
 
-  const watchedWord = form.watch('word');
+  const watchedValues = form.watch();
+  const watchedWord = watchedValues.word;
+  const review = watchedValues.ai_review ?? { uncertainties: [], guidance: [] };
+  const aiSnapshot = {
+    ...word,
+    ...watchedValues,
+    ...(editableTable ? { [editableTable.field]: table } : {}),
+  } as Partial<VocabularyWord>;
+  const snapshotKey = JSON.stringify([aiSnapshot, editingCell, editingCellValue]);
 
   const renderPosForm = () => {
     switch (word?.part_of_speech) {
@@ -339,12 +376,12 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
 
   const isSubmitting = form.formState.isSubmitting;
 
-  const savedTable = useMemo(() => JSON.stringify(tableFromWord(word)), [word]);
   const dirty = form.formState.isDirty || JSON.stringify(table) !== savedTable;
+  const reportDirty = useEffectEvent((value: boolean) => onDirtyChange?.(value));
   useEffect(() => {
-    onDirtyChange?.(dirty);
-    return () => onDirtyChange?.(false);
-  }, [dirty, onDirtyChange]);
+    reportDirty(dirty);
+  }, [dirty]);
+  useEffect(() => () => reportDirty(false), []);
 
   if (!word) {
     return <EmptyState />;
@@ -366,12 +403,14 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
                 {actions}
                 {allowAIAutocomplete && (
                   <AIAutocompleteButton
+                    key={word.id}
                     wordId={word.id}
                     word={watchedWord || word.word}
                     partOfSpeech={word.part_of_speech}
-                    existingData={form.getValues() as Partial<VocabularyWord>}
+                    existingData={aiSnapshot}
+                    snapshotKey={snapshotKey}
                     onAutocomplete={handleAIAutocomplete}
-                    disabled={updating || isSubmitting}
+                    disabled={updating || isSubmitting || !!editingCell}
                   />
                 )}
                 <Button type="submit" disabled={updating || isSubmitting}>
@@ -403,6 +442,21 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
               without it they are positioned against the page and make the whole document scrollable. */}
           <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
             <div className="space-y-6">
+              {allowAIAutocomplete && (
+                <>
+                  <VocabularyAIReviewPanel
+                    key={word.id}
+                    review={review}
+                    snapshot={aiSnapshot}
+                    snapshotKey={snapshotKey}
+                    onReviewChange={handleReviewChange}
+                    onApply={handleApplyAnswer}
+                    disabled={updating || isSubmitting || !!editingCell}
+                    saveLabel={saveLabel}
+                  />
+                  <VocabularyAIGlobalGuidance disabled={updating || isSubmitting} />
+                </>
+              )}
               <BaseWordForm />
               {renderPosForm()}
 
@@ -441,3 +495,6 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
     </FormProvider>
   );
 };
+
+/** A word switch discards local requests, proposals, and draft state together. */
+export const WordEditPanel = (props: WordEditPanelProps) => <WordEditor key={props.word?.id ?? 'empty'} {...props} />;

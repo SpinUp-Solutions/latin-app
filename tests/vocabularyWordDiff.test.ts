@@ -6,6 +6,16 @@ import {
 } from '@/src/utils/vocabulary/word-diff';
 
 describe('vocabulary word diff', () => {
+  it('detects review-only changes independently of Latin fields', () => {
+    const current = { word: 'et' };
+    const proposed = {
+      ...current,
+      ai_review: { uncertainties: [], guidance: [{ id: 'sense', instruction: 'Use and.' }] },
+    };
+    expect(changedWordFields(current, proposed)).toEqual(['ai_review']);
+    expect(summarizeWordChanges(current, proposed)).toEqual({ fields: ['ai_review'], tableCells: 0 });
+  });
+
   it('treats the values the editor shows as "—" as the same', () => {
     expect(sameWordValue(null, '')).toBe(true);
     expect(sameWordValue(undefined, [])).toBe(true);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VocabularyAIReviewSchema } from '@/shared/types/vocabulary/ai-review';
 import { WordTypeSchema } from '@/shared/types/vocabulary/schemas/enums';
 
 const emptyToNull = z.preprocess(
@@ -7,6 +8,7 @@ const emptyToNull = z.preprocess(
 );
 
 export const BaseWordFormSchema = z.object({
+  ai_review: VocabularyAIReviewSchema.optional(),
   word: z.string().min(1),
   translation: z.string().min(1),
   definitions: z.array(z.string()),

@@ -173,7 +173,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     const body = await request.json();
     const { wordId, updates } = body;
 
-    if (!wordId || !updates) {
+    if (!wordId || !updates || typeof updates !== 'object' || Array.isArray(updates)) {
       return NextResponse.json(
         {
           success: false,
@@ -210,12 +210,27 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
         return { status: 'invalid' as const, issues: validationResult.error.issues };
       }
 
+      // Write only requested schema fields, using their parsed values. This keeps
+      // generation response envelopes out of words without removing legacy data.
+      const validatedData = validationResult.data as Record<string, unknown>;
+      const persistedUpdates = {
+        ...Object.fromEntries(
+          Object.keys(updates)
+            .filter(key => Object.hasOwn(validatedData, key) && validatedData[key] !== undefined)
+            .map(key => [key, validatedData[key]])
+        ),
+        ...(typeof updateData.sort_key === 'string' ? { sort_key: updateData.sort_key } : {}),
+        updatedAt: updateData.updatedAt,
+      };
       const applyContentRevision = await prepareVocabularyContentRevisionBump(transaction, adminDb);
-      transaction.update(existingRef, updateData as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>);
+      transaction.update(existingRef, persistedUpdates as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>);
       applyContentRevision();
       return {
         status: 'updated' as const,
-        data: { id: existingSnapshot.id, ...serializeVocabularyWord({ ...existingSnapshot.data(), ...updateData }) },
+        data: {
+          id: existingSnapshot.id,
+          ...serializeVocabularyWord({ ...existingSnapshot.data(), ...persistedUpdates }),
+        },
       };
     });
 

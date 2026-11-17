@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import { VocabularyAIReviewSchema } from '../ai-review';
 import { PartOfSpeechSchema, WordTypeSchema } from './enums';
 
 export const FirestoreTimestampSchema = z.string();
 
 export const BaseWordSchema = z.object({
+  ai_review: VocabularyAIReviewSchema.optional(),
   word: z.string().min(1),
   part_of_speech: PartOfSpeechSchema,
   translation: z.string().min(1),

@@ -1,3 +1,5 @@
+import type { AICompletableField, VocabularyAIFollowUp, VocabularyAIUncertainty } from '../types/vocabulary/ai-review';
+export type { AICompletableField } from '../types/vocabulary/ai-review';
 import type { VocabularyWord } from '../types/vocabulary/schemas';
 import type { PartOfSpeech } from '../types/vocabulary/schemas/enums';
 
@@ -7,26 +9,8 @@ export interface AIAutocompleteRequest {
   existingData?: Partial<VocabularyWord>;
   fieldsToComplete?: AICompletableField[];
   overwriteExisting?: boolean;
+  followUp?: VocabularyAIFollowUp;
 }
-
-export type AICompletableField =
-  | 'translation'
-  | 'definitions'
-  | 'etymology'
-  | 'pronunciation'
-  | 'gender'
-  | 'declension'
-  | 'declension_table'
-  | 'conjugation'
-  | 'conjugation_table'
-  | 'principal_parts'
-  | 'is_deponent'
-  | 'degrees_table'
-  | 'alternate_form'
-  | 'pronoun_type'
-  | 'dictionary_forms'
-  | 'nominative_singular'
-  | 'genitive_singular';
 
 export interface TokenUsage {
   promptTokens: number;
@@ -70,6 +54,7 @@ export interface ErrorDetails {
 
 export interface AIAutocompleteResponse {
   success: boolean;
+  errorCode?: string;
   data?: Partial<VocabularyWord>;
   error?: string;
   errorDetails?: ErrorDetails;
@@ -77,7 +62,8 @@ export interface AIAutocompleteResponse {
   model?: string;
   cost?: CostBreakdown;
   fieldStatus?: Record<string, 'filled' | 'missing'>;
-  notes?: string;
+  uncertainties?: VocabularyAIUncertainty[];
+  reviewAnswer?: string | null;
 }
 
 export type TranslationDirection = 'latin-to-english' | 'english-to-latin';

@@ -9,7 +9,12 @@ import { ZodError, type z } from 'zod';
 import { autocompleteVocabularyWord } from '../../shared/openai/autocomplete';
 import { resolveRootWord, ResolveRootWordRequest } from '../../shared/openai/root-resolver';
 import { gradeTranslation } from '../../shared/openai/translation-grading';
-import { AIAutocompleteRequest, TranslationGradingRequest } from '../../shared/openai/types';
+import { AIAutocompleteRequestSchema } from '../../shared/openai/autocomplete-request';
+import {
+  readVocabularyAIGuidance,
+  VocabularyAIGuidanceError,
+} from '../../src/lib/vocabulary-ai-guidance/persistence.server';
+import { TranslationGradingRequest } from '../../shared/openai/types';
 import {
   evaluationFunctionDeleteRequestSchema,
   evaluationFunctionRunRequestSchema,
@@ -61,23 +66,22 @@ export const autocompleteWord = onCall(
     secrets: [openaiApiKey],
   },
   async request => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    await requireAdmin(request.auth);
+    const parsed = AIAutocompleteRequestSchema.safeParse(request.data);
+    if (!parsed.success) throw new HttpsError('invalid-argument', 'Invalid vocabulary autocomplete request');
+    try {
+      const guidance = await readVocabularyAIGuidance(functionsDb);
+      const result = await autocompleteVocabularyWord(parsed.data, guidance.rules);
+      if (result.cost) console.log(`[autocompleteWord] ${result.model} cost $${result.cost.totalCost.toFixed(4)}`);
+      return result;
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      if (error instanceof VocabularyAIGuidanceError) {
+        throw new HttpsError('failed-precondition', 'Saved AI guidance is invalid. Ask an administrator to review it.');
+      }
+      console.error('[autocompleteWord] callable failed', error);
+      throw new HttpsError('internal', 'Vocabulary autocomplete could not be completed.');
     }
-
-    const data = request.data as AIAutocompleteRequest;
-
-    if (!data.word || typeof data.word !== 'string') {
-      throw new HttpsError('invalid-argument', 'Word is required');
-    }
-
-    if (!data.part_of_speech || typeof data.part_of_speech !== 'string') {
-      throw new HttpsError('invalid-argument', 'Part of speech is required');
-    }
-
-    const result = await autocompleteVocabularyWord(data);
-    if (result.cost) console.log(`[autocompleteWord] ${result.model} cost $${result.cost.totalCost.toFixed(4)}`);
-    return result;
   }
 );
 

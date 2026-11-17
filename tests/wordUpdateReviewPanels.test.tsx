@@ -1,3 +1,9 @@
+jest.mock('@/src/components/ui/admin/vocabulary/VocabularyAIReviewPanel', () => ({
+  VocabularyAIReviewPanel: () => null,
+}));
+jest.mock('@/src/components/ui/admin/vocabulary/VocabularyAIGlobalGuidance', () => ({
+  VocabularyAIGlobalGuidance: () => null,
+}));
 import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { WordDiffPanel } from '@/src/components/ui/admin/vocabulary/WordDiffPanel';

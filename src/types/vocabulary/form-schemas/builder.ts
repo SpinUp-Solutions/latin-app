@@ -2,19 +2,20 @@ import type { VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
 import { BaseWordFormSchema, BaseWordFormValues } from './base';
 import { NounFormSchema, NounFormValues } from './noun';
 import { PronounFormSchema, PronounFormValues } from './pronoun';
-import { AdjectiveFormSchema, AdjectiveFormValues } from './adjective';
+import { AdjectiveFormSchema } from './adjective';
 import { VerbFormSchema, VerbFormValues } from './verb';
 import { PrepositionFormSchema, PrepositionFormValues } from './preposition';
 import { VerbConjugationSchema } from '@/shared/types/vocabulary/schemas/enums';
 import { z } from 'zod';
+import { AdjectiveSchema } from '@/shared/types/vocabulary/schemas/adjective';
 
 const nounBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('noun') }).merge(NounFormSchema);
 const pronounBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('pronoun') }).merge(
   PronounFormSchema
 );
-const adjectiveBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('adjective') }).merge(
-  AdjectiveFormSchema
-);
+const adjectiveBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('adjective') })
+  .merge(AdjectiveFormSchema)
+  .extend({ dictionary_forms: AdjectiveSchema.shape.dictionary_forms });
 const verbBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('verb') }).merge(VerbFormSchema);
 const adverbBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('adverb') });
 const prepositionBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('preposition') }).merge(
@@ -53,6 +54,14 @@ export type VocabularyFormValues = z.infer<typeof VocabularyFormSchema>;
 
 export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormValues => {
   const base: BaseWordFormValues = {
+    ...(word.ai_review
+      ? {
+          ai_review: {
+            uncertainties: word.ai_review.uncertainties.map(item => ({ ...item })),
+            guidance: word.ai_review.guidance.map(item => ({ ...item })),
+          },
+        }
+      : {}),
     word: word.word,
     translation: word.translation,
     definitions: [...word.definitions],
@@ -89,6 +98,7 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
     return {
       ...base,
       part_of_speech: 'adjective',
+      dictionary_forms: word.dictionary_forms,
       declension: word.declension ?? null,
     };
   }
@@ -127,6 +137,14 @@ export const applyFormValuesToWord = (
 ): VocabularyWordWithId => {
   const baseApplied = {
     ...word,
+    ...(values.ai_review
+      ? {
+          ai_review: {
+            uncertainties: values.ai_review.uncertainties.map(item => ({ ...item })),
+            guidance: values.ai_review.guidance.map(item => ({ ...item })),
+          },
+        }
+      : {}),
     word: values.word,
     translation: values.translation,
     definitions: values.definitions,
@@ -142,7 +160,7 @@ export const applyFormValuesToWord = (
     return {
       ...baseApplied,
       gender: nounValues.gender ?? null,
-      declension: nounValues.declension ?? word.declension,
+      declension: nounValues.declension,
       declension_table: word.declension_table,
       nominative_singular: nounValues.nominative_singular ?? null,
       genitive_singular: nounValues.genitive_singular ?? null,
@@ -153,18 +171,18 @@ export const applyFormValuesToWord = (
     const pronounValues = values as BaseWordFormValues & PronounFormValues;
     return {
       ...baseApplied,
-      pronoun_type: pronounValues.pronoun_type ?? word.pronoun_type,
-      person: pronounValues.person ?? word.person,
+      pronoun_type: pronounValues.pronoun_type,
+      person: pronounValues.person,
       declension_table: word.declension_table,
     } as VocabularyWordWithId;
   }
 
   if (word.part_of_speech === 'adjective') {
-    const adjectiveValues = values as BaseWordFormValues & AdjectiveFormValues;
+    const adjectiveValues = values as Extract<VocabularyFormValues, { part_of_speech: 'adjective' }>;
     return {
       ...baseApplied,
-      declension: adjectiveValues.declension ?? word.declension,
-      dictionary_forms: word.dictionary_forms,
+      declension: adjectiveValues.declension,
+      dictionary_forms: adjectiveValues.dictionary_forms,
       degrees_table: word.degrees_table,
     } as VocabularyWordWithId;
   }
@@ -173,9 +191,9 @@ export const applyFormValuesToWord = (
     const verbValues = values as BaseWordFormValues & VerbFormValues;
     return {
       ...baseApplied,
-      conjugation: verbValues.conjugation ?? word.conjugation,
-      is_deponent: verbValues.is_deponent ?? word.is_deponent,
-      principal_parts: verbValues.principal_parts ?? word.principal_parts,
+      conjugation: verbValues.conjugation,
+      is_deponent: verbValues.is_deponent,
+      principal_parts: verbValues.principal_parts,
       conjugation_table: word.conjugation_table,
     } as VocabularyWordWithId;
   }

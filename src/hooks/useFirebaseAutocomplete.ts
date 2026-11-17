@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { AIAutocompleteResponse, CostBreakdown, ErrorDetails } from '@/shared/openai/types';
+import { AIAutocompleteRequest, AIAutocompleteResponse, CostBreakdown, ErrorDetails } from '@/shared/openai/types';
 import { VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
@@ -28,13 +28,21 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
   const [isLoading, setIsLoading] = useState(false);
   const [cost, setCost] = useState<CostBreakdown | null>(null);
 
-  const autocomplete = async (request: {
-    word: string;
-    part_of_speech: PartOfSpeech;
-    existingData?: Partial<VocabularyWord>;
-    fieldsToComplete?: string[];
-    overwriteExisting?: boolean;
-  }) => {
+  const generation = useRef(0);
+  useEffect(
+    () => () => {
+      generation.current += 1;
+    },
+    []
+  );
+
+  const invalidate = () => {
+    generation.current += 1;
+    setIsLoading(false);
+  };
+
+  const requestAutocomplete = async (request: AIAutocompleteRequest): Promise<AIAutocompleteResponse | null> => {
+    const requestGeneration = ++generation.current;
     setIsLoading(true);
     const requestData = { word: request.word, part_of_speech: request.part_of_speech };
 
@@ -45,6 +53,8 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
         { timeout: 540000 }
       );
       const { data: result } = await autocompleteWordFunc(request);
+
+      if (generation.current !== requestGeneration) return null;
 
       if (!result.success) {
         const errorMessage = result.error || 'Failed to autocomplete word';
@@ -58,11 +68,9 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
       }
 
       setCost(result.cost || null);
-      if (result.data) {
-        options?.onSuccess?.(result.data, result.cost, result.fieldStatus, result.notes);
-      }
-      return result.data || null;
+      return result;
     } catch (err: unknown) {
+      if (generation.current !== requestGeneration) return null;
       const error = err as { message?: string; details?: ErrorDetails; code?: string };
       const errorMessage = error?.message || 'Unknown error occurred';
       options?.onError?.(errorMessage, {
@@ -73,9 +81,16 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
       });
       return null;
     } finally {
-      setIsLoading(false);
+      if (generation.current === requestGeneration) setIsLoading(false);
     }
   };
 
-  return { autocomplete, isLoading, cost };
+  // Preserve the draft-editor API; review controls need the full response envelope.
+  const autocomplete = async (request: AIAutocompleteRequest) => {
+    const result = await requestAutocomplete(request);
+    if (result?.data) options?.onSuccess?.(result.data, result.cost, result.fieldStatus);
+    return result?.data || null;
+  };
+
+  return { autocomplete, requestAutocomplete, invalidate, isLoading, cost };
 }
