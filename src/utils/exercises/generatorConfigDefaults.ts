@@ -23,7 +23,19 @@ export const DEFAULT_GENERATOR_CONFIG: EnsuredGeneratorConfig = {
   filters: { partOfSpeech: 'all' },
 };
 
-export const ensureGeneratorConfig = (config?: Partial<GeneratorConfigBase>): EnsuredGeneratorConfig => {
+/**
+ * A pool exercise uses every eligible pool word until the admin enters a number. Custom filters never inherit
+ * that unbounded count, because with broad filters it would draw from the whole vocabulary collection.
+ */
+export const getWordSourceUpdate = (
+  wordSource: GeneratorConfigBase['wordSource'],
+  count: GeneratorConfigBase['count']
+): Pick<GeneratorConfigBase, 'wordSource' | 'count'> =>
+  wordSource === 'pool'
+    ? { wordSource, count: 'all' }
+    : { wordSource, count: count === 'all' ? DEFAULT_GENERATOR_CONFIG.count : count };
+
+export const ensureGeneratorConfig =(config?: Partial<GeneratorConfigBase>): EnsuredGeneratorConfig => {
   const normalized = {
     ...DEFAULT_GENERATOR_CONFIG,
     ...config,

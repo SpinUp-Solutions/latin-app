@@ -7,7 +7,7 @@ interface GeneratedPoolSourceFieldsProps {
   count: number | 'all';
   questionCountId: string;
   onPoolChange: (poolId: string | null) => void;
-  onCountChange: (count: number) => void;
+  onCountChange: (count: number | 'all') => void;
   /** Extra pool settings rendered below the question count. */
   children?: React.ReactNode;
 }
