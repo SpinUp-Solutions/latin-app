@@ -9,7 +9,7 @@ const LearnedFromSchema = z
   })
   .strict();
 
-/** A rule for every word; the AI writes it from an admin's answer, and admins may edit or remove it. */
+/** A rule for every word. An admin writes it, or the AI draws it from an admin's answer (`learnedFrom`). */
 export const VocabularyAIRuleSchema = VocabularyAIGuidanceSchema.extend({
   learnedFrom: LearnedFromSchema.optional(),
 }).strict();
@@ -53,4 +53,15 @@ export interface LearnVocabularyAIRuleResult {
   rule: VocabularyAIRule;
   /** False when an existing rule already said the same thing. */
   added: boolean;
+}
+
+/** Rules that differ only in spacing, case or a closing full stop say the same thing. */
+export function sameAIRule(left: string, right: string): boolean {
+  const normalize = (text: string) =>
+    text
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/[.!]+$/, '')
+      .toLowerCase();
+  return normalize(left) === normalize(right);
 }

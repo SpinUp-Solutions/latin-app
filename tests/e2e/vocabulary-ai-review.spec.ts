@@ -23,6 +23,7 @@ const tableQuestion = {
 };
 const PICKED = etymologyQuestion.options[0];
 const RULE = 'Give locative forms only for nouns with an attested locative.';
+const CUSTOM_RULE = 'Leave the vocative empty when it is the same as the nominative.';
 
 /**
  * The AI is mocked at the browser's callable request, so no model is called;
@@ -191,7 +192,9 @@ test.describe('Vocabulary AI assistant', () => {
     await dialog.screenshot({ path: testInfo.outputPath('5-rules.png') });
   });
 
-  test('an admin asks the AI about a word it had no questions on, and edits the learned rule', async ({ page }) => {
+  test('an admin asks the AI about a word it had no questions on, edits a learned rule and adds one of their own', async ({
+    page,
+  }, testInfo) => {
     await getE2EAdmin()
       .db.collection(VOCABULARY_WORDS_COLLECTION)
       .doc(WORD_ID)
@@ -225,6 +228,11 @@ test.describe('Vocabulary AI assistant', () => {
     await page.getByRole('button', { name: 'AI rules' }).click();
     const dialog = page.getByRole('dialog', { name: 'AI rules for all words' });
     await dialog.getByLabel('Rule 1', { exact: true }).fill('Give locative forms only for towns and small islands.');
+    await dialog.getByLabel('Add your own rule').fill(CUSTOM_RULE);
+    await dialog.getByLabel('Add your own rule').press('Enter');
+    await expect(dialog.getByLabel('Rule 2', { exact: true })).toHaveValue(CUSTOM_RULE);
+    await expect(dialog).toContainText('New. Saved when you click Save rules.');
+    await dialog.screenshot({ path: testInfo.outputPath('6-custom-rule.png') });
     await dialog.getByRole('button', { name: 'Save rules' }).click();
     await expect(dialog).toBeHidden();
     await expect
@@ -235,6 +243,11 @@ test.describe('Vocabulary AI assistant', () => {
           instruction: 'Give locative forms only for towns and small islands.',
           learnedFrom: { word: 'silva', message: 'No locative.' },
         },
+        { id: expect.any(String), instruction: CUSTOM_RULE },
       ]);
+
+    await page.getByRole('button', { name: 'AI rules' }).click();
+    await expect(dialog.getByLabel('Rule 2', { exact: true })).toHaveValue(CUSTOM_RULE);
+    await expect(dialog).toContainText('Added by an admin.');
   });
 });

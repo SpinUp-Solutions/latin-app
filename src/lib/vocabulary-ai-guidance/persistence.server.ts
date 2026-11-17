@@ -7,6 +7,7 @@ import {
 import {
   LearnVocabularyAIRuleSchema,
   SaveVocabularyAIGuidanceSchema,
+  sameAIRule,
   VocabularyAIGuidanceSettingsSchema,
   type LearnVocabularyAIRuleResult,
   type VocabularyAIGuidanceSettings,
@@ -84,17 +85,6 @@ export async function saveVocabularyAIGuidance(
   });
 }
 
-/** Rules that differ only in spacing, case or a closing full stop say the same thing. */
-const sameRule = (left: string, right: string) => {
-  const normalize = (text: string) =>
-    text
-      .trim()
-      .replace(/\s+/g, ' ')
-      .replace(/[.!]+$/, '')
-      .toLowerCase();
-  return normalize(left) === normalize(right);
-};
-
 /**
  * Adds a rule the AI drew from an admin's answer. It needs no revision from the
  * client: it only appends, so it cannot overwrite an edit made meanwhile.
@@ -109,7 +99,7 @@ export async function learnVocabularyAIRule(
   return db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
     const current = decode(snapshot.exists, snapshot.data());
-    const existing = current.rules.find(rule => sameRule(rule.instruction, request.instruction));
+    const existing = current.rules.find(rule => sameAIRule(rule.instruction, request.instruction));
     if (existing) return { settings: current, rule: existing, added: false };
     if (current.rules.length >= AI_REVIEW_ITEM_LIMIT) {
       throw new VocabularyAIGuidanceError(
