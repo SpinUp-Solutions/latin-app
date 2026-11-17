@@ -209,7 +209,7 @@ export type VocabularyAutocompleteProfileId = keyof typeof VOCABULARY_AUTOCOMPLE
 export type VocabularyAutocompleteProfile = (typeof VOCABULARY_AUTOCOMPLETE_PROFILES)[VocabularyAutocompleteProfileId];
 
 /** The profile the admin vocabulary editor's autocomplete uses. */
-export const PRODUCTION_VOCABULARY_AUTOCOMPLETE_PROFILE: VocabularyAutocompleteProfileId = 'baseline';
+export const PRODUCTION_VOCABULARY_AUTOCOMPLETE_PROFILE: VocabularyAutocompleteProfileId = 'candidate';
 
 export const EVALUATION_VOCABULARY_AUTOCOMPLETE_PROFILE_IDS = [
   'baseline',
