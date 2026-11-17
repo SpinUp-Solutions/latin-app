@@ -139,7 +139,12 @@ test.describe('Vocabulary AI assistant', () => {
     await expect(page.getByLabel('Etymology', { exact: true })).toHaveValue(
       'Borrowed from Greek rhódon, probably through an Italic language.'
     );
-    // The rule is saved through the admin route as soon as the answer is accepted.
+    // Accepting changes rosa only; the suggested rule waits for its own click, then goes through the admin route.
+    await expect(assistant).toContainText(`From your message: “Etymology: ${PICKED}”`);
+    expect((await readDoc(VOCABULARY_AI_GUIDANCE_COLLECTION, VOCABULARY_AI_GUIDANCE_DOCUMENT))?.rules ?? []).toEqual(
+      []
+    );
+    await assistant.getByRole('button', { name: 'Save as rule for all words' }).click();
     await expect(assistant).toContainText('Saved. The AI follows it for every word.');
     await expect
       .poll(async () => (await readDoc(VOCABULARY_AI_GUIDANCE_COLLECTION, VOCABULARY_AI_GUIDANCE_DOCUMENT))?.rules)
@@ -167,7 +172,7 @@ test.describe('Vocabulary AI assistant', () => {
         ai_review: {
           uncertainties: [],
           guidance: [
-            { instruction: 'rosa is a loan from Greek rhódon.', field: 'etymology' },
+            { instruction: 'rosa is a loan from Greek rhódon.', field: 'etymology', source: `Etymology: ${PICKED}` },
             {
               instruction: `When asked “${tableQuestion.question}”, an admin confirmed the current value.`,
               field: 'declension_table',
@@ -242,7 +247,7 @@ test.describe('Vocabulary AI assistant', () => {
     await expect(page.getByRole('region', { name: 'AI assistant' })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('0-dismissed.png'), animations: 'disabled' });
     await page.getByRole('button', { name: 'AI Autocomplete' }).click();
-    await expect(assistant).toContainText('All good! I filled Pronunciation in rosa and I’m confident about it.');
+    await expect(assistant).toContainText('All good! No questions from me about rosa. I filled Pronunciation.');
     await expect(composer).toBeVisible();
     await expect(tab).toHaveCount(0);
     await expect(page.getByLabel('Pronunciation', { exact: true })).toHaveValue('ˈro.sa');

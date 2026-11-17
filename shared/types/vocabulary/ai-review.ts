@@ -76,10 +76,19 @@ export const VocabularyAIGuidanceSchema = z
   })
   .strict();
 
+/**
+ * A note on one word. `source` is the admin's message the AI drew it from, kept
+ * so the note can be judged later; it is the message the AI interpreted, not
+ * proof the note is faithful to it. Notes an admin wrote, or older ones, have none.
+ */
+export const VocabularyAINoteSchema = VocabularyAIGuidanceSchema.extend({
+  source: z.string().trim().min(1).max(ADMIN_NOTE_MAX).optional(),
+}).strict();
+
 export const VocabularyAIReviewSchema = z
   .object({
     uncertainties: z.array(VocabularyAIUncertaintySchema).max(AI_REVIEW_ITEM_LIMIT),
-    guidance: z.array(VocabularyAIGuidanceSchema).max(AI_REVIEW_ITEM_LIMIT),
+    guidance: z.array(VocabularyAINoteSchema).max(AI_REVIEW_ITEM_LIMIT),
   })
   .strict();
 
@@ -126,6 +135,7 @@ export const VocabularyAIReplySchema = z
 
 export type VocabularyAIUncertainty = z.infer<typeof VocabularyAIUncertaintySchema>;
 export type VocabularyAIGuidance = z.infer<typeof VocabularyAIGuidanceSchema>;
+export type VocabularyAINote = z.infer<typeof VocabularyAINoteSchema>;
 export type VocabularyAIReview = z.infer<typeof VocabularyAIReviewSchema>;
 export type VocabularyAIChatTurn = z.infer<typeof VocabularyAIChatTurnSchema>;
 export type VocabularyAIConversation = z.infer<typeof VocabularyAIConversationSchema>;

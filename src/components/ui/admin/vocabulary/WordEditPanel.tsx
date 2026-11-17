@@ -6,7 +6,7 @@ import {
   AICompletableFieldSchema,
   EMPTY_AI_REVIEW,
   type AICompletableField,
-  type VocabularyAIGuidance,
+  type VocabularyAINote,
   type VocabularyAIMemory,
   type VocabularyAIReview,
   type VocabularyAIUncertainty,
@@ -331,8 +331,8 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       shouldValidate: false,
     });
 
-  /** Notes for later AI requests, up to the limit a word can hold. */
-  const withNotes = (guidance: VocabularyAIGuidance[], notes: VocabularyAIMemory[]) => {
+  /** Notes for later AI requests, up to the limit a word can hold, with the admin's message they came from. */
+  const withNotes = (guidance: VocabularyAINote[], notes: VocabularyAIMemory[], source?: string) => {
     const room = Math.max(0, AI_REVIEW_ITEM_LIMIT - guidance.length);
     if (notes.length > room) {
       toast.warning(
@@ -344,9 +344,12 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     }
     return [
       ...guidance,
-      ...notes
-        .slice(0, room)
-        .map(({ field, note }) => ({ id: crypto.randomUUID(), instruction: note, ...(field ? { field } : {}) })),
+      ...notes.slice(0, room).map(({ field, note }) => ({
+        id: crypto.randomUUID(),
+        instruction: note,
+        ...(field ? { field } : {}),
+        ...(source?.trim() ? { source: source.trim() } : {}),
+      })),
     ];
   };
 
@@ -359,7 +362,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       : editableTable!.schema;
 
   /** Puts the values the admin accepted in the draft, closes the questions they settle and keeps the notes. */
-  const handleAcceptReply = ({ changes, closed, notes }: AcceptedAIReply) => {
+  const handleAcceptReply = ({ changes, closed, notes, source }: AcceptedAIReply) => {
     const highlighted = new Map(aiFieldStatus);
     for (const [field, value] of Object.entries(changes)) {
       if (editableTable?.field === field) {
@@ -378,7 +381,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     if (closed.length > 0 || notes.length > 0) {
       updateReview(review => ({
         uncertainties: review.uncertainties.filter(item => !closed.includes(item.field)),
-        guidance: withNotes(review.guidance, notes),
+        guidance: withNotes(review.guidance, notes, source),
       }));
     }
     const fields = Object.keys(changes).map(aiFieldLabel);

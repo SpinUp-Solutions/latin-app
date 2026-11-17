@@ -30,9 +30,9 @@ export interface Proposal {
   prompt: string;
 }
 
+/** A rule for all words the AI suggested: saved only when the admin asks, apart from accepting the reply. */
 export type RuleState =
   | { status: 'offered' }
-  | { status: 'declined' }
   | { status: 'saving' }
   | { status: 'saved'; id: string }
   | { status: 'known' }
@@ -200,7 +200,8 @@ function useAIAssistantState(): AIAssistantStore {
       rule: reply.rule,
       prompt: text,
     };
-    const actionable = changes.length > 0 || reply.answered.length > 0 || reply.remember.length > 0 || !!reply.rule;
+    // A suggested rule is not something to accept: the admin saves it on its own, or not at all.
+    const actionable = changes.length > 0 || reply.answered.length > 0 || reply.remember.length > 0;
     update(key, current => ({
       ...current,
       pending: null,
@@ -213,7 +214,7 @@ function useAIAssistantState(): AIAssistantStore {
           id: newTurnId(),
           from: 'ai',
           text: reply.message,
-          proposal: actionable ? proposal : null,
+          proposal: actionable || reply.rule ? proposal : null,
           status: actionable ? 'pending' : 'answer',
           rule: { status: 'offered' },
         },

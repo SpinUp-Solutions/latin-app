@@ -136,6 +136,7 @@ it('asks its questions in one place, with what it is unsure of, the current valu
   expect(within(card).getByText(question.explanation)).toBeInTheDocument();
   expect(within(card).getByText('An uncertain derivation')).toBeInTheDocument();
   for (const option of question.options) expect(within(card).getByRole('button', { name: option })).toBeInTheDocument();
+  expect(within(assistant()).getByText('Unanswered questions stay open.')).toBeInTheDocument();
 
   // The field the AI asked about links back to the question; other fields carry no marker.
   expect(screen.queryByRole('button', { name: 'AI question about Translation' })).toBeNull();
@@ -186,13 +187,24 @@ it('turns a picked answer into a reply in words with the change under it, applie
   expect(toast.success).toHaveBeenCalledWith('Updated Etymology. Save the word with Apply to keep it.');
   const memory = screen.getByRole('list', { name: 'What the AI remembers about rosa' });
   expect(within(memory).getByText('rosa is a loan from Greek rhódon.')).toBeInTheDocument();
+  // The note keeps what the admin actually said, so its wording can be judged later.
+  expect(
+    within(memory).getByText('From the message: “Etymology: It is a loan from Greek rhódon.”')
+  ).toBeInTheDocument();
 
   const payload = await saveWord(onSave);
   expect(payload.etymology).toBe('Borrowed from Greek rhódon.');
   expect(payload.translation).toBe('rose');
   expect(payload.ai_review).toEqual({
     uncertainties: [],
-    guidance: [{ id: 'note-1', instruction: 'rosa is a loan from Greek rhódon.', field: 'etymology' }],
+    guidance: [
+      {
+        id: 'note-1',
+        instruction: 'rosa is a loan from Greek rhódon.',
+        field: 'etymology',
+        source: 'Etymology: It is a loan from Greek rhódon.',
+      },
+    ],
   });
   const savedWord = { ...payload, id: noun.id } as VocabularyWordWithId;
   const roundtrip = applyFormValuesToWord(savedWord, VocabularyFormSchema.parse(toFormDefaultValues(savedWord)));
@@ -263,14 +275,24 @@ it('replaces a whole table, listing only the changed cells, and keeps other unsa
 
 it('skips a change to a field the admin edited after asking, applies the rest, and keeps that question open', async () => {
   const finish = pending();
-  render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
+  const rules = learnedRules();
+  const onSave = jest.fn(async () => true);
+  render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} learnedRules={rules} />);
   say('Fix the etymology and the pronunciation.');
   fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'another field' } });
   fireEvent.change(screen.getByLabelText('Etymology'), { target: { value: 'typed by the admin' } });
   await finish(
     reply(
       { etymology: 'From Greek rhódon.', pronunciation: 'RO-sa' },
-      { message: 'Both fixed.', answered: ['etymology'] }
+      {
+        message: 'Both fixed.',
+        answered: ['etymology'],
+        remember: [
+          { field: 'etymology', note: 'rosa comes from Greek.' },
+          { field: 'pronunciation', note: 'The o is short.' },
+        ],
+        rule: 'Mark Greek loans in the etymology.',
+      }
     )
   );
 
@@ -283,6 +305,29 @@ it('skips a change to a field the admin edited after asking, applies the rest, a
   expect(screen.getByLabelText('Pronunciation')).toHaveValue('RO-sa');
   expect(screen.getByLabelText('Translation')).toHaveValue('another field');
   expect(questionCard('Etymology')).not.toBeNull();
+
+  // The note about the skipped field describes a value the admin replaced, so it is not kept.
+  expect((await saveWord(onSave)).ai_review.guidance).toEqual([
+    expect.objectContaining({ field: 'pronunciation', instruction: 'The o is short.' }),
+  ]);
+  // The suggested rule is judged on its own, with the admin's message beside it.
+  expect(screen.getByText('From your message: “Fix the etymology and the pronunciation.”')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Save as rule for all words' }));
+  await waitFor(() => expect(rules.learn).toHaveBeenCalledTimes(1));
+});
+
+it('applies a change to a field the admin changed and then changed back while the AI answered', async () => {
+  const finish = pending();
+  render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
+  say('Fix the etymology.');
+  fireEvent.change(screen.getByLabelText('Etymology'), { target: { value: 'a passing edit' } });
+  fireEvent.change(screen.getByLabelText('Etymology'), { target: { value: 'An uncertain derivation' } });
+  await finish(reply({ etymology: 'From Greek rhódon.' }, { message: 'Fixed.' }));
+
+  // What matters is that the draft still holds the value the AI saw.
+  expect(screen.queryByText(/You edited Etymology after asking/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Accept change' }));
+  expect(screen.getByLabelText('Etymology')).toHaveValue('From Greek rhódon.');
 });
 
 it('follows up in the same conversation, and a newer answer replaces one not yet accepted', async () => {
@@ -335,7 +380,7 @@ it('comes back up when autocomplete finishes, says all good when the AI is sure,
 
   fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
   const report = await screen.findByText(
-    'All good! I filled Pronunciation in rosa and I’m confident about it. If anything is wrong, tell me below and I’ll fix it.'
+    'All good! No questions from me about rosa. I filled Pronunciation. If anything looks off, tell me below.'
   );
   expect(assistant()).toContainElement(report);
   expect(tab()).toBeNull();
@@ -346,7 +391,7 @@ it('comes back up when autocomplete finishes, says all good when the AI is sure,
   say('The o is long.');
   expect(await screen.findByText('Fixed: the o is long.')).toBeInTheDocument();
   expect(mockCallable.mock.calls[1][0].conversation.history).toEqual([
-    { from: 'ai', text: expect.stringContaining('All good! I filled Pronunciation') },
+    { from: 'ai', text: expect.stringContaining('All good! No questions from me about rosa. I filled Pronunciation.') },
   ]);
   fireEvent.click(screen.getByRole('button', { name: 'Accept change' }));
   expect(screen.getByLabelText('Pronunciation')).toHaveValue('ˈroː.sa');
@@ -360,7 +405,7 @@ it('says all good when there was nothing left to fill', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
   expect(
     await within(assistant()).findByText(
-      'All good! There was nothing left for me to fill in rosa. If anything is wrong, tell me below and I’ll fix it.'
+      'All good! No questions from me about rosa, and there was nothing left to fill. If anything looks off, tell me below.'
     )
   ).toBeInTheDocument();
 });
@@ -483,68 +528,101 @@ it('puts the message back in the box when the AI cannot answer', async () => {
   expect(within(assistant()).queryByText('Fix the etymology.', { selector: 'p' })).toBeNull();
 });
 
-it('saves the rule the AI drew from an answer when the admin accepts it, and undoes it on request', async () => {
-  const rules = learnedRules();
-  mockCallable.mockResolvedValue(
-    reply(
-      {},
-      {
-        message: 'Understood: no locative for rosa.',
-        remember: [{ field: 'declension_table', note: 'rosa has no locative.' }],
-        rule: 'Give locative forms only for place names.',
-      }
-    )
+const RULE_MESSAGE = 'No locative: only place names have one.';
+const replyWithRule = (extra: Partial<VocabularyAIReply> = {}) =>
+  reply(
+    {},
+    {
+      message: 'Understood: no locative for rosa.',
+      remember: [{ field: 'declension_table', note: 'rosa has no locative.' }],
+      rule: 'Give locative forms only for place names.',
+      ...extra,
+    }
   );
+
+it('suggests a rule for all words but saves it only on its own click, quoting the admin, and undoes it', async () => {
+  const rules = learnedRules();
+  mockCallable.mockResolvedValue(replyWithRule());
   render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} learnedRules={rules} />);
-  say('No locative: only place names have one.');
+  say(RULE_MESSAGE);
   await screen.findByText('Understood: no locative for rosa.');
-  expect(screen.getByText('New rule for all words:')).toBeInTheDocument();
+  expect(screen.getByText('Suggested rule for all words:')).toBeInTheDocument();
+  expect(screen.getByText(`From your message: “${RULE_MESSAGE}”`)).toBeInTheDocument();
+
+  // Accepting the reply keeps the note on rosa and saves nothing for every word.
+  fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+  expect(within(assistant()).getByText('Accepted')).toBeInTheDocument();
   expect(rules.learn).not.toHaveBeenCalled();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-  await waitFor(() =>
-    expect(rules.learn).toHaveBeenCalledWith({
-      instruction: 'Give locative forms only for place names.',
-      learnedFrom: { word: 'rosa', message: 'No locative: only place names have one.' },
-    })
-  );
+  // A quick double click still saves it once.
+  const save = screen.getByRole('button', { name: 'Save as rule for all words' });
+  fireEvent.click(save);
+  fireEvent.click(save);
   expect(await screen.findByText(/Saved\. The AI follows it for every word\./)).toBeInTheDocument();
+  expect(rules.learn).toHaveBeenCalledTimes(1);
+  expect(rules.learn).toHaveBeenCalledWith({
+    instruction: 'Give locative forms only for place names.',
+    learnedFrom: { word: 'rosa', message: RULE_MESSAGE },
+  });
   expect(toast.success).toHaveBeenCalledWith(
-    'The AI learned a rule for all words',
+    'Saved as a rule for all words',
     expect.objectContaining({
       description: 'Give locative forms only for place names.',
       action: expect.objectContaining({ label: 'Undo' }),
     })
   );
+  expect(screen.queryByRole('button', { name: 'Save as rule for all words' })).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
   await waitFor(() => expect(rules.forget).toHaveBeenCalledWith('rule-1'));
-  await waitFor(() => expect(screen.queryByText(/Give locative forms only for place names/)).toBeNull());
+  expect(await screen.findByText('Rule removed.')).toBeInTheDocument();
   expect(toast.success).toHaveBeenCalledWith('Rule removed');
+  // Removed by mistake? It can be saved again.
+  expect(screen.getByRole('button', { name: 'Save as rule for all words' })).toBeInTheDocument();
 });
 
-it('does not save a rule the admin declines, and explains a rule that could not be saved', async () => {
+it('keeps a suggested rule saveable after the reply is discarded, and offers a retry when saving fails', async () => {
   const rules = learnedRules();
-  mockCallable
-    .mockResolvedValueOnce(reply({}, { message: 'Noted.', rule: 'A rule the admin does not want.' }))
-    .mockResolvedValueOnce(reply({}, { message: 'Noted again.', rule: 'A rule past the limit.' }));
+  mockCallable.mockResolvedValue(replyWithRule({ remember: [], rule: 'A rule past the limit.' }));
   render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} learnedRules={rules} />);
-
-  say('Only for this word.');
-  await screen.findByText('Noted.');
-  fireEvent.click(screen.getByRole('button', { name: 'Don’t save' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-  expect(rules.learn).not.toHaveBeenCalled();
-  expect(screen.queryByText(/A rule the admin does not want/)).toBeNull();
+  say('Something general.');
+  await screen.findByText('Understood: no locative for rosa.');
+  // A reply that only suggests a rule has nothing to accept.
+  expect(screen.queryByRole('button', { name: /^Accept/ })).toBeNull();
 
   rules.learn.mockRejectedValueOnce(new Error('There are already 20 rules for all words.'));
-  say('Something general.');
-  await screen.findByText('Noted again.');
-  fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save as rule for all words' }));
   expect(await screen.findByText('Not saved: There are already 20 rules for all words.')).toBeInTheDocument();
   expect(toast.warning).toHaveBeenCalledWith('The rule for all words was not saved', {
     description: 'There are already 20 rules for all words.',
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(await screen.findByText(/Saved\. The AI follows it for every word\./)).toBeInTheDocument();
+  expect(rules.learn).toHaveBeenCalledTimes(2);
+});
+
+it('says when the AI already follows a suggested rule, and that rules cannot be saved where the page has none', async () => {
+  const rules = learnedRules();
+  rules.learn.mockImplementationOnce(async rule => ({
+    settings: { revision: 1, rules: [], updatedAt: null, updatedBy: null },
+    rule: { id: 'existing', instruction: rule.instruction },
+    added: false,
+  }));
+  mockCallable.mockResolvedValue(replyWithRule());
+  const view = render(
+    <WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} learnedRules={rules} />
+  );
+  say(RULE_MESSAGE);
+  await screen.findByText('Understood: no locative for rosa.');
+  fireEvent.click(screen.getByRole('button', { name: 'Save as rule for all words' }));
+  expect(await screen.findByText('The AI already follows this rule.')).toBeInTheDocument();
+  view.unmount();
+
+  render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
+  say(RULE_MESSAGE);
+  await screen.findByText('Understood: no locative for rosa.');
+  expect(screen.getByText('Rules can’t be saved from this page.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Save as rule for all words' })).toBeNull();
 });
 
 it('does not show an answer for the previous word after switching words', async () => {

@@ -53,6 +53,8 @@ export interface AcceptedAIReply {
   closed: AICompletableField[];
   /** Facts to keep on the word for later AI requests. */
   notes: VocabularyAIMemory[];
+  /** The admin's message the notes were drawn from, kept with them. */
+  source?: string;
 }
 
 /** What the word editor shares with the AI assistant and the field markers it renders. */
@@ -139,10 +141,11 @@ export interface AIAutocompleteRun {
 /** The assistant's report on an autocomplete: all good, or what it still asks. */
 export function autocompleteMessage(run: AIAutocompleteRun, word: string): string {
   const filled = run.filled.length > 4 ? plural(run.filled.length, 'field') : listLabels(run.filled.map(aiFieldLabel));
+  // No questions means the model raised none, not that its answers were checked, so it says only that.
   if (run.questions === 0) {
     return filled
-      ? `All good! I filled ${filled} in ${word} and I’m confident about it. If anything is wrong, tell me below and I’ll fix it.`
-      : `All good! There was nothing left for me to fill in ${word}. If anything is wrong, tell me below and I’ll fix it.`;
+      ? `All good! No questions from me about ${word}. I filled ${filled}. If anything looks off, tell me below.`
+      : `All good! No questions from me about ${word}, and there was nothing left to fill. If anything looks off, tell me below.`;
   }
   const asks = `I have ${plural(run.questions, 'question')} for you above.`;
   return filled ? `Done. I filled ${filled} in ${word}. ${asks}` : `Done. ${asks}`;
@@ -299,14 +302,14 @@ function ProposalView({
   busy,
   onAccept,
   onDiscard,
-  onDeclineRule,
+  onSaveRule,
   onUndoRule,
 }: {
   turn: AITurn;
   busy: boolean;
   onAccept: () => void;
   onDiscard: () => void;
-  onDeclineRule: () => void;
+  onSaveRule: () => void;
   onUndoRule: (id: string) => void;
 }) {
   const context = useContext(AIReviewContext)!;
@@ -362,20 +365,24 @@ function ProposalView({
           </div>
         </div>
       )}
-      {proposal.rule && turn.rule.status !== 'declined' && turn.rule.status !== 'undone' && (
+      {proposal.rule && (
         <div className="flex gap-2 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700">
           <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
-          <div className="min-w-0 flex-1 space-y-1">
+          <div className="min-w-0 flex-1 space-y-1.5">
             <p>
               <span className="font-medium">
-                {savedRuleId || turn.rule.status === 'known' ? 'Rule for all words:' : 'New rule for all words:'}
+                {savedRuleId || turn.rule.status === 'known' ? 'Rule for all words:' : 'Suggested rule for all words:'}
               </span>{' '}
               “{proposal.rule}”
             </p>
-            {pending && !context.learnedRules && <p className="text-gray-500">Rules can’t be saved from this page.</p>}
+            <p className="text-gray-500" title={proposal.prompt}>
+              From your message: “{truncate(proposal.prompt, 160)}”
+            </p>
+            {!context.learnedRules && <p className="text-gray-500">Rules can’t be saved from this page.</p>}
             {turn.rule.status === 'saving' && <p className="text-gray-500">Saving the rule…</p>}
             {turn.rule.status === 'known' && <p className="text-gray-500">The AI already follows this rule.</p>}
             {turn.rule.status === 'failed' && <p className="text-amber-800">Not saved: {turn.rule.message}</p>}
+            {turn.rule.status === 'undone' && <p className="text-gray-500">Rule removed.</p>}
             {savedRuleId && (
               <p className="text-green-700">
                 Saved. The AI follows it for every word.{' '}
@@ -387,15 +394,13 @@ function ProposalView({
                 </button>
               </p>
             )}
+            {context.learnedRules &&
+              (turn.rule.status === 'offered' || turn.rule.status === 'failed' || turn.rule.status === 'undone') && (
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={onSaveRule}>
+                  {turn.rule.status === 'failed' ? 'Try again' : 'Save as rule for all words'}
+                </Button>
+              )}
           </div>
-          {pending && context.learnedRules && (
-            <button
-              type="button"
-              onClick={onDeclineRule}
-              className="h-6 shrink-0 rounded px-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
-              Don’t save
-            </button>
-          )}
         </div>
       )}
       {pending && (
@@ -431,6 +436,11 @@ function MemoryList({ word }: { word: string }) {
             <span className="min-w-0 flex-1 whitespace-pre-wrap">
               {note.field && <span className="font-medium">{aiFieldLabel(note.field)}: </span>}
               {note.instruction}
+              {note.source && (
+                <span className="block text-[11px] text-gray-500" title={note.source}>
+                  From the message: “{truncate(note.source, 160)}”
+                </span>
+              )}
             </span>
             <button
               type="button"
@@ -469,6 +479,8 @@ export function AIAssistantDock() {
   const context = useContext(AIReviewContext);
   const composer = useRef<HTMLTextAreaElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
+  /** Rules being saved, so a quick second click cannot send one twice. */
+  const savingRules = useRef(new Set<number>());
   const chatKey = context?.chatKey ?? null;
   const chat = context ? context.assistant.chat(context.chatKey) : null;
   const turnCount = chat?.turns.length ?? 0;
@@ -531,6 +543,8 @@ export function AIAssistantDock() {
   const accept = async (turn: AITurn) => {
     const proposal = turn.proposal;
     if (!proposal || turn.status !== 'pending' || busy) return;
+    // Stale means the draft no longer holds the value the AI saw. A field changed and then changed
+    // back is not stale: the AI's change still applies to exactly what it was asked about.
     const stale = new Set(
       proposal.changes
         .filter(change => snapshot(draftValue(draft, change.field)) !== change.basis)
@@ -543,23 +557,32 @@ export function AIAssistantDock() {
       closed: [...new Set([...proposal.answered, ...fresh.map(change => change.field)])].filter(
         field => asked.has(field) && !stale.has(field)
       ),
+      // A note about a field skipped as stale goes too: it describes a value the admin has since replaced.
       notes: proposal.remember.filter(note => !note.field || !stale.has(note.field)),
+      source: proposal.prompt,
     });
-    const learnRule = proposal.rule && turn.rule.status === 'offered' && context.learnedRules;
-    update(turn.id, () => ({
-      status: 'accepted',
-      skipped: [...stale],
-      ...(learnRule ? { rule: { status: 'saving' } } : {}),
-    }));
-    if (!learnRule || !proposal.rule) return;
+    update(turn.id, () => ({ status: 'accepted', skipped: [...stale] }));
+  };
+
+  /**
+   * Saves the suggested rule for all words, only on the admin's own click and whatever became of the
+   * reply. A second click while it saves does nothing, and the route never stores the same rule twice.
+   */
+  const saveRule = async (turn: AITurn) => {
+    const instruction = turn.proposal?.rule;
+    const learned = context.learnedRules;
+    if (!instruction || !learned || savingRules.current.has(turn.id)) return;
+    if (turn.rule.status === 'saving' || turn.rule.status === 'saved' || turn.rule.status === 'known') return;
+    savingRules.current.add(turn.id);
+    update(turn.id, () => ({ rule: { status: 'saving' } }));
     try {
-      const { rule, added } = await learnRule.learn({
-        instruction: proposal.rule,
-        learnedFrom: { word, message: proposal.prompt },
+      const { rule, added } = await learned.learn({
+        instruction,
+        learnedFrom: { word, message: turn.proposal!.prompt },
       });
       update(turn.id, () => ({ rule: added ? { status: 'saved', id: rule.id } : { status: 'known' } }));
       if (added) {
-        toast.success('The AI learned a rule for all words', {
+        toast.success('Saved as a rule for all words', {
           description: rule.instruction,
           action: { label: 'Undo', onClick: () => void undoRule(turn.id, rule.id) },
         });
@@ -568,6 +591,8 @@ export function AIAssistantDock() {
       const description = error instanceof Error ? error.message : 'Try again later.';
       update(turn.id, () => ({ rule: { status: 'failed', message: description } }));
       toast.warning('The rule for all words was not saved', { description });
+    } finally {
+      savingRules.current.delete(turn.id);
     }
   };
 
@@ -693,6 +718,7 @@ export function AIAssistantDock() {
                         onDone={() => done(question)}
                       />
                     ))}
+                    <p className="px-1 text-[11px] text-gray-500">Unanswered questions stay open.</p>
                   </li>
                 )}
                 {turns.map(turn => {
@@ -722,7 +748,7 @@ export function AIAssistantDock() {
                           busy={busy}
                           onAccept={() => void accept(turn)}
                           onDiscard={() => update(turn.id, () => ({ status: 'discarded' }))}
-                          onDeclineRule={() => update(turn.id, () => ({ rule: { status: 'declined' } }))}
+                          onSaveRule={() => void saveRule(turn)}
                           onUndoRule={id => void undoRule(turn.id, id)}
                         />
                       )}

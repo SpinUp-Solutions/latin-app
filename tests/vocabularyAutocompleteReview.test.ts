@@ -109,12 +109,17 @@ it('sends rules for all words and notes on this word as trusted guidance, apart 
       ...request,
       existingData: {
         translation: 'ruler',
-        ai_review: { uncertainties: [legacyQuestion], guidance: [...guidance, fieldNote] },
+        ai_review: {
+          uncertainties: [legacyQuestion],
+          guidance: [...guidance, { ...fieldNote, source: 'Etymology: the message the note was drawn from.' }],
+        },
       },
     },
     [{ id: 'global-rule', instruction: 'Use Classical Latin.' }]
   );
   const body = create.mock.calls[0][0];
+  // The admin's message a note came from is for people reviewing the note; the model gets the note.
+  expect(JSON.stringify(body)).not.toContain('the message the note was drawn from');
   expect(body.instructions).toContain('Rules for all words: ["Use Classical Latin."]');
   expect(body.instructions).toContain(
     `Notes on this word: [{"note":"${guidance[0].instruction}"},{"field":"etymology","note":"${fieldNote.instruction}"}]`
