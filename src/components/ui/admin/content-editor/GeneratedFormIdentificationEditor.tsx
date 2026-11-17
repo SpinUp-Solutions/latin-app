@@ -25,7 +25,11 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import { GeneratedVocabularyFilters } from './GeneratedVocabularyFilters';
 import { GeneratedPoolSourceFields } from './GeneratedPoolSourceFields';
 import { GeneratedUniqueWordCountField } from './GeneratedUniqueWordCountField';
-import { DEFAULT_POS_FILTERS, getAppliedUniqueWordCount } from '@/src/utils/exercises/generatorConfigDefaults';
+import {
+  DEFAULT_POS_FILTERS,
+  getAppliedUniqueWordCount,
+  getWordSourceUpdate,
+} from '@/src/utils/exercises/generatorConfigDefaults';
 import { GeneratedExerciseSummary } from './GeneratedExerciseSummary';
 import { GeneratedPreviewPanel } from './GeneratedPreviewPanel';
 
@@ -202,7 +206,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
 
       <WordSourceSection
         value={editor.config.wordSource}
-        onChange={value => editor.updateConfig({ wordSource: value })}
+        onChange={value => editor.updateConfig(getWordSourceUpdate(value, editor.config.count))}
         coreType={editor.config.coreType}
         onCoreTypeChange={coreType => editor.updateConfig({ coreType })}
         filtersContent={filtersContent}

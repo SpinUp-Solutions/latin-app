@@ -58,6 +58,24 @@ describe('pool generation question-count contract', () => {
     expect(result.globalScanLimitReached).toBe(false);
   });
 
+  it('fills a question count above 200 from a large pool', async () => {
+    const { words, pool, exercise } = generatedPoolFixture(450, 500);
+    exercise.data.generatorConfig.count = 300;
+    const db = createFakeGeneratedWordDb({ words, pools: [pool] });
+    const result = await collectWordsForGeneratedExerciseRequest(db as never, exercise);
+    expect(result.words).toHaveLength(300);
+    expect(new Set(result.words.map(word => word.id)).size).toBe(300);
+  });
+
+  it('uses every eligible word of a large pool when the count is all', async () => {
+    const { words, pool, exercise } = generatedPoolFixture(450, 500);
+    exercise.data.generatorConfig.count = 'all';
+    const db = createFakeGeneratedWordDb({ words, pools: [pool] });
+    const result = await collectWordsForGeneratedExerciseRequest(db as never, exercise);
+    expect(result.words).toHaveLength(450);
+    expect(result.words.every(word => word.id.startsWith('valid-'))).toBe(true);
+  });
+
   it('replaces missing, deletion-pending, and duplicate pool references with distinct usable words', async () => {
     const { words, pool, exercise } = generatedPoolFixture(32, 32);
     words.shift();

@@ -73,7 +73,23 @@ jest.mock('@/src/hooks/useFormIdentificationEditor', () => ({
 }));
 
 jest.mock('@/src/components/ui/admin/content-editor/WordSourceSection', () => ({
-  WordSourceSection: ({ poolContent }: { poolContent: React.ReactNode }) => <div>{poolContent}</div>,
+  WordSourceSection: ({
+    poolContent,
+    onChange,
+  }: {
+    poolContent: React.ReactNode;
+    onChange: (value: 'filters' | 'pool') => void;
+  }) => (
+    <div>
+      <button type="button" onClick={() => onChange('filters')}>
+        Custom Filters
+      </button>
+      <button type="button" onClick={() => onChange('pool')}>
+        Vocabulary Pool
+      </button>
+      {poolContent}
+    </div>
+  ),
 }));
 
 jest.mock('@/src/components/ui/admin/vocabulary-pools/VocabularyPoolSelector', () => ({
@@ -151,7 +167,7 @@ describe.each([
     expect(screen.getByRole('checkbox', { name: 'Repeat incorrect words until correct' })).not.toBeChecked();
   });
 
-  it('offers only one question count for the selected pool', () => {
+  it('lets an admin choose a numeric count or every eligible pool word', () => {
     render(<Editor />);
 
     const countInput = screen.getByLabelText('Number of Questions');
@@ -161,9 +177,42 @@ describe.each([
     fireEvent.blur(countInput);
     expect(updateConfig).toHaveBeenCalledWith({ count: 10 });
 
-    expect(screen.queryByRole('checkbox', { name: 'Use all eligible pool words' })).not.toBeInTheDocument();
+    const allWords = screen.getByRole('checkbox', { name: 'Use every eligible word in the pool' });
+    expect(allWords).not.toBeChecked();
+    fireEvent.click(allWords);
+    expect(updateConfig).toHaveBeenLastCalledWith({ count: 'all' });
+
     expect(screen.queryByLabelText('Pool Word Limit')).not.toBeInTheDocument();
     expect(screen.getAllByRole('spinbutton')).toHaveLength(numberFieldCount);
+  });
+
+  it('switches back to a numeric count when every-word mode is turned off', () => {
+    mockCount = 'all';
+    render(<Editor />);
+    const allWords = screen.getByRole('checkbox', { name: 'Use every eligible word in the pool' });
+    expect(allWords).toBeChecked();
+    fireEvent.click(allWords);
+    expect(updateConfig).toHaveBeenLastCalledWith({ count: 5 });
+  });
+
+  it('uses the whole pool when an admin switches the word source to a pool', () => {
+    render(<Editor />);
+    fireEvent.click(screen.getByRole('button', { name: 'Vocabulary Pool' }));
+    expect(updateConfig).toHaveBeenLastCalledWith({ wordSource: 'pool', count: 'all' });
+  });
+
+  it('does not carry an every-word count over to custom filters', () => {
+    mockCount = 'all';
+    render(<Editor />);
+    fireEvent.click(screen.getByRole('button', { name: 'Custom Filters' }));
+    expect(updateConfig).toHaveBeenLastCalledWith({ wordSource: 'filters', count: 5 });
+  });
+
+  it('keeps a numeric count when an admin switches to custom filters', () => {
+    mockCount = 40;
+    render(<Editor />);
+    fireEvent.click(screen.getByRole('button', { name: 'Custom Filters' }));
+    expect(updateConfig).toHaveBeenLastCalledWith({ wordSource: 'filters', count: 40 });
   });
 });
 
@@ -226,7 +275,7 @@ describe('generated morphology unique word limit', () => {
 });
 
 describe('saved pool count compatibility', () => {
-  it('preserves legacy all-word exercises until an admin enters a number', () => {
+  it('keeps an every-word exercise until an admin enters a number', () => {
     mockEditingContent = formExercise;
     mockCount = 'all';
     mockFormUpdateConfig.mockClear();
@@ -253,12 +302,15 @@ describe('saved pool count compatibility', () => {
     expect(countInput).toHaveValue(30);
   });
 
-  it('clamps the question count to the supported maximum', () => {
+  it('accepts question counts above the old 200 ceiling and clamps at the supported maximum', () => {
     mockEditingContent = formExercise;
     mockCount = 5;
     mockFormUpdateConfig.mockClear();
     render(<GeneratedFormIdentificationEditor />);
     const countInput = screen.getByLabelText('Number of Questions');
+    fireEvent.change(countInput, { target: { value: '500' } });
+    fireEvent.blur(countInput);
+    expect(mockFormUpdateConfig).toHaveBeenLastCalledWith({ count: 500 });
     fireEvent.change(countInput, { target: { value: String(MAX_GENERATED_WORD_COUNT + 1) } });
     fireEvent.blur(countInput);
     expect(mockFormUpdateConfig).toHaveBeenCalledWith({ count: MAX_GENERATED_WORD_COUNT });
