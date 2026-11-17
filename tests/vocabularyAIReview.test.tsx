@@ -156,7 +156,7 @@ it('turns a picked answer into a reply in words with the change under it, applie
       }
     )
   );
-  render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+  const view = render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
 
   fireEvent.click(within(questionCard('Etymology')!).getByRole('button', { name: question.options[0] }));
   expect(composer()).toHaveValue('Etymology: It is a loan from Greek rhódon.');
@@ -183,7 +183,14 @@ it('turns a picked answer into a reply in words with the change under it, applie
   expect(screen.getByLabelText('Etymology')).toHaveValue('Borrowed from Greek rhódon.');
   expect(questionCard('Etymology')).toBeNull();
   expect(screen.queryByRole('button', { name: 'AI question about Etymology' })).toBeNull();
-  expect(within(assistant()).getByText('Accepted')).toBeInTheDocument();
+  expect(within(assistant()).getByText('Accepted into the draft: Etymology. Remembering 1 note.')).toBeInTheDocument();
+  expect(within(assistant()).getByText('Not saved yet: save the word with Apply.')).toBeInTheDocument();
+  // Decided, the reply shrinks to that line; the change is still there under Details.
+  expect(screen.queryByRole('list', { name: 'Proposed changes' })).toBeNull();
+  fireEvent.click(within(assistant()).getByRole('button', { name: 'Details' }));
+  expect(
+    within(screen.getByRole('list', { name: 'Proposed changes' })).getByText('Borrowed from Greek rhódon.')
+  ).toBeInTheDocument();
   expect(toast.success).toHaveBeenCalledWith('Updated Etymology. Save the word with Apply to keep it.');
   const memory = screen.getByRole('list', { name: 'What the AI remembers about rosa' });
   expect(within(memory).getByText('rosa is a loan from Greek rhódon.')).toBeInTheDocument();
@@ -209,6 +216,10 @@ it('turns a picked answer into a reply in words with the change under it, applie
   const savedWord = { ...payload, id: noun.id } as VocabularyWordWithId;
   const roundtrip = applyFormValuesToWord(savedWord, VocabularyFormSchema.parse(toFormDefaultValues(savedWord)));
   expect(roundtrip.ai_review).toEqual(payload.ai_review);
+
+  // Once the page holds the saved word, the receipt says so.
+  view.rerender(<WordEditPanel word={savedWord} onSave={onSave} updating={false} />);
+  expect(within(assistant()).getByText('Saved on rosa.')).toBeInTheDocument();
 });
 
 it('keeps a value without asking the AI and remembers that an admin confirmed it', async () => {
@@ -300,7 +311,17 @@ it('skips a change to a field the admin edited after asking, applies the rest, a
     screen.getByText('You edited Etymology after asking, so this change will not be applied. Ask again to update it.')
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Accept change' }));
+  expect(
+    screen.getByText(
+      'Accepted into the draft: Pronunciation. Remembering 1 note. Skipped Etymology, which you had edited.'
+    )
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Details' }));
   expect(screen.getByText('Not applied, because you had edited this field.')).toBeInTheDocument();
+  // The receipt names only the note that was kept, and says why the other was not.
+  expect(screen.getByText('Remembered for rosa:').nextSibling).toHaveTextContent('The o is short.');
+  expect(screen.getByText('Remembered for rosa:').nextSibling).not.toHaveTextContent('rosa comes from Greek.');
+  expect(screen.getByText('rosa comes from Greek. (you had edited Etymology)')).toBeInTheDocument();
   expect(screen.getByLabelText('Etymology')).toHaveValue('typed by the admin');
   expect(screen.getByLabelText('Pronunciation')).toHaveValue('RO-sa');
   expect(screen.getByLabelText('Translation')).toHaveValue('another field');
@@ -314,6 +335,15 @@ it('skips a change to a field the admin edited after asking, applies the rest, a
   expect(screen.getByText('From your message: “Fix the etymology and the pronunciation.”')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Save as rule for all words' }));
   await waitFor(() => expect(rules.learn).toHaveBeenCalledTimes(1));
+
+  // A follow-up tells the AI which part of its answer did not apply.
+  mockCallable.mockResolvedValueOnce(reply({}, { message: 'Understood.' }));
+  say('Yes, except the etymology.');
+  await screen.findByText('Understood.');
+  expect(mockCallable.mock.calls.at(-1)![0].conversation.history.at(-1)).toEqual({
+    from: 'ai',
+    text: 'Both fixed. [partly applied: etymology skipped]',
+  });
 });
 
 it('applies a change to a field the admin changed and then changed back while the AI answered', async () => {
@@ -346,11 +376,72 @@ it('follows up in the same conversation, and a newer answer replaces one not yet
     message: 'Not quite: it came through Etruscan.',
     history: [
       { from: 'admin', text: 'It is Greek.' },
-      { from: 'ai', text: 'I rewrote it as Greek.' },
+      { from: 'ai', text: 'I rewrote it as Greek. [not accepted yet]' },
     ],
   });
-  expect(screen.getByText('Replaced by a newer answer')).toBeInTheDocument();
+  expect(screen.getByText('Replaced by a newer answer. Nothing was changed.')).toBeInTheDocument();
   expect(screen.getAllByRole('button', { name: 'Accept change' })).toHaveLength(1);
+});
+
+it('promises nothing after a discard, and tells the AI its answer was discarded', async () => {
+  mockCallable
+    .mockResolvedValueOnce(
+      reply(
+        { etymology: 'From Greek.' },
+        { message: 'I rewrote it as Greek.', remember: [{ field: 'etymology', note: 'rosa is Greek.' }] }
+      )
+    )
+    .mockResolvedValueOnce(reply({}, { message: 'Got it.' }));
+  render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
+  say('It is Greek.');
+  await screen.findByText('I rewrote it as Greek.');
+  fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+
+  expect(screen.getByText('Discarded. Nothing was changed.')).toBeInTheDocument();
+  expect(screen.queryByText("I'll remember for rosa:")).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+  expect(screen.getByText('Suggested notes, not kept:')).toBeInTheDocument();
+  expect(screen.getByLabelText('Etymology')).toHaveValue('An uncertain derivation');
+
+  say('Yes, except it came through Etruscan.');
+  await screen.findByText('Got it.');
+  expect(mockCallable.mock.calls[1][0].conversation.history).toEqual([
+    { from: 'admin', text: 'It is Greek.' },
+    { from: 'ai', text: 'I rewrote it as Greek. [discarded]' },
+  ]);
+});
+
+it('says when an accepted value was changed by hand before saving', async () => {
+  mockCallable.mockResolvedValueOnce(reply({ etymology: 'From Greek.' }, { message: 'I rewrote it as Greek.' }));
+  render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
+  say('It is Greek.');
+  await screen.findByText('I rewrote it as Greek.');
+  fireEvent.click(screen.getByRole('button', { name: 'Accept change' }));
+  fireEvent.change(screen.getByLabelText('Etymology'), { target: { value: 'My own wording.' } });
+  expect(
+    screen.getByText('You have since changed Etymology by hand, so the AI’s version will not be saved.')
+  ).toBeInTheDocument();
+});
+
+it('follows new messages, but leaves the admin where they are after scrolling up to read', async () => {
+  mockCallable.mockResolvedValueOnce(reply({}, { message: 'First answer.' }));
+  render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
+  const sheet = screen.getByRole('list', { name: 'Conversation with the AI' }).parentElement!;
+  Object.defineProperty(sheet, 'scrollHeight', { configurable: true, get: () => 1000 });
+  Object.defineProperty(sheet, 'clientHeight', { configurable: true, get: () => 200 });
+
+  say('First question.');
+  await screen.findByText('First answer.');
+  expect(sheet.scrollTop).toBe(1000);
+
+  const finish = pending();
+  say('Second question.');
+  // The admin scrolls up to reread while the AI answers.
+  sheet.scrollTop = 100;
+  fireEvent.scroll(sheet);
+  await finish(reply({}, { message: 'Second answer.' }));
+  expect(screen.getByText('Second answer.')).toBeInTheDocument();
+  expect(sheet.scrollTop).toBe(100);
 });
 
 it('can be asked anything when it has no questions, and answers without proposing a change', async () => {
@@ -478,7 +569,7 @@ it('stops a reply on request, from its own word or another, and ignores the late
   const late = pending();
   const view = render(<OnPage word={cloneNoun()} />);
   say('First try.');
-  fireEvent.click(within(assistant()).getByRole('button', { name: 'Stop' }));
+  fireEvent.click(within(assistant()).getByRole('button', { name: 'Stop waiting' }));
   expect(composer()).toHaveValue('First try.');
   await late(reply({ etymology: 'late' }, { message: 'Too late.' }));
   expect(screen.queryByText('Too late.')).toBeNull();
@@ -486,7 +577,7 @@ it('stops a reply on request, from its own word or another, and ignores the late
   const later = pending();
   say('Second try.');
   view.rerender(<OnPage word={silva()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Stop the answer about rosa' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Stop waiting for the answer about rosa' }));
   expect(screen.queryByRole('status')).toBeNull();
   await later(reply({ etymology: 'late' }, { message: 'Also too late.' }));
   expect(toast.info).not.toHaveBeenCalled();
@@ -551,8 +642,10 @@ it('suggests a rule for all words but saves it only on its own click, quoting th
 
   // Accepting the reply keeps the note on rosa and saves nothing for every word.
   fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-  expect(within(assistant()).getByText('Accepted')).toBeInTheDocument();
+  expect(within(assistant()).getByText('Accepted. Remembering 1 note.')).toBeInTheDocument();
   expect(rules.learn).not.toHaveBeenCalled();
+  // The reply has shrunk, but the unsaved rule is still shown in full.
+  expect(screen.getByText('Suggested rule for all words:')).toBeInTheDocument();
 
   // A quick double click still saves it once.
   const save = screen.getByRole('button', { name: 'Save as rule for all words' });

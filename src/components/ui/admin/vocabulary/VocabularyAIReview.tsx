@@ -6,6 +6,7 @@ import {
   useEffect,
   useEffectEvent,
   useRef,
+  useState,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -24,6 +25,7 @@ import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import {
   ADMIN_NOTE_MAX,
+  AI_REVIEW_ITEM_LIMIT,
   AICompletableFieldSchema,
   type AICompletableField,
   type VocabularyAIMemory,
@@ -65,7 +67,10 @@ export interface AIReviewContextValue {
   /** The editor's current draft, including unsaved table edits; sent to the AI as context. */
   draft: Partial<VocabularyWord>;
   disabled: boolean;
-  acceptReply: (reply: AcceptedAIReply) => void;
+  /** Applies an accepted answer to the draft and returns the notes that fit on the word. */
+  acceptReply: (reply: AcceptedAIReply) => VocabularyAIMemory[];
+  /** The label of the editor's save button, for saying how to keep the draft. */
+  saveLabel: string;
   /** Closes a question and keeps the field's value, remembering that an admin confirmed it. */
   keep: (field: AICompletableField, note: string) => void;
   removeNote: (id: string) => void;
@@ -297,6 +302,200 @@ function QuestionCard({
   );
 }
 
+/** The suggested rule for all words: saved only on its own click, whatever became of the reply. */
+function RuleSuggestion({
+  turn,
+  onSaveRule,
+  onUndoRule,
+}: {
+  turn: AITurn;
+  onSaveRule: () => void;
+  onUndoRule: (id: string) => void;
+}) {
+  const context = useContext(AIReviewContext)!;
+  const proposal = turn.proposal!;
+  const savedRuleId = turn.rule.status === 'saved' ? turn.rule.id : null;
+  return (
+    <div className="flex gap-2 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700">
+      <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <p>
+          <span className="font-medium">
+            {savedRuleId || turn.rule.status === 'known' ? 'Rule for all words:' : 'Suggested rule for all words:'}
+          </span>{' '}
+          “{proposal.rule}”
+        </p>
+        <p className="text-gray-500" title={proposal.prompt}>
+          From your message: “{truncate(proposal.prompt, 160)}”
+        </p>
+        {!context.learnedRules && <p className="text-gray-500">Rules can’t be saved from this page.</p>}
+        {turn.rule.status === 'saving' && <p className="text-gray-500">Saving the rule…</p>}
+        {turn.rule.status === 'known' && <p className="text-gray-500">The AI already follows this rule.</p>}
+        {turn.rule.status === 'failed' && <p className="text-amber-800">Not saved: {turn.rule.message}</p>}
+        {turn.rule.status === 'undone' && <p className="text-gray-500">Rule removed.</p>}
+        {savedRuleId && (
+          <p className="text-green-700">
+            Saved. The AI follows it for every word.{' '}
+            <button
+              type="button"
+              className="font-medium underline underline-offset-2"
+              onClick={() => onUndoRule(savedRuleId)}>
+              Undo
+            </button>
+          </p>
+        )}
+        {context.learnedRules &&
+          (turn.rule.status === 'offered' || turn.rule.status === 'failed' || turn.rule.status === 'undone') && (
+            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={onSaveRule}>
+              {turn.rule.status === 'failed' ? 'Try again' : 'Save as rule for all words'}
+            </Button>
+          )}
+      </div>
+    </div>
+  );
+}
+
+/** The proposed changes, as old and new values. */
+function ChangeList({ turn }: { turn: AITurn }) {
+  const context = useContext(AIReviewContext)!;
+  const proposal = turn.proposal!;
+  const pending = turn.status === 'pending';
+  const stale = (change: ProposedChange) => snapshot(draftValue(context.draft, change.field)) !== change.basis;
+  if (proposal.changes.length === 0) return null;
+  return (
+    <ul aria-label="Proposed changes" className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+      {proposal.changes.map(change => (
+        <li key={change.field} className="grid gap-1 px-3 py-2 sm:grid-cols-[8rem_1fr] sm:gap-3">
+          <span className="text-xs font-medium text-gray-600">{aiFieldLabel(change.field)}</span>
+          <div className="min-w-0 space-y-1">
+            <ChangeView
+              field={change.field}
+              current={pending ? draftValue(context.draft, change.field) : JSON.parse(change.basis)}
+              proposed={change.value}
+            />
+            {pending && stale(change) && (
+              <p role="status" className="text-xs text-amber-800">
+                You edited {aiFieldLabel(change.field)} after asking, so this change will not be applied. Ask again to
+                update it.
+              </p>
+            )}
+            {turn.skipped?.includes(change.field) && (
+              <p className="text-xs text-amber-800">Not applied, because you had edited this field.</p>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function NoteList({ title, notes }: { title: string; notes: string[] }) {
+  if (notes.length === 0) return null;
+  return (
+    <div className="flex gap-2 text-xs text-gray-700">
+      <BookmarkCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
+      <div>
+        <p className="font-medium">{title}</p>
+        <ul className="list-disc pl-4">
+          {notes.map(note => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What a decided reply actually did, in one line, with its details on request.
+ * It reports only what landed, and whether the saved word holds it yet.
+ */
+function DecisionReceipt({ turn }: { turn: AITurn }) {
+  const context = useContext(AIReviewContext)!;
+  const [showDetails, setShowDetails] = useState(false);
+  const proposal = turn.proposal!;
+  const word = context.draft.word?.trim() || 'this word';
+  const applied = turn.status === 'accepted' ? turn.applied : undefined;
+  const fields = applied ? (Object.keys(applied.values) as AICompletableField[]) : [];
+  const kept = applied?.notes ?? [];
+  const skipped = turn.skipped ?? [];
+
+  let summary = 'Replaced by a newer answer. Nothing was changed.';
+  let status: { text: string; tone: 'saved' | 'warn' | 'draft' } | null = null;
+  if (turn.status === 'discarded') summary = 'Discarded. Nothing was changed.';
+  if (applied) {
+    summary = [
+      fields.length > 0 ? `Accepted into the draft: ${listLabels(fields.map(aiFieldLabel))}.` : 'Accepted.',
+      kept.length > 0 ? `Remembering ${plural(kept.length, 'note')}.` : '',
+      skipped.length > 0 ? `Skipped ${listLabels(skipped.map(aiFieldLabel))}, which you had edited.` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const savedReview = context.saved.ai_review;
+    const landed = fields.length + kept.length + applied.closed.length > 0;
+    // Saved means the saved word holds what was accepted, not merely that a save happened since.
+    const saved =
+      fields.every(field => sameWordValue(draftValue(context.saved, field), applied.values[field])) &&
+      kept.every(note => savedReview?.guidance.some(item => item.instruction === note)) &&
+      applied.closed.every(field => !savedReview?.uncertainties.some(item => item.field === field));
+    const overwritten = fields.filter(field => !sameWordValue(draftValue(context.draft, field), applied.values[field]));
+    if (!landed) status = null;
+    else if (saved) status = { text: `Saved on ${word}.`, tone: 'saved' };
+    else if (overwritten.length > 0)
+      status = {
+        text: `You have since changed ${listLabels(overwritten.map(aiFieldLabel))} by hand, so the AI’s version will not be saved.`,
+        tone: 'warn',
+      };
+    else status = { text: `Not saved yet: save the word with ${context.saveLabel}.`, tone: 'draft' };
+  }
+
+  const dropped = applied ? proposal.remember.filter(note => !kept.includes(note.note)) : [];
+  return (
+    <div className="space-y-1.5 text-xs">
+      <div className="flex items-start gap-2">
+        <p className="flex-1 font-medium text-gray-800">{summary}</p>
+        <button
+          type="button"
+          aria-expanded={showDetails}
+          onClick={() => setShowDetails(!showDetails)}
+          className="shrink-0 rounded px-1.5 text-gray-600 underline-offset-2 hover:underline">
+          {showDetails ? 'Hide details' : 'Details'}
+        </button>
+      </div>
+      {status && (
+        <p
+          className={cn(
+            status.tone === 'saved' && 'text-green-700',
+            status.tone === 'warn' && 'text-amber-800',
+            status.tone === 'draft' && 'text-gray-600'
+          )}>
+          {status.text}
+        </p>
+      )}
+      {showDetails && (
+        <div className="space-y-2 pt-1">
+          <ChangeList turn={turn} />
+          {applied ? (
+            <>
+              <NoteList title={`Remembered for ${word}:`} notes={kept} />
+              <NoteList
+                title="Not kept:"
+                notes={dropped.map(note =>
+                  note.field && skipped.includes(note.field)
+                    ? `${note.note} (you had edited ${aiFieldLabel(note.field)})`
+                    : `${note.note} (this word already holds ${AI_REVIEW_ITEM_LIMIT} notes)`
+                )}
+              />
+            </>
+          ) : (
+            <NoteList title="Suggested notes, not kept:" notes={proposal.remember.map(note => note.note)} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProposalView({
   turn,
   busy,
@@ -314,108 +513,35 @@ function ProposalView({
 }) {
   const context = useContext(AIReviewContext)!;
   const proposal = turn.proposal!;
-  const pending = turn.status === 'pending';
   const word = context.draft.word ?? 'this word';
-  const stale = (change: ProposedChange) => snapshot(draftValue(context.draft, change.field)) !== change.basis;
-  const fresh = proposal.changes.filter(change => !stale(change));
-  const savedRuleId = turn.rule.status === 'saved' ? turn.rule.id : null;
-  const acceptLabel = fresh.length ? `Accept ${fresh.length === 1 ? 'change' : `${fresh.length} changes`}` : 'Accept';
+  const decidable = proposal.changes.length + proposal.remember.length + proposal.answered.length > 0;
+  const rule = proposal.rule ? <RuleSuggestion turn={turn} onSaveRule={onSaveRule} onUndoRule={onUndoRule} /> : null;
 
+  // Once decided, a reply shrinks to what it did; an unsaved rule stays in full, still saveable.
+  if (turn.status !== 'pending') {
+    return (
+      <div className="space-y-2">
+        {decidable && <DecisionReceipt turn={turn} />}
+        {rule}
+      </div>
+    );
+  }
+
+  const fresh = proposal.changes.filter(change => snapshot(draftValue(context.draft, change.field)) === change.basis);
+  const acceptLabel = fresh.length ? `Accept ${fresh.length === 1 ? 'change' : `${fresh.length} changes`}` : 'Accept';
   return (
     <div className="space-y-2">
-      {proposal.changes.length > 0 && (
-        <ul
-          aria-label="Proposed changes"
-          className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
-          {proposal.changes.map(change => (
-            <li key={change.field} className="grid gap-1 px-3 py-2 sm:grid-cols-[8rem_1fr] sm:gap-3">
-              <span className="text-xs font-medium text-gray-600">{aiFieldLabel(change.field)}</span>
-              <div className="min-w-0 space-y-1">
-                <ChangeView
-                  field={change.field}
-                  current={pending ? draftValue(context.draft, change.field) : JSON.parse(change.basis)}
-                  proposed={change.value}
-                />
-                {pending && stale(change) && (
-                  <p role="status" className="text-xs text-amber-800">
-                    You edited {aiFieldLabel(change.field)} after asking, so this change will not be applied. Ask again
-                    to update it.
-                  </p>
-                )}
-                {turn.skipped?.includes(change.field) && (
-                  <p className="text-xs text-amber-800">Not applied, because you had edited this field.</p>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      {proposal.remember.length > 0 && (
-        <div className="flex gap-2 text-xs text-gray-700">
-          <BookmarkCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
-          <div>
-            <p className="font-medium">
-              {turn.status === 'accepted' ? `Remembered for ${word}:` : `I'll remember for ${word}:`}
-            </p>
-            <ul className="list-disc pl-4">
-              {proposal.remember.map(item => (
-                <li key={item.note}>{item.note}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
-      {proposal.rule && (
-        <div className="flex gap-2 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700">
-          <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <p>
-              <span className="font-medium">
-                {savedRuleId || turn.rule.status === 'known' ? 'Rule for all words:' : 'Suggested rule for all words:'}
-              </span>{' '}
-              “{proposal.rule}”
-            </p>
-            <p className="text-gray-500" title={proposal.prompt}>
-              From your message: “{truncate(proposal.prompt, 160)}”
-            </p>
-            {!context.learnedRules && <p className="text-gray-500">Rules can’t be saved from this page.</p>}
-            {turn.rule.status === 'saving' && <p className="text-gray-500">Saving the rule…</p>}
-            {turn.rule.status === 'known' && <p className="text-gray-500">The AI already follows this rule.</p>}
-            {turn.rule.status === 'failed' && <p className="text-amber-800">Not saved: {turn.rule.message}</p>}
-            {turn.rule.status === 'undone' && <p className="text-gray-500">Rule removed.</p>}
-            {savedRuleId && (
-              <p className="text-green-700">
-                Saved. The AI follows it for every word.{' '}
-                <button
-                  type="button"
-                  className="font-medium underline underline-offset-2"
-                  onClick={() => onUndoRule(savedRuleId)}>
-                  Undo
-                </button>
-              </p>
-            )}
-            {context.learnedRules &&
-              (turn.rule.status === 'offered' || turn.rule.status === 'failed' || turn.rule.status === 'undone') && (
-                <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={onSaveRule}>
-                  {turn.rule.status === 'failed' ? 'Try again' : 'Save as rule for all words'}
-                </Button>
-              )}
-          </div>
-        </div>
-      )}
-      {pending && (
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button type="button" size="sm" onClick={onAccept} disabled={busy}>
-            {acceptLabel}
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={onDiscard} disabled={busy}>
-            Discard
-          </Button>
-        </div>
-      )}
-      {turn.status === 'accepted' && <p className="text-xs font-medium text-green-700">Accepted</p>}
-      {turn.status === 'discarded' && <p className="text-xs text-gray-500">Discarded</p>}
-      {turn.status === 'replaced' && <p className="text-xs text-gray-500">Replaced by a newer answer</p>}
+      <ChangeList turn={turn} />
+      <NoteList title={`I'll remember for ${word}:`} notes={proposal.remember.map(note => note.note)} />
+      {rule}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button type="button" size="sm" onClick={onAccept} disabled={busy}>
+          {acceptLabel}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onDiscard} disabled={busy}>
+          Discard
+        </Button>
+      </div>
     </div>
   );
 }
@@ -493,10 +619,11 @@ export function AIAssistantDock() {
     return () => showChat(null);
   }, [chatKey]);
 
-  // Like any chat, it follows the newest message.
+  // Like any chat, it follows the newest message, unless the admin has scrolled up to read.
+  const following = useRef(true);
   useEffect(() => {
     const element = sheet.current;
-    if (element) element.scrollTop = element.scrollHeight;
+    if (element && following.current) element.scrollTop = element.scrollHeight;
   }, [turnCount, waiting]);
 
   if (!context || !chat) return null;
@@ -525,6 +652,8 @@ export function AIAssistantDock() {
     const text = message.trim();
     const { part_of_speech } = draft;
     if (!text || busy || !draft.word || !part_of_speech) return;
+    // Sending is a request to see the answer, wherever the admin had scrolled.
+    following.current = true;
     void assistant.send(key, { word: draft.word, part_of_speech, asked: draft, text });
   };
 
@@ -552,16 +681,23 @@ export function AIAssistantDock() {
     );
     const fresh = proposal.changes.filter(change => !stale.has(change.field));
     const asked = new Set(questions.map(question => question.field));
-    context.acceptReply({
-      changes: Object.fromEntries(fresh.map(change => [change.field, change.value])),
-      closed: [...new Set([...proposal.answered, ...fresh.map(change => change.field)])].filter(
-        field => asked.has(field) && !stale.has(field)
-      ),
+    const values = Object.fromEntries(fresh.map(change => [change.field, change.value]));
+    const closed = [...new Set([...proposal.answered, ...fresh.map(change => change.field)])].filter(
+      field => asked.has(field) && !stale.has(field)
+    );
+    const kept = context.acceptReply({
+      changes: values,
+      closed,
       // A note about a field skipped as stale goes too: it describes a value the admin has since replaced.
       notes: proposal.remember.filter(note => !note.field || !stale.has(note.field)),
       source: proposal.prompt,
     });
-    update(turn.id, () => ({ status: 'accepted', skipped: [...stale] }));
+    // The receipt reports what landed, not what was proposed.
+    update(turn.id, () => ({
+      status: 'accepted',
+      skipped: [...stale],
+      applied: { values, notes: kept.map(note => note.note), closed },
+    }));
   };
 
   /**
@@ -683,9 +819,9 @@ export function AIAssistantDock() {
               <button
                 type="button"
                 className="font-medium underline-offset-2 hover:underline"
-                aria-label={`Stop the answer about ${elsewhere.word}`}
+                aria-label={`Stop waiting for the answer about ${elsewhere.word}`}
                 onClick={() => assistant.stop(elsewhere.key)}>
-                Stop
+                Stop waiting
               </button>
               <button
                 type="button"
@@ -698,7 +834,13 @@ export function AIAssistantDock() {
           )}
 
           {hasSheet && (
-            <div ref={sheet} className="max-h-[min(55vh,30rem)] overflow-y-auto overscroll-contain">
+            <div
+              ref={sheet}
+              onScroll={event => {
+                const element = event.currentTarget;
+                following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
+              }}
+              className="max-h-[min(55vh,30rem)] overflow-y-auto overscroll-contain">
               <ol aria-label="Conversation with the AI" aria-live="polite" className="space-y-3 px-4 py-3">
                 {summary && (
                   <AIBubble>
@@ -764,7 +906,7 @@ export function AIAssistantDock() {
                         type="button"
                         className="rounded px-1.5 text-xs font-medium text-gray-700 underline-offset-2 hover:underline"
                         onClick={() => assistant.stop(key)}>
-                        Stop
+                        Stop waiting
                       </button>
                     </p>
                   </AIBubble>

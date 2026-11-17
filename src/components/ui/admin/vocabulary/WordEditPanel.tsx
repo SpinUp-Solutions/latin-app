@@ -363,6 +363,9 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
 
   /** Puts the values the admin accepted in the draft, closes the questions they settle and keeps the notes. */
   const handleAcceptReply = ({ changes, closed, notes, source }: AcceptedAIReply) => {
+    // The same room `withNotes` leaves, so the assistant can say which notes were kept.
+    const room = AI_REVIEW_ITEM_LIMIT - (form.getValues('ai_review') ?? EMPTY_AI_REVIEW).guidance.length;
+    const kept = notes.slice(0, Math.max(0, room));
     const highlighted = new Map(aiFieldStatus);
     for (const [field, value] of Object.entries(changes)) {
       if (editableTable?.field === field) {
@@ -388,6 +391,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     if (fields.length > 0) toast.success(`Updated ${fields.join(', ')}. Save the word with ${saveLabel} to keep it.`);
     else if (closed.length > 0 || notes.length > 0)
       toast.success(`Answer noted. Save the word with ${saveLabel} to keep it.`);
+    return kept;
   };
 
   const handleKeep = (field: AICompletableField, note: string) =>
@@ -469,6 +473,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         draft: aiSnapshot,
         disabled: updating || isSubmitting || !!editingCell,
         acceptReply: handleAcceptReply,
+        saveLabel,
         keep: handleKeep,
         removeNote: handleRemoveNote,
         learnedRules,

@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { toast } from 'sonner';
 import {
   AI_CONVERSATION_HISTORY_LIMIT,
+  AI_REPLY_MAX,
   AICompletableFieldSchema,
   type AICompletableField,
   type VocabularyAIChatTurn,
@@ -52,6 +53,12 @@ export type Turn =
       rule: RuleState;
       /** Changes left out on accepting, because the admin had edited those fields since asking. */
       skipped?: AICompletableField[];
+      /** What accepting actually put in the draft: the values, the notes that fit and the questions closed. */
+      applied?: {
+        values: Partial<Record<AICompletableField, unknown>>;
+        notes: string[];
+        closed: AICompletableField[];
+      };
     };
 export type AITurn = Extract<Turn, { from: 'ai' }>;
 
@@ -117,6 +124,32 @@ function readOpen(): boolean {
   }
 }
 
+/** What the admin did with an earlier answer, so a follow-up is read against what actually applied. */
+function outcomeTag(turn: AITurn): string | null {
+  if (!turn.proposal) return null;
+  switch (turn.status) {
+    case 'accepted':
+      return turn.skipped?.length ? `[partly applied: ${turn.skipped.join(', ')} skipped]` : '[accepted]';
+    case 'discarded':
+      return '[discarded]';
+    case 'replaced':
+      return '[replaced by a newer answer]';
+    case 'pending':
+      return '[not accepted yet]';
+    default:
+      return null;
+  }
+}
+
+function historyText(turn: Exclude<Turn, { from: 'event' }>): string {
+  if (turn.from === 'admin') return turn.text;
+  const tag = outcomeTag(turn);
+  if (!tag) return turn.text;
+  const room = AI_REPLY_MAX - tag.length - 1;
+  const text = turn.text.length > room ? `${turn.text.slice(0, room - 1)}…` : turn.text;
+  return `${text} ${tag}`;
+}
+
 /** Puts a message the AI did not answer back where the admin typed it. */
 function withdraw(chat: AIChat, pending: PendingReply): AIChat {
   return {
@@ -159,7 +192,7 @@ function useAIAssistantState(): AIAssistantStore {
     const chat = chats[key] ?? EMPTY_CHAT;
     if (chat.pending) return;
     const history: VocabularyAIChatTurn[] = chat.turns
-      .flatMap(turn => (turn.from === 'event' ? [] : [{ from: turn.from, text: turn.text }]))
+      .flatMap(turn => (turn.from === 'event' ? [] : [{ from: turn.from, text: historyText(turn) }]))
       .slice(-AI_CONVERSATION_HISTORY_LIMIT);
     const pending: PendingReply = { request: ++requests.current, turnId: newTurnId(), word, text, keepGoing: false };
     active.current.set(key, pending.request);

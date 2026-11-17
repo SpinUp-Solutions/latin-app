@@ -139,6 +139,8 @@ test.describe('Vocabulary AI assistant', () => {
     await expect(page.getByLabel('Etymology', { exact: true })).toHaveValue(
       'Borrowed from Greek rhódon, probably through an Italic language.'
     );
+    await expect(assistant).toContainText('Accepted into the draft: Etymology. Remembering 1 note.');
+    await expect(assistant).toContainText('Not saved yet: save the word with Apply.');
     // Accepting changes rosa only; the suggested rule waits for its own click, then goes through the admin route.
     await expect(assistant).toContainText(`From your message: “Etymology: ${PICKED}”`);
     expect((await readDoc(VOCABULARY_AI_GUIDANCE_COLLECTION, VOCABULARY_AI_GUIDANCE_DOCUMENT))?.rules ?? []).toEqual(
@@ -164,6 +166,8 @@ test.describe('Vocabulary AI assistant', () => {
     await assistant.screenshot({ path: testInfo.outputPath('4-answered.png') });
     await page.getByRole('button', { name: 'Apply', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled();
+    // Once the page holds the saved word, the receipt says the accepted change is saved.
+    await expect(assistant).toContainText('Saved on rosa.');
 
     await expect
       .poll(async () => readDoc(VOCABULARY_WORDS_COLLECTION, WORD_ID))

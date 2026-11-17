@@ -182,6 +182,7 @@ it('answers a conversation with only the fields it replaces, its reply, and what
   expect(Object.keys(result.data!)).toEqual(['part_of_speech', 'etymology']);
 
   const body = create.mock.calls[0][0];
+  expect(body.instructions).toContain('[partly applied: <fields> skipped]');
   expect(body.instructions).toContain('CONVERSATION WITH THE TEACHER');
   expect(body.instructions).not.toContain('QUESTIONS FOR THE TEACHER');
   expect(body.instructions).toContain('Rules for all words: ["Use Classical Latin."]');
