@@ -1,0 +1,150 @@
+▲ Next.js 16.4.6 (Turbopack)
+✓ Running next.config.js took 161ms
+- Experiments (use with caution):
+  · clientTraceMetadata
+  · optimizePackageImports
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 13.5s
+  Running next.config.js provided runAfterProductionCompile ...
+✓ Completed runAfterProductionCompile in 460ms
+  Running TypeScript ...
+  Finished TypeScript in 8.2s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/44) ...
+  Generating static pages using 11 workers (11/44)
+  Generating static pages using 11 workers (22/44)
+  Generating static pages using 11 workers (33/44)
+✓ Generating static pages using 11 workers (44/44) in 573ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin
+├ ○ /admin/ai-evaluations
+├ ○ /admin/diagramming-attempts
+├ ○ /admin/feedback
+├ ƒ /admin/feedback/[feedbackId]
+├ ○ /admin/lessons/create
+├ ƒ /admin/lessons/edit/[id]
+├ ○ /admin/lessons/live
+├ ○ /admin/lessons/manage
+├ ƒ /admin/lessons/preview/[id]
+├ ○ /admin/mock-tests
+├ ƒ /admin/mock-tests/[mockId]
+├ ○ /admin/mock-tests/create
+├ ○ /admin/practice-categories
+├ ƒ /admin/practice-categories/[categoryId]
+├ ○ /admin/tests/create
+├ ƒ /admin/tests/edit/[id]
+├ ƒ /admin/tests/edit/[id]/versions/[versionId]/edit
+├ ƒ /admin/tests/edit/[id]/versions/create
+├ ○ /admin/tests/manage
+├ ○ /admin/vocab-autocomplete-evaluations
+├ ○ /admin/vocabulary
+├ ○ /admin/vocabulary-pools
+├ ƒ /admin/vocabulary-pools/[poolId]/edit
+├ ○ /admin/vocabulary-pools/create
+├ ○ /admin/vocabulary/pending
+├ ƒ /api/admin/delete-audio
+├ ƒ /api/admin/diagramming-attempts
+├ ƒ /api/admin/exercises/generated-preview
+├ ƒ /api/admin/feedback
+├ ƒ /api/admin/feedback/[feedbackId]
+├ ƒ /api/admin/feedback/[feedbackId]/attachments
+├ ƒ /api/admin/feedback/[feedbackId]/notes
+├ ƒ /api/admin/feedback/[feedbackId]/state
+├ ƒ /api/admin/feedback/count
+├ ƒ /api/admin/learning-path
+├ ƒ /api/admin/lessons
+├ ƒ /api/admin/lessons/[id]
+├ ƒ /api/admin/lessons/recovery
+├ ƒ /api/admin/lessons/recovery/[id]
+├ ƒ /api/admin/lessons/reorder
+├ ƒ /api/admin/lessons/update-publish-status
+├ ƒ /api/admin/mock-tests
+├ ƒ /api/admin/mock-tests/[mockId]
+├ ƒ /api/admin/mock-tests/[mockId]/archive
+├ ƒ /api/admin/mock-tests/[mockId]/duplicate-into-test
+├ ƒ /api/admin/mock-tests/[mockId]/move-to-test
+├ ƒ /api/admin/mock-tests/[mockId]/reactivate
+├ ƒ /api/admin/mock-tests/[mockId]/version
+├ ƒ /api/admin/mock-tests/assign
+├ ƒ /api/admin/practice-categories
+├ ƒ /api/admin/practice-categories/[categoryId]
+├ ƒ /api/admin/practice-categories/[categoryId]/lessons
+├ ƒ /api/admin/practice-categories/[categoryId]/lessons/[lessonId]
+├ ƒ /api/admin/practice-categories/[categoryId]/lessons/[lessonId]/tags
+├ ƒ /api/admin/practice-categories/[categoryId]/lessons/available
+├ ƒ /api/admin/practice-categories/[categoryId]/lessons/reorder
+├ ƒ /api/admin/practice-categories/[categoryId]/tags
+├ ƒ /api/admin/practice-categories/[categoryId]/tags/[tagId]
+├ ƒ /api/admin/practice-categories/[categoryId]/tags/reorder
+├ ƒ /api/admin/practice-categories/reorder
+├ ƒ /api/admin/test-versions/[versionId]
+├ ƒ /api/admin/tests
+├ ƒ /api/admin/tests/[id]
+├ ƒ /api/admin/tests/[id]/settings
+├ ƒ /api/admin/tests/[id]/versions
+├ ƒ /api/admin/tests/[id]/versions/[versionId]
+├ ƒ /api/admin/tests/[id]/versions/[versionId]/activate
+├ ƒ /api/admin/tests/[id]/versions/[versionId]/deactivate
+├ ƒ /api/admin/tests/[id]/versions/[versionId]/duplicate
+├ ƒ /api/admin/upload-audio
+├ ƒ /api/admin/vocabulary-pools
+├ ƒ /api/admin/vocabulary-pools/[poolId]
+├ ƒ /api/admin/vocabulary-pools/[poolId]/deletion-challenge
+├ ƒ /api/admin/vocabulary-pools/[poolId]/duplicate
+├ ƒ /api/admin/vocabulary-pools/[poolId]/paradigm-summary
+├ ƒ /api/admin/vocabulary-pools/[poolId]/summary
+├ ƒ /api/admin/vocabulary-pools/from-pools
+├ ƒ /api/admin/vocabulary-pools/usages
+├ ƒ /api/admin/vocabulary-word-requests
+├ ƒ /api/admin/vocabulary-word-requests/[id]
+├ ƒ /api/admin/vocabulary-word-requests/[id]/approve
+├ ƒ /api/admin/vocabulary-word-requests/[id]/dismiss
+├ ƒ /api/admin/vocabulary-word-update-requests
+├ ƒ /api/admin/vocabulary-word-update-requests/[id]
+├ ƒ /api/admin/vocabulary-word-update-requests/[id]/approve
+├ ƒ /api/admin/vocabulary-word-update-requests/[id]/dismiss
+├ ƒ /api/admin/vocabulary-word-update-requests/[id]/notes
+├ ƒ /api/admin/vocabulary-word-update-requests/[id]/notes/[noteId]
+├ ƒ /api/admin/words
+├ ƒ /api/admin/words/[wordId]
+├ ƒ /api/admin/words/backup
+├ ƒ /api/diagramming-attempts
+├ ƒ /api/feedback
+├ ƒ /api/get-signed-audio-url
+├ ƒ /api/health
+├ ƒ /api/lessons
+├ ƒ /api/lessons/[lessonId]
+├ ƒ /api/mock-tests/[mockId]
+├ ƒ /api/progress/[userId]/[lessonId]
+├ ƒ /api/progress/[userId]/[lessonId]/complete
+├ ƒ /api/student-dashboard
+├ ƒ /api/test-attempts/[attemptId]
+├ ƒ /api/test-attempts/[attemptId]/answers
+├ ƒ /api/test-attempts/[attemptId]/sections/[pageId]
+├ ƒ /api/test-attempts/[attemptId]/sections/[pageId]/confirm
+├ ƒ /api/test-attempts/start
+├ ƒ /api/test-results/[attemptId]
+├ ƒ /api/test-results/[attemptId]/pdf
+├ ƒ /api/vocabulary-pools/[poolId]/words
+├ ƒ /api/words/generated-exercise
+├ ƒ /api/words/search
+├ ○ /dashboard
+├ ○ /feedback
+├ ○ /forgot-password
+├ ƒ /lesson/[lessonId]
+├ ○ /login
+├ ○ /profile
+├ ○ /register
+├ ○ /robots.txt
+├ ○ /sitemap.xml
+├ ƒ /test-results/[attemptId]
+└ ƒ /test/[testId]
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

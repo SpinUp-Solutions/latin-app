@@ -1,0 +1,12 @@
+> latin-app@1.1.7 lint
+> eslint .
+
+
+/home/harry/.codex/worktrees/edge-release-qa/latin-app/src/app/admin/(shell)/lessons/create/page.tsx
+  231:9  warning  Do not use `window.location.href` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+  263:9  warning  Do not use `window.location.href` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/home/harry/.codex/worktrees/edge-release-qa/latin-app/src/components/ui/admin/vocabulary-pools/PoolList.tsx
+  143:35  warning  Do not use `window.location.href` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+✖ 3 problems (0 errors, 3 warnings)

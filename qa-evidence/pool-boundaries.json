@@ -1,0 +1,67 @@
+[
+  {
+    "poolId": "qa-empty",
+    "status": 200,
+    "body": {
+      "items": [],
+      "words": [],
+      "diagnostics": [
+        {
+          "specId": "verb-conjugation",
+          "collected": 0,
+          "scanned": 0,
+          "exhausted": true,
+          "scanLimitReached": false
+        }
+      ],
+      "requestedCount": "all",
+      "collected": 0,
+      "globalScanLimitReached": false
+    }
+  },
+  {
+    "poolId": "qa-missing",
+    "status": 404,
+    "body": {
+      "error": "Vocabulary pool qa-missing was not found",
+      "code": "POOL_NOT_FOUND"
+    }
+  },
+  {
+    "poolId": "qa-empty-pending",
+    "status": 200,
+    "body": {
+      "items": [],
+      "words": [],
+      "diagnostics": [
+        {
+          "specId": "verb-conjugation",
+          "collected": 0,
+          "scanned": 0,
+          "exhausted": true,
+          "scanLimitReached": false
+        }
+      ],
+      "requestedCount": "all",
+      "collected": 0,
+      "globalScanLimitReached": false
+    },
+    "baselineStatus": 200,
+    "baselineBody": {
+      "items": [],
+      "words": [],
+      "diagnostics": [
+        {
+          "specId": "verb-conjugation",
+          "collected": 0,
+          "scanned": 0,
+          "exhausted": true,
+          "scanLimitReached": false
+        }
+      ],
+      "requestedCount": "all",
+      "collected": 0,
+      "globalScanLimitReached": false
+    }
+  }
+]

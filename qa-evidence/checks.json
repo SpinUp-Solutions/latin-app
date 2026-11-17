@@ -1,0 +1,65 @@
+{
+  "testedHead": "b97d1d5f98b5480227624a69aea936c287d9c9dc",
+  "comparisonBase": "738bdb6bd115d520097a35dcd947360320fda344",
+  "date": "2026-11-17",
+  "browserBatches": [
+    {
+      "name": "existing acceptance",
+      "passed": 16
+    },
+    {
+      "name": "release Chromium",
+      "passed": 17,
+      "expectedKnownFailure": 1
+    },
+    {
+      "name": "Firefox",
+      "passed": 11
+    },
+    {
+      "name": "Node 22 production build Chromium",
+      "passed": 14
+    }
+  ],
+  "focusedRecaptures": [
+    {
+      "name": "wide adjective comparison",
+      "passed": 1
+    },
+    {
+      "name": "AI callable and UI",
+      "passed": 1
+    }
+  ],
+  "jest": {
+    "suitesPassed": 208,
+    "testsPassed": 1998,
+    "testsSkipped": 1
+  },
+  "typecheck": "passed",
+  "lint": {
+    "errors": 0,
+    "warnings": 3
+  },
+  "functionsBuild": "passed",
+  "productionBuild": "passed",
+  "dependencyAudit": {
+    "baseTotal": 72,
+    "edgeTotal": 70,
+    "edgeCritical": 5,
+    "edgeHigh": 15,
+    "edgeModerate": 49,
+    "edgeLow": 1,
+    "nextFlagged": false,
+    "sharpFlagged": false
+  },
+  "knownIssues": [
+    "QA-01 pending root pool preview returns 200 on base and edge"
+  ],
+  "limitations": [
+    "AI provider responses controlled locally; real model quality and latency unverified",
+    "No deployed Firebase writes or production operations",
+    "No Safari/WebKit or physical mobile-device pass",
+    "Firestore/Storage rules suites not rerun; rules unchanged"
+  ]
+}

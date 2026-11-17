@@ -1,0 +1,35 @@
+import { expect, type Page } from '@playwright/test';
+import { E2E_PASSWORD, type E2E_USERS } from './seed';
+
+type SeededUser = (typeof E2E_USERS)[keyof typeof E2E_USERS];
+
+export async function signIn(page: Page, user: SeededUser, destination: '/dashboard' | '/admin' = '/dashboard') {
+  await page.goto('/login');
+  await page.getByPlaceholder('name@example.com').fill(user.email);
+  await page.getByPlaceholder('••••••••').fill(E2E_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.waitForURL(`**${destination}`);
+}
+
+export function dashboardCard(page: Page, title: string) {
+  return page
+    .locator('[data-testid="dashboard-test-card"], [data-testid="mock-test-card"]')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+}
+
+export async function recordFillAnswerAndReview(page: Page, answer: string) {
+  await page.getByPlaceholder(/Type your answer/).fill(answer);
+  await page.getByRole('button', { name: 'Check' }).click();
+  await expect(page.getByRole('status')).toContainText('Answers saved.');
+  await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Review section', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toBeVisible();
+}
+
+export async function submitCurrentTest(page: Page) {
+  if (!(await page.getByRole('heading', { name: 'Review section', exact: true }).isVisible()))
+    await page.getByRole('button', { name: 'Review section' }).click();
+  const omissions = page.getByRole('checkbox', { name: /I understand this section/ });
+  if (await omissions.isVisible()) await omissions.check();
+  await page.getByRole('button', { name: 'Confirm section and submit' }).click();
+}

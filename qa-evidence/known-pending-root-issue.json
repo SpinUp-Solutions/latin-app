@@ -1,0 +1,14 @@
+[
+  {
+    "origin": "http://127.0.0.1:3001",
+    "status": 200,
+    "collected": 5,
+    "code": null
+  },
+  {
+    "origin": "http://127.0.0.1:3000",
+    "status": 200,
+    "collected": 5,
+    "code": null
+  }
+]

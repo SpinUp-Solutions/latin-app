@@ -1,0 +1,21 @@
+{
+  "wordCount": 506,
+  "poolCount": 3,
+  "eligibleStressWords": 450,
+  "excludedStressWords": 50,
+  "users": [
+    "admin",
+    "scoreOnly",
+    "requiredPass",
+    "resume",
+    "mock"
+  ],
+  "lessonCount": 6,
+  "extraLargePool": {
+    "wordCount": 1050,
+    "eligibleWords": 1050,
+    "synthetic": true
+  },
+  "projectId": "demo-latin-app",
+  "testDataOnly": true
+}

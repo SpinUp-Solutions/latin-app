@@ -1,0 +1,8 @@
+{
+  "status": 422,
+  "body": {
+    "error": "This test attempt is too large to save safely. Please ask an administrator to review its content size.",
+    "code": "ATTEMPT_TOO_LARGE"
+  },
+  "partialAttempts": 0
+}

@@ -1,0 +1,29 @@
+{
+  "id": "kkSJcBtskOjUfow6zzBT",
+  "studentId": "e2e-score-only",
+  "versionId": "e2e-score-version",
+  "passingPercentage": null,
+  "origin": {
+    "kind": "normal-test",
+    "testId": "e2e-score-test"
+  },
+  "startedAt": "2026-11-17T09:01:13.487Z",
+  "updatedAt": "2026-11-17T09:01:15.416Z",
+  "status": "submitted",
+  "flowVersion": 1,
+  "confirmedSections": {
+    "e2e-score-version-page": "2026-11-17T09:01:15.414Z"
+  },
+  "exerciseResults": {
+    "qa-table": {
+      "title": "Latin noun translations",
+      "awardedPoints": 2,
+      "maxPoints": 3
+    }
+  },
+  "score": 2,
+  "maxScore": 3,
+  "percentage": 66.66666666666666,
+  "outcome": "score-only",
+  "submittedAt": "2026-11-17T09:01:15.416Z"
+}

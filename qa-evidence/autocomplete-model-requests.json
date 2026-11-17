@@ -1,0 +1,47 @@
+[
+  {
+    "model": "gpt-6.1-terra",
+    "reasoning": {
+      "effort": "medium"
+    },
+    "max_output_tokens": 32000,
+    "format": "verb_structured_output",
+    "mode": "success"
+  },
+  {
+    "model": "gpt-6.1-terra",
+    "reasoning": {
+      "effort": "medium"
+    },
+    "max_output_tokens": 32000,
+    "format": "verb_structured_output",
+    "mode": "error"
+  },
+  {
+    "model": "gpt-6.1-terra",
+    "reasoning": {
+      "effort": "medium"
+    },
+    "max_output_tokens": 32000,
+    "format": "verb_structured_output",
+    "mode": "malformed"
+  },
+  {
+    "model": "gpt-6.1-terra",
+    "reasoning": {
+      "effort": "medium"
+    },
+    "max_output_tokens": 32000,
+    "format": "verb_structured_output",
+    "mode": "incomplete"
+  },
+  {
+    "model": "gpt-6.1-terra",
+    "reasoning": {
+      "effort": "medium"
+    },
+    "max_output_tokens": 32000,
+    "format": "verb_structured_output",
+    "mode": "success"
+  }
+]
