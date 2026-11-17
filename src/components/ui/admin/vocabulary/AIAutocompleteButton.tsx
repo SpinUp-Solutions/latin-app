@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
 import { useEffect, useEffectEvent, useState } from 'react';
 import type { VocabularyAIUncertainty } from '@/shared/types/vocabulary/ai-review';
-import { aiFieldLabel } from './wordFields';
 
 interface AIAutocompleteButtonProps {
   wordId: string;
@@ -68,19 +67,8 @@ export function AIAutocompleteButton({
     const costMessage = result.cost
       ? `Cost: $${result.cost.totalCost.toFixed(4)} (${result.cost.tokens.totalTokens.toLocaleString()} tokens)`
       : '';
-    if (uncertainties.length > 0) {
-      const fields = uncertainties.map(item => aiFieldLabel(item.field)).join(', ');
-      toast.warning(
-        uncertainties.length === 1 ? 'The AI has a question' : `The AI has ${uncertainties.length} questions`,
-        {
-          description: `About ${fields}. Answer in the AI assistant at the top of the editor. ${costMessage}`,
-        }
-      );
-      return;
-    }
-    toast.success('AI Autocomplete Successful', {
-      description: `Empty fields have been filled. Review the suggestions and save your changes. ${costMessage}`,
-    });
+    // The assistant opens with what the AI filled and anything it asks, so the toast only adds the cost.
+    toast.success('AI autocomplete finished', costMessage ? { description: costMessage } : undefined);
   };
 
   const handleCopyError = () => {

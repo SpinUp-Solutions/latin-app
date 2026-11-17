@@ -192,7 +192,7 @@ test.describe('Vocabulary AI assistant', () => {
     await dialog.screenshot({ path: testInfo.outputPath('5-rules.png') });
   });
 
-  test('an admin asks the AI about a word it had no questions on, edits a learned rule and adds one of their own', async ({
+  test('autocomplete opens the assistant to say all good, it still takes a question, and an admin adds a rule', async ({
     page,
   }, testInfo) => {
     await getE2EAdmin()
@@ -210,7 +210,7 @@ test.describe('Vocabulary AI assistant', () => {
       });
     const requests = await mockAI(page, {
       success: true,
-      data: { part_of_speech: 'noun' },
+      data: { part_of_speech: 'noun', pronunciation: 'ˈro.sa' },
       uncertainties: [],
       reply: { message: 'Because rosa, rosae follows the first declension.', answered: [], remember: [], rule: null },
     });
@@ -219,11 +219,28 @@ test.describe('Vocabulary AI assistant', () => {
 
     const assistant = page.getByRole('region', { name: 'AI assistant' });
     const composer = assistant.getByLabel('Message to the AI');
+    // Hidden behind its arrow, the assistant opens by itself when autocomplete finishes.
+    await assistant.getByRole('button', { name: 'Hide the AI assistant' }).click();
+    await expect(composer).toBeHidden();
+    await page.screenshot({ path: testInfo.outputPath('0-hidden.png') });
+    await page.getByRole('button', { name: 'AI Autocomplete' }).click();
+    await expect(assistant).toContainText('All good! I filled Pronunciation in rosa and I’m confident about it.');
+    await expect(composer).toBeVisible();
+    await expect(page.getByLabel('Pronunciation', { exact: true })).toHaveValue('ˈro.sa');
+    await page.screenshot({ path: testInfo.outputPath('0-all-good.png') });
+
+    // Sure or not, the admin can still talk to it.
     await composer.fill('Why first declension?');
     await assistant.getByRole('button', { name: 'Send to the AI' }).click();
     await expect(assistant).toContainText('Because rosa, rosae follows the first declension.');
     await expect(assistant.getByRole('button', { name: /^Accept/ })).toHaveCount(0);
-    expect(requests).toHaveLength(1);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({
+      conversation: {
+        message: 'Why first declension?',
+        history: [{ from: 'ai', text: expect.stringContaining('All good!') }],
+      },
+    });
 
     await page.getByRole('button', { name: 'AI rules' }).click();
     const dialog = page.getByRole('dialog', { name: 'AI rules for all words' });

@@ -1,7 +1,18 @@
 'use client';
 
 import { createContext, useContext, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowUp, BookmarkCheck, CircleHelp, Lightbulb, Loader2, Sparkles, X } from 'lucide-react';
+import {
+  ArrowUp,
+  BookmarkCheck,
+  ChevronDown,
+  ChevronUp,
+  CircleHelp,
+  Lightbulb,
+  Loader2,
+  Sparkles,
+  X,
+} from 'lucide-react';
+import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import {
   ADMIN_NOTE_MAX,
@@ -46,9 +57,44 @@ export interface AIReviewContextValue {
   removeNote: (id: string) => void;
   /** Saves the rules for all words that the AI learns; without it the AI's rules are shown but not kept. */
   learnedRules?: LearnedAIRules;
+  /** Whether the assistant is shown or hidden behind its arrow. */
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  /** The latest autocomplete in this editor, which the assistant reports on. */
+  lastRun: AIAutocompleteRun | null;
+}
+
+/** What one autocomplete did, so the assistant can say so. */
+export interface AIAutocompleteRun {
+  /** Increases with every run, so each run is reported once. */
+  id: number;
+  filled: AICompletableField[];
+  questions: number;
 }
 
 export const AIReviewContext = createContext<AIReviewContextValue | null>(null);
+
+const OPEN_KEY = 'vocabulary-ai-assistant-open';
+
+/** Shown or hidden, remembered in this browser so a hidden assistant stays hidden from word to word. */
+export function useAIAssistantOpen(): [boolean, (open: boolean) => void] {
+  const [open, setOpenState] = useState(() => {
+    try {
+      return window.localStorage.getItem(OPEN_KEY) !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    try {
+      window.localStorage.setItem(OPEN_KEY, String(next));
+    } catch {
+      // Storage can be unavailable; the choice then lasts until the editor closes.
+    }
+  };
+  return [open, setOpen];
+}
 
 const isCompletable = (field: string): field is AICompletableField => AICompletableFieldSchema.safeParse(field).success;
 
@@ -60,6 +106,7 @@ const MAX_LISTED_CELLS = 40;
 const questionAnchor = (prefix: string, field: string) => `${prefix}-ai-question-${field}`;
 const fieldAnchor = (prefix: string, field: string) => `${prefix}-ai-field-${field}`;
 const composerId = (prefix: string) => `${prefix}-ai-composer`;
+const assistantId = (prefix: string) => `${prefix}-ai-assistant`;
 
 const draftValue = (draft: Partial<VocabularyWord>, field: AICompletableField): unknown =>
   (draft as Record<string, unknown>)[field];
@@ -94,9 +141,29 @@ const valueAt = (value: unknown, path: string): unknown =>
   }, value);
 
 /** Scrolls to an element in the editor and optionally focuses something in it. */
-function reveal(id: string, focus?: () => HTMLElement | null | undefined) {
-  document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+function reveal(id: string, focus?: () => HTMLElement | null | undefined, block: ScrollLogicalPosition = 'center') {
+  document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block });
   focus?.()?.focus({ preventScroll: true });
+}
+
+/** Brings the assistant into view at the top of the editor. */
+export function revealAIAssistant(prefix: string) {
+  reveal(assistantId(prefix), undefined, 'start');
+}
+
+const listLabels = (labels: string[]) =>
+  labels.length <= 1 ? labels.join('') : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+
+/** The assistant's report on an autocomplete: all good, or what it still asks. */
+function autocompleteMessage(run: AIAutocompleteRun, word: string): string {
+  const filled = run.filled.length > 4 ? plural(run.filled.length, 'field') : listLabels(run.filled.map(aiFieldLabel));
+  if (run.questions === 0) {
+    return filled
+      ? `All good! I filled ${filled} in ${word} and I’m confident about it. If anything is wrong, tell me below and I’ll fix it.`
+      : `All good! There was nothing left for me to fill in ${word}. If anything is wrong, tell me below and I’ll fix it.`;
+  }
+  const asks = `I have ${plural(run.questions, 'question')} for you above.`;
+  return filled ? `Done. I filled ${filled} in ${word}. ${asks}` : `Done. ${asks}`;
 }
 
 /** The AI's proposed value next to the current one; for a table, only the cells that change. */
@@ -441,6 +508,7 @@ export function AIReviewPanel() {
   const { requestAutocomplete, isLoading } = useFirebaseAutocomplete({
     onError: error => toast.error('The AI could not answer', { description: error }),
   });
+  const [reportedRun, setReportedRun] = useState(context?.lastRun?.id ?? 0);
   if (!context) return null;
 
   const { review, draft, disabled } = context;
@@ -448,6 +516,24 @@ export function AIReviewPanel() {
   const questions = review.uncertainties;
   const busy = disabled || isLoading;
   const quiet = questions.length === 0 && turns.length === 0;
+  const { open, setOpen, lastRun } = context;
+  const bodyId = `${context.anchorPrefix}-ai-body`;
+
+  // Each autocomplete gets one report in the conversation; negative IDs keep it apart from sent messages.
+  if (lastRun && lastRun.id !== reportedRun) {
+    setReportedRun(lastRun.id);
+    setTurns(previous => [
+      ...previous,
+      {
+        id: -lastRun.id,
+        from: 'ai',
+        text: autocompleteMessage(lastRun, word),
+        proposal: null,
+        status: 'answer',
+        rule: { status: 'offered' },
+      },
+    ]);
+  }
   const newId = () => ++nextId.current;
   const update = (id: number, change: (turn: AITurn) => Partial<AITurn>) =>
     setTurns(previous =>
@@ -592,136 +678,147 @@ export function AIReviewPanel() {
   const summary =
     questions.length > 0
       ? `I'm not sure about ${questions.length === 1 ? 'one thing' : `${questions.length} things`} in ${word}. Pick a suggested answer, or reply in your own words.`
-      : null;
+      : turns.length === 0
+        ? `Tell me what to fix or explain in ${word}. You’ll see every change before it reaches the word.`
+        : null;
 
   return (
     <section
+      id={assistantId(context.anchorPrefix)}
       aria-label="AI assistant"
       className={cn(
-        'overflow-hidden rounded-xl border bg-white shadow-sm',
-        questions.length > 0 ? 'border-amber-300' : 'border-violet-200',
-        quiet && 'focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100'
+        'scroll-mt-4 overflow-hidden rounded-xl border bg-white shadow-sm',
+        questions.length > 0 ? 'border-amber-300' : 'border-violet-200'
       )}>
-      {!quiet && (
-        <header className="flex items-center gap-2 border-b border-gray-100 px-4 py-2.5">
+      <h3>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={open ? bodyId : undefined}
+          aria-label={open ? 'Hide the AI assistant' : 'Show the AI assistant'}
+          onClick={() => setOpen(!open)}
+          className={cn(
+            'flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-gray-50',
+            open && 'border-b border-gray-100'
+          )}>
           <AIAvatar />
-          <h3 className="flex-1 text-sm font-semibold text-gray-900">AI assistant</h3>
+          <span className="flex-1 text-sm font-semibold text-gray-900">AI assistant</span>
           {questions.length > 0 && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
               {plural(questions.length, 'question')}
             </span>
           )}
-        </header>
-      )}
+          <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm">
+            {open ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
+            {open ? 'Hide' : 'Show'}
+          </span>
+        </button>
+      </h3>
 
-      {!quiet && (
-        <ol aria-label="Conversation with the AI" aria-live="polite" className="space-y-3 px-4 py-3">
-          {summary && (
-            <AIBubble>
-              <p>{summary}</p>
-            </AIBubble>
-          )}
-          {questions.length > 0 && (
-            <li className="space-y-2 pl-9">
-              {questions.map((question, index) => (
-                <QuestionCard
-                  key={question.field}
-                  number={index + 1}
-                  question={question}
-                  onPick={answer => pick(question.field, answer)}
-                  onKeep={() => keep(question)}
-                />
-              ))}
-            </li>
-          )}
-          {turns.map(turn => {
-            if (turn.from === 'event') {
-              return (
-                <li key={turn.id} className="pl-9 text-xs text-gray-500">
-                  {turn.text}
-                </li>
-              );
-            }
-            if (turn.from === 'admin') {
-              return (
-                <li key={turn.id} className="flex justify-end">
-                  <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-gray-100 px-3 py-2 text-sm text-gray-900">
-                    <span className="sr-only">You: </span>
-                    {turn.text}
-                  </p>
-                </li>
-              );
-            }
-            return (
-              <AIBubble key={turn.id}>
-                <p className="whitespace-pre-wrap">{turn.text}</p>
-                {turn.proposal && (
-                  <ProposalView
-                    turn={turn}
-                    busy={busy}
-                    onAccept={() => void accept(turn)}
-                    onDiscard={() => update(turn.id, () => ({ status: 'discarded' }))}
-                    onDeclineRule={() => update(turn.id, () => ({ rule: { status: 'declined' } }))}
-                    onUndoRule={id => void undoRule(turn.id, id)}
-                  />
-                )}
+      {open && (
+        <div id={bodyId}>
+          <ol aria-label="Conversation with the AI" aria-live="polite" className="space-y-3 px-4 py-3">
+            {summary && (
+              <AIBubble>
+                <p>{summary}</p>
               </AIBubble>
-            );
-          })}
-          {isLoading && (
-            <AIBubble>
-              <p className="flex items-center gap-2 text-gray-600">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                Thinking…
+            )}
+            {questions.length > 0 && (
+              <li className="space-y-2 pl-9">
+                {questions.map((question, index) => (
+                  <QuestionCard
+                    key={question.field}
+                    number={index + 1}
+                    question={question}
+                    onPick={answer => pick(question.field, answer)}
+                    onKeep={() => keep(question)}
+                  />
+                ))}
+              </li>
+            )}
+            {turns.map(turn => {
+              if (turn.from === 'event') {
+                return (
+                  <li key={turn.id} className="pl-9 text-xs text-gray-500">
+                    {turn.text}
+                  </li>
+                );
+              }
+              if (turn.from === 'admin') {
+                return (
+                  <li key={turn.id} className="flex justify-end">
+                    <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-gray-100 px-3 py-2 text-sm text-gray-900">
+                      <span className="sr-only">You: </span>
+                      {turn.text}
+                    </p>
+                  </li>
+                );
+              }
+              return (
+                <AIBubble key={turn.id}>
+                  <p className="whitespace-pre-wrap">{turn.text}</p>
+                  {turn.proposal && (
+                    <ProposalView
+                      turn={turn}
+                      busy={busy}
+                      onAccept={() => void accept(turn)}
+                      onDiscard={() => update(turn.id, () => ({ status: 'discarded' }))}
+                      onDeclineRule={() => update(turn.id, () => ({ rule: { status: 'declined' } }))}
+                      onUndoRule={id => void undoRule(turn.id, id)}
+                    />
+                  )}
+                </AIBubble>
+              );
+            })}
+            {isLoading && (
+              <AIBubble>
+                <p className="flex items-center gap-2 text-gray-600">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  Thinking…
+                </p>
+              </AIBubble>
+            )}
+          </ol>
+
+          <div className="border-t border-gray-100 bg-gray-50/70 px-3 py-2.5">
+            <div className="flex items-end gap-2 rounded-xl border border-gray-200 bg-white py-1.5 pl-3 pr-1.5 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">
+              <Textarea
+                ref={composer}
+                id={composerId(context.anchorPrefix)}
+                aria-label="Message to the AI"
+                rows={Math.min(6, Math.max(1, message.split('\n').length))}
+                value={message}
+                maxLength={ADMIN_NOTE_MAX}
+                disabled={disabled}
+                placeholder={
+                  questions.length > 0
+                    ? 'Answer the AI, or tell it what else to fix…'
+                    : `Tell the AI what to fix or explain in ${word}…`
+                }
+                onChange={event => setMessage(event.target.value)}
+                onKeyDown={onComposerKeyDown}
+                className="min-h-0 resize-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+              <Button
+                type="button"
+                size="icon"
+                className="h-8 w-8 shrink-0 rounded-lg"
+                aria-label="Send to the AI"
+                disabled={busy || !message.trim()}
+                onClick={() => void send()}>
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+              </Button>
+            </div>
+            {(!quiet || message) && (
+              <p className="mt-1 px-1 text-[11px] text-gray-500">
+                Enter to send, Shift+Enter for a new line. You’ll see every change before it reaches the word.
               </p>
-            </AIBubble>
-          )}
-        </ol>
-      )}
+            )}
+          </div>
 
-      <div className={cn(quiet ? 'px-1.5 py-1' : 'border-t border-gray-100 bg-gray-50/70 px-3 py-2.5')}>
-        <div
-          className={cn(
-            'flex items-end gap-2 rounded-xl bg-white py-1.5 pl-3 pr-1.5',
-            !quiet &&
-              'border border-gray-200 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100'
-          )}>
-          {quiet && <Sparkles className="mb-2.5 h-4 w-4 shrink-0 text-violet-600" aria-hidden />}
-          <Textarea
-            ref={composer}
-            id={composerId(context.anchorPrefix)}
-            aria-label="Message to the AI"
-            rows={Math.min(6, Math.max(1, message.split('\n').length))}
-            value={message}
-            maxLength={ADMIN_NOTE_MAX}
-            disabled={disabled}
-            placeholder={
-              questions.length > 0
-                ? 'Answer the AI, or tell it what else to fix…'
-                : `Ask the AI to fix or explain something in ${word}…`
-            }
-            onChange={event => setMessage(event.target.value)}
-            onKeyDown={onComposerKeyDown}
-            className="min-h-0 resize-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
-          <Button
-            type="button"
-            size="icon"
-            className="h-8 w-8 shrink-0 rounded-lg"
-            aria-label="Send to the AI"
-            disabled={busy || !message.trim()}
-            onClick={() => void send()}>
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-          </Button>
+          <MemoryList word={word} />
         </div>
-        {(!quiet || message) && (
-          <p className="mt-1 px-1 text-[11px] text-gray-500">
-            Enter to send, Shift+Enter for a new line. You’ll see every change before it reaches the word.
-          </p>
-        )}
-      </div>
-
-      <MemoryList word={word} />
+      )}
     </section>
   );
 }
@@ -743,9 +840,11 @@ export function AIFieldReview({ field, children }: { field: string; children?: R
       {asked && (
         <button
           type="button"
-          onClick={() =>
-            reveal(questionAnchor(anchorPrefix, field), () => document.getElementById(composerId(anchorPrefix)))
-          }
+          onClick={() => {
+            // The question is only in the page while the assistant is shown.
+            flushSync(() => context.setOpen(true));
+            reveal(questionAnchor(anchorPrefix, field), () => document.getElementById(composerId(anchorPrefix)));
+          }}
           aria-label={`AI question about ${aiFieldLabel(field)}`}
           className="absolute -top-3 right-2 z-[1] inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 shadow-sm hover:bg-amber-100">
           <CircleHelp className="h-3 w-3" aria-hidden />

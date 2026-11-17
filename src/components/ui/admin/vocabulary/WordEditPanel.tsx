@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import {
   addOpenUncertainties,
   AI_REVIEW_ITEM_LIMIT,
+  AICompletableFieldSchema,
   EMPTY_AI_REVIEW,
   type AICompletableField,
   type VocabularyAIGuidance,
@@ -36,7 +37,10 @@ import {
   AIFieldReview,
   AIReviewContext,
   AIReviewPanel,
+  revealAIAssistant,
+  useAIAssistantOpen,
   type AcceptedAIReply,
+  type AIAutocompleteRun,
   type AIReviewContextValue,
 } from './VocabularyAIReview';
 import { aiFieldLabel } from './wordFields';
@@ -198,6 +202,8 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   const [editingCellValue, setEditingCellValue] = useState('');
   const [tableExpanded, setTableExpanded] = useState(true);
   const [aiFieldStatus, setAiFieldStatus] = useState<Map<string, 'filled' | 'missing'>>(new Map());
+  const [assistantOpen, setAssistantOpen] = useAIAssistantOpen();
+  const [aiRun, setAiRun] = useState<AIAutocompleteRun | null>(null);
   const [tableErrors, setTableErrors] = useState<string[]>([]);
   const [prevPronounSchema, setPrevPronounSchema] = useState<ReturnType<typeof getPronounTableSchema> | null>(null);
 
@@ -259,11 +265,14 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     const fieldStatus = new Map<string, 'filled' | 'missing'>(Object.entries(apiFieldStatus || {}));
 
     const current = form.getValues() as unknown as TableData;
+    const filled: AICompletableField[] = [];
     Object.entries(aiData).forEach(([key, value]) => {
       if (key === 'part_of_speech' || key === 'ai_review' || key === editableTable?.field || !(key in current)) return;
       const merged = deepMergeNullValues(current[key], value);
       if (JSON.stringify(merged) !== JSON.stringify(current[key])) {
         form.setValue(key as keyof VocabularyFormValues, merged as never, { shouldValidate: false, shouldDirty: true });
+        const field = AICompletableFieldSchema.safeParse(key);
+        if (field.success) filled.push(field.data);
       }
     });
     if (uncertainties.length > 0) {
@@ -282,6 +291,8 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       for (const path of missingBefore) {
         fieldStatus.set(`${editableTable.field}.${path}`, missingAfter.has(path) ? 'missing' : 'filled');
       }
+      const tableField = AICompletableFieldSchema.safeParse(editableTable.field);
+      if (tableField.success && missingBefore.some(path => !missingAfter.has(path))) filled.push(tableField.data);
       setTable(previous => {
         const mergedTable = deepMergeNullValues(previous, aiTable);
         return cloneTableData(mergedTable);
@@ -289,6 +300,10 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     }
 
     setAiFieldStatus(fieldStatus);
+    // The assistant opens to report the run: all good, or what the AI still asks.
+    setAiRun(previous => ({ id: (previous?.id ?? 0) + 1, filled, questions: uncertainties.length }));
+    setAssistantOpen(true);
+    revealAIAssistant(anchorPrefix);
   };
 
   const updateReview = (change: (review: VocabularyAIReview) => VocabularyAIReview) =>
@@ -435,6 +450,9 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         keep: handleKeep,
         removeNote: handleRemoveNote,
         learnedRules,
+        open: assistantOpen,
+        setOpen: setAssistantOpen,
+        lastRun: aiRun,
       }
     : null;
 
