@@ -37,6 +37,13 @@ import { fetchVocabularyBackup } from '@/src/services/vocabularyBackupService';
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
 const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
 
+/** The word the URL names (`#word-<id>`), so a reload or a shared link reopens it. */
+function wordIdFromHash(): string | null {
+  if (typeof window === 'undefined') return null;
+  const { hash } = window.location;
+  return hash.startsWith('#word-') ? hash.substring(6) || null : null;
+}
+
 function omitUndefinedFields<T extends object>(updates: T): Partial<T> {
   return Object.fromEntries(Object.entries(updates).filter(([, value]) => value !== undefined)) as Partial<T>;
 }
@@ -48,7 +55,9 @@ function AdminVocabularyPage() {
   const debouncedSearch = useDebounce(filters.search, 150);
 
   const [lastWordId, setLastWordId] = useState<string | null>(null);
-  const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
+  // Read on the first render: reading it in an effect left one render with nothing selected, and the
+  // effect below then cleared the URL, so every second reload lost the word.
+  const [selectedWordId, setSelectedWordId] = useState<string | null>(wordIdFromHash);
   const [creatingWord, setCreatingWord] = useState<VocabularyWordWithId | null>(null);
   const [deletingWordId, setDeletingWordId] = useState<string | null>(null);
   // Unsaved edits in the editor, including what autocomplete filled or the AI's accepted answers.
@@ -78,34 +87,18 @@ function AdminVocabularyPage() {
     setLastWordId(null);
   }, [filters.wordType, filters.coreType, debouncedSearch]);
 
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.startsWith('#word-')) {
-      const wordId = hash.substring(6);
-      setSelectedWordId(wordId);
-    }
-  }, []);
-
+  // The URL follows the selection, and is written only when it differs: every history write makes the
+  // App Router update the page.
   useEffect(() => {
     if (selectedWordId) {
-      window.location.hash = `word-${selectedWordId}`;
-    } else {
-      if (window.location.hash) {
-        history.replaceState(null, '', window.location.pathname + window.location.search);
-      }
+      if (wordIdFromHash() !== selectedWordId) window.location.hash = `word-${selectedWordId}`;
+    } else if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
     }
   }, [selectedWordId]);
 
   useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash;
-      if (hash.startsWith('#word-')) {
-        const wordId = hash.substring(6);
-        setSelectedWordId(wordId);
-      } else {
-        setSelectedWordId(null);
-      }
-    };
+    const handleHashChange = () => setSelectedWordId(wordIdFromHash());
 
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
