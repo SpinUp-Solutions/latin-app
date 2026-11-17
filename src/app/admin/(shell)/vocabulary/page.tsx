@@ -21,6 +21,7 @@ import {
 import { useCurrentWordsQuery } from '@/src/hooks/useCurrentWordsQuery';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { AIAssistantProvider } from '@/src/components/ui/admin/vocabulary/aiAssistantStore';
 import { VocabularyAIRulesDialog } from '@/src/components/ui/admin/vocabulary/VocabularyAIRulesDialog';
 import { useLearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
@@ -50,6 +51,9 @@ function AdminVocabularyPage() {
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
   const [creatingWord, setCreatingWord] = useState<VocabularyWordWithId | null>(null);
   const [deletingWordId, setDeletingWordId] = useState<string | null>(null);
+  // Unsaved edits in the editor, including what autocomplete filled or the AI's accepted answers.
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [pendingSwitch, setPendingSwitch] = useState<(() => void) | null>(null);
   const [poolWarning, setPoolWarning] = useState<{
     word: VocabularyWordWithId;
     pools: { id: string; name: string }[];
@@ -107,15 +111,32 @@ function AdminVocabularyPage() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const handleSelectWord = (word: VocabularyWordWithId) => {
-    setCreatingWord(null);
-    setSelectedWordId(word.id);
+  useEffect(() => {
+    if (!editorDirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [editorDirty]);
+
+  /** Switching words rebuilds the editor, so unsaved edits are only dropped once the admin agrees. */
+  const switchEditor = (go: () => void) => {
+    if (editorDirty) setPendingSwitch(() => go);
+    else go();
   };
 
-  const handleStartCreate = () => {
-    setCreatingWord(buildEmptyWord('verb'));
-    setSelectedWordId(null);
+  const handleSelectWord = (word: VocabularyWordWithId) => {
+    if (!creatingWord && word.id === selectedWordId) return;
+    switchEditor(() => {
+      setCreatingWord(null);
+      setSelectedWordId(word.id);
+    });
   };
+
+  const handleStartCreate = () =>
+    switchEditor(() => {
+      setCreatingWord(buildEmptyWord('verb'));
+      setSelectedWordId(null);
+    });
 
   const handleUpdateWord = async (updates: Partial<VocabularyWord>) => {
     if (!selectedWordId) return false;
@@ -193,10 +214,11 @@ function AdminVocabularyPage() {
   const loadingMore = isFetching && lastWordId !== null;
   const selectedWord = creatingWord ?? (selectedWordId ? words.find(w => w.id === selectedWordId) || null : null);
 
-  const handleCreatePartOfSpeechChange = (nextPart: PartOfSpeech) => {
-    setCreatingWord(buildEmptyWord(nextPart));
-    setSelectedWordId(null);
-  };
+  const handleCreatePartOfSpeechChange = (nextPart: PartOfSpeech) =>
+    switchEditor(() => {
+      setCreatingWord(buildEmptyWord(nextPart));
+      setSelectedWordId(null);
+    });
 
   const handleDeleteWord = async (word: VocabularyWordWithId, confirmationToken?: string) => {
     setDeletingWordId(word.id);
@@ -251,98 +273,116 @@ function AdminVocabularyPage() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-roman-marble">
-      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <AdminIconChip icon={BookOpen} />
-          <div>
-            <h1 className="text-xl font-serif tracking-wide">Vocabulary Viewer</h1>
-            <p className="text-sm text-roman-stone">View and edit Latin words</p>
+    <AIAssistantProvider>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-roman-marble">
+        <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <AdminIconChip icon={BookOpen} />
+            <div>
+              <h1 className="text-xl font-serif tracking-wide">Vocabulary Viewer</h1>
+              <p className="text-sm text-roman-stone">View and edit Latin words</p>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {isPlaceholderWord(creatingWord) && (
-            <Select
-              value={creatingWord?.part_of_speech}
-              onValueChange={value => handleCreatePartOfSpeechChange(value as PartOfSpeech)}>
-              <SelectTrigger className="h-9 w-48">
-                <SelectValue placeholder="Part of speech" />
-              </SelectTrigger>
-              <SelectContent>
-                {PART_OF_SPEECH_OPTIONS.map(option => (
-                  <SelectItem key={option} value={option}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Button size="sm" onClick={handleStartCreate} disabled={creating || isPlaceholderWord(creatingWord)}>
-            {creating ? 'Creating...' : 'Create Word'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={handleBackup}>
-            <Download className="h-4 w-4 mr-2" />
-            Backup
-          </Button>
-          <VocabularyAIRulesDialog />
-        </div>
-      </header>
+          <div className="flex items-center gap-3">
+            {isPlaceholderWord(creatingWord) && (
+              <Select
+                value={creatingWord?.part_of_speech}
+                onValueChange={value => handleCreatePartOfSpeechChange(value as PartOfSpeech)}>
+                <SelectTrigger className="h-9 w-48">
+                  <SelectValue placeholder="Part of speech" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PART_OF_SPEECH_OPTIONS.map(option => (
+                    <SelectItem key={option} value={option}>
+                      {option.charAt(0).toUpperCase() + option.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button size="sm" onClick={handleStartCreate} disabled={creating || isPlaceholderWord(creatingWord)}>
+              {creating ? 'Creating...' : 'Create Word'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleBackup}>
+              <Download className="h-4 w-4 mr-2" />
+              Backup
+            </Button>
+            <VocabularyAIRulesDialog />
+          </div>
+        </header>
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,40%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[40%_60%] lg:grid-rows-none">
-        <div className="flex min-h-0 flex-col overflow-hidden border-b border-gray-200 bg-roman-marble lg:border-b-0 lg:border-r">
-          <div className="p-4">
-            <VocabularyFiltersComponent
-              filters={filters}
-              wordTypeCounts={wordTypeCounts}
-              countsLoading={countsLoading}
-              onFiltersChange={handleUpdateFilters}
-              onSearch={handleSearch}
-              onReset={handleResetFilters}
+        <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,40%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[40%_60%] lg:grid-rows-none">
+          <div className="flex min-h-0 flex-col overflow-hidden border-b border-gray-200 bg-roman-marble lg:border-b-0 lg:border-r">
+            <div className="p-4">
+              <VocabularyFiltersComponent
+                filters={filters}
+                wordTypeCounts={wordTypeCounts}
+                countsLoading={countsLoading}
+                onFiltersChange={handleUpdateFilters}
+                onSearch={handleSearch}
+                onReset={handleResetFilters}
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+              <VocabularyList
+                words={words}
+                loading={isLoading}
+                loadingMore={loadingMore}
+                hasMore={hasMore}
+                error={isError}
+                onRetry={refetch}
+                onLoadMore={handleLoadMore}
+                onSelectWord={handleSelectWord}
+                onDeleteWord={handleDeleteWord}
+                selectedWordId={selectedWordId}
+                deletingWordId={deletingWordId}
+              />
+            </div>
+          </div>
+
+          <div className="min-h-0 overflow-hidden">
+            <WordEditPanel
+              key={selectedWord?.id ?? 'no-selection'}
+              word={selectedWord}
+              onSave={handleSaveWord}
+              updating={updating || creating}
+              learnedRules={learnedRules}
+              onDirtyChange={setEditorDirty}
             />
           </div>
+        </main>
 
-          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
-            <VocabularyList
-              words={words}
-              loading={isLoading}
-              loadingMore={loadingMore}
-              hasMore={hasMore}
-              error={isError}
-              onRetry={refetch}
-              onLoadMore={handleLoadMore}
-              onSelectWord={handleSelectWord}
-              onDeleteWord={handleDeleteWord}
-              selectedWordId={selectedWordId}
-              deletingWordId={deletingWordId}
-            />
-          </div>
-        </div>
+        <ConfirmationDialog
+          isOpen={pendingSwitch !== null}
+          onClose={() => setPendingSwitch(null)}
+          onConfirm={() => {
+            const go = pendingSwitch;
+            setPendingSwitch(null);
+            go?.();
+          }}
+          title="Discard unsaved changes?"
+          description={`Your changes to ${selectedWord?.word || 'this word'} have not been saved. Save them with Apply first, or discard them. The conversation with the AI is kept either way.`}
+          confirmText="Discard changes"
+          cancelText="Keep editing"
+          confirmVariant="destructive"
+        />
 
-        <div className="min-h-0 overflow-hidden">
-          <WordEditPanel
-            key={selectedWord?.id ?? 'no-selection'}
-            word={selectedWord}
-            onSave={handleSaveWord}
-            updating={updating || creating}
-            learnedRules={learnedRules}
-          />
-        </div>
-      </main>
-
-      <ConfirmationDialog
-        isOpen={!!poolWarning}
-        onClose={() => setPoolWarning(null)}
-        onConfirm={handleConfirmDeleteWithPools}
-        title="Word Used in Vocabulary Pools"
-        description={
-          poolWarning
-            ? `The word "${poolWarning.word.word}" is used in the following pool(s): ${poolWarning.pools.map(p => p.name).join(', ')}. Deleting it will remove it from those pools. Continue?`
-            : ''
-        }
-        confirmText="Delete & Remove from Pools"
-        cancelText="Cancel"
-      />
-    </div>
+        <ConfirmationDialog
+          isOpen={!!poolWarning}
+          onClose={() => setPoolWarning(null)}
+          onConfirm={handleConfirmDeleteWithPools}
+          title="Word Used in Vocabulary Pools"
+          description={
+            poolWarning
+              ? `The word "${poolWarning.word.word}" is used in the following pool(s): ${poolWarning.pools.map(p => p.name).join(', ')}. Deleting it will remove it from those pools. Continue?`
+              : ''
+          }
+          confirmText="Delete & Remove from Pools"
+          cancelText="Cancel"
+        />
+      </div>
+    </AIAssistantProvider>
   );
 }
 

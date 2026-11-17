@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import {
   ArrowUp,
   BookmarkCheck,
@@ -16,10 +24,8 @@ import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import {
   ADMIN_NOTE_MAX,
-  AI_CONVERSATION_HISTORY_LIMIT,
   AICompletableFieldSchema,
   type AICompletableField,
-  type VocabularyAIChatTurn,
   type VocabularyAIMemory,
   type VocabularyAIReview,
   type VocabularyAIUncertainty,
@@ -28,10 +34,16 @@ import type { VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import type { LearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
 import { Button } from '@/src/components/ui/button';
 import { Textarea } from '@/src/components/ui/textarea';
-import { useFirebaseAutocomplete } from '@/src/hooks/useFirebaseAutocomplete';
 import { cn } from '@/src/lib/utils';
 import { changedTableCells, sameWordValue, WORD_TABLE_FIELDS } from '@/src/utils/vocabulary/word-diff';
 import { aiFieldLabel, WORD_FIELDS } from './wordFields';
+import {
+  snapshotValue as snapshot,
+  type AIAssistantStore,
+  type AITurn,
+  type ProposedChange,
+  type Turn,
+} from './aiAssistantStore';
 
 /** An answer from the AI that the admin accepted, as the editor applies it. */
 export interface AcceptedAIReply {
@@ -57,44 +69,15 @@ export interface AIReviewContextValue {
   removeNote: (id: string) => void;
   /** Saves the rules for all words that the AI learns; without it the AI's rules are shown but not kept. */
   learnedRules?: LearnedAIRules;
-  /** Whether the assistant is shown or hidden behind its arrow. */
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  /** The latest autocomplete in this editor, which the assistant reports on. */
-  lastRun: AIAutocompleteRun | null;
-}
-
-/** What one autocomplete did, so the assistant can say so. */
-export interface AIAutocompleteRun {
-  /** Increases with every run, so each run is reported once. */
-  id: number;
-  filled: AICompletableField[];
-  questions: number;
+  /** Keeps this word's conversation, and whether the assistant is shown, across word switches. */
+  assistant: AIAssistantStore;
+  /** Which conversation in the store belongs to this word. */
+  chatKey: string;
+  /** The word as saved, to notice a field the admin changed by hand after the AI asked about it. */
+  saved: Partial<VocabularyWord>;
 }
 
 export const AIReviewContext = createContext<AIReviewContextValue | null>(null);
-
-const OPEN_KEY = 'vocabulary-ai-assistant-open';
-
-/** Shown or hidden, remembered in this browser so a hidden assistant stays hidden from word to word. */
-export function useAIAssistantOpen(): [boolean, (open: boolean) => void] {
-  const [open, setOpenState] = useState(() => {
-    try {
-      return window.localStorage.getItem(OPEN_KEY) !== 'false';
-    } catch {
-      return true;
-    }
-  });
-  const setOpen = (next: boolean) => {
-    setOpenState(next);
-    try {
-      window.localStorage.setItem(OPEN_KEY, String(next));
-    } catch {
-      // Storage can be unavailable; the choice then lasts until the editor closes.
-    }
-  };
-  return [open, setOpen];
-}
 
 const isCompletable = (field: string): field is AICompletableField => AICompletableFieldSchema.safeParse(field).success;
 
@@ -106,11 +89,9 @@ const MAX_LISTED_CELLS = 40;
 const questionAnchor = (prefix: string, field: string) => `${prefix}-ai-question-${field}`;
 const fieldAnchor = (prefix: string, field: string) => `${prefix}-ai-field-${field}`;
 const composerId = (prefix: string) => `${prefix}-ai-composer`;
-const assistantId = (prefix: string) => `${prefix}-ai-assistant`;
 
 const draftValue = (draft: Partial<VocabularyWord>, field: AICompletableField): unknown =>
   (draft as Record<string, unknown>)[field];
-const snapshot = (value: unknown) => JSON.stringify(value ?? null);
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 const truncate = (text: string, length: number) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
 
@@ -146,16 +127,17 @@ function reveal(id: string, focus?: () => HTMLElement | null | undefined, block:
   focus?.()?.focus({ preventScroll: true });
 }
 
-/** Brings the assistant into view at the top of the editor. */
-export function revealAIAssistant(prefix: string) {
-  reveal(assistantId(prefix), undefined, 'start');
-}
-
 const listLabels = (labels: string[]) =>
   labels.length <= 1 ? labels.join('') : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
 
+/** What one autocomplete did, so the assistant can say so. */
+export interface AIAutocompleteRun {
+  filled: AICompletableField[];
+  questions: number;
+}
+
 /** The assistant's report on an autocomplete: all good, or what it still asks. */
-function autocompleteMessage(run: AIAutocompleteRun, word: string): string {
+export function autocompleteMessage(run: AIAutocompleteRun, word: string): string {
   const filled = run.filled.length > 4 ? plural(run.filled.length, 'field') : listLabels(run.filled.map(aiFieldLabel));
   if (run.questions === 0) {
     return filled
@@ -202,47 +184,6 @@ function ChangeView({ field, current, proposed }: { field: AICompletableField; c
   );
 }
 
-interface ProposedChange {
-  field: AICompletableField;
-  value: unknown;
-  /** The field's value when the admin asked, to notice an edit made since. */
-  basis: string;
-}
-
-interface Proposal {
-  changes: ProposedChange[];
-  answered: AICompletableField[];
-  remember: VocabularyAIMemory[];
-  rule: string | null;
-  /** The admin message the AI answered; a learned rule records it as its source. */
-  prompt: string;
-}
-
-type RuleState =
-  | { status: 'offered' }
-  | { status: 'declined' }
-  | { status: 'saving' }
-  | { status: 'saved'; id: string }
-  | { status: 'known' }
-  | { status: 'undone' }
-  | { status: 'failed'; message: string };
-
-type Turn =
-  | { id: number; from: 'admin'; text: string }
-  | { id: number; from: 'event'; text: string }
-  | {
-      id: number;
-      from: 'ai';
-      text: string;
-      proposal: Proposal | null;
-      /** `answer` is a reply with nothing to accept, such as an explanation or a question back. */
-      status: 'answer' | 'pending' | 'accepted' | 'discarded' | 'replaced';
-      rule: RuleState;
-      /** Changes left out on accepting, because the admin had edited those fields since asking. */
-      skipped?: AICompletableField[];
-    };
-type AITurn = Extract<Turn, { from: 'ai' }>;
-
 function AIAvatar() {
   return (
     <span
@@ -268,13 +209,18 @@ function AIBubble({ children, label = 'AI' }: { children: ReactNode; label?: str
 function QuestionCard({
   number,
   question,
+  changed,
   onPick,
   onKeep,
+  onDone,
 }: {
   number: number;
   question: VocabularyAIUncertainty;
+  /** The admin changed the field by hand since the AI asked. */
+  changed: boolean;
   onPick: (answer: string) => void;
   onKeep: () => void;
+  onDone: () => void;
 }) {
   const context = useContext(AIReviewContext)!;
   const { field } = question;
@@ -295,7 +241,7 @@ function QuestionCard({
             <button
               type="button"
               className="underline-offset-2 hover:underline"
-              onClick={() => reveal(fieldAnchor(context.anchorPrefix, field))}
+              onClick={() => reveal(fieldAnchor(context.anchorPrefix, field), undefined, 'start')}
               aria-label={`Show the ${label} field`}>
               {label}
             </button>
@@ -303,16 +249,26 @@ function QuestionCard({
             label
           )}
         </span>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs"
-          disabled={context.disabled}
-          onClick={onKeep}>
-          Keep as is
-        </Button>
+        {!changed && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            disabled={context.disabled}
+            onClick={onKeep}>
+            Keep as is
+          </Button>
+        )}
       </div>
+      {changed && (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs text-gray-800 ring-1 ring-amber-200">
+          <span>You changed {label} since the AI asked.</span>
+          <Button type="button" size="sm" className="h-7 px-3 text-xs" disabled={context.disabled} onClick={onDone}>
+            Done
+          </Button>
+        </div>
+      )}
       <p className="font-medium text-gray-900">{question.question ?? question.explanation}</p>
       {question.question && <p className="whitespace-pre-wrap text-sm text-gray-700">{question.explanation}</p>}
       {!TABLE_FIELDS.has(field) && (
@@ -469,7 +425,7 @@ function MemoryList({ word }: { word: string }) {
         <BookmarkCheck className="h-3.5 w-3.5 text-violet-600" aria-hidden />
         What the AI remembers about {word}
       </p>
-      <ul aria-label={`What the AI remembers about ${word}`} className="max-h-40 space-y-1 overflow-auto">
+      <ul aria-label={`What the AI remembers about ${word}`} className="space-y-1">
         {notes.map(note => (
           <li key={note.id} className="flex items-start gap-2 text-xs text-gray-700">
             <span className="min-w-0 flex-1 whitespace-pre-wrap">
@@ -491,107 +447,73 @@ function MemoryList({ word }: { word: string }) {
   );
 }
 
-/**
- * The AI assistant at the top of the word editor: what the AI is unsure about,
- * as questions with suggested answers, and a conversation in which the admin
- * answers them or asks for any other fix. The AI answers in words and lists the
- * changes it proposes; nothing reaches the draft until the admin accepts it.
- * Facts the admin states are remembered on the word, and a principle that
- * applies to every word becomes a rule for all words.
- */
-export function AIReviewPanel() {
-  const context = useContext(AIReviewContext);
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [message, setMessage] = useState('');
-  const composer = useRef<HTMLTextAreaElement>(null);
-  const nextId = useRef(0);
-  const { requestAutocomplete, isLoading } = useFirebaseAutocomplete({
-    onError: error => toast.error('The AI could not answer', { description: error }),
-  });
-  const [reportedRun, setReportedRun] = useState(context?.lastRun?.id ?? 0);
-  if (!context) return null;
+/** Slides the dock and its tab in and out quickly; people who ask for less motion get none. */
+const SLIDE =
+  'transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none';
 
-  const { review, draft, disabled } = context;
+/**
+ * The AI assistant, floating at the bottom of the word editor like a chat
+ * input. Above the input: what the AI is unsure about, as questions with
+ * suggested answers, and the conversation in which the admin answers them or
+ * asks for any other fix. The AI answers in words and lists the changes it
+ * proposes; nothing reaches the draft until the admin accepts it. Facts the
+ * admin states are remembered on the word, and a principle that applies to
+ * every word becomes a rule for all words.
+ *
+ * The down arrow dismisses it to a small tab, keeping what was typed. Each
+ * word's conversation lives in the page's store, so it survives switching
+ * words, and a reply still running for another word can be stopped or let
+ * finish.
+ */
+export function AIAssistantDock() {
+  const context = useContext(AIReviewContext);
+  const composer = useRef<HTMLTextAreaElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
+  const chatKey = context?.chatKey ?? null;
+  const chat = context ? context.assistant.chat(context.chatKey) : null;
+  const turnCount = chat?.turns.length ?? 0;
+  const waiting = Boolean(chat?.pending);
+
+  // The store announces an answer that arrives for a word that is not on screen.
+  const showChat = useEffectEvent((key: string | null) => context?.assistant.show(key));
+  useEffect(() => {
+    showChat(chatKey);
+    return () => showChat(null);
+  }, [chatKey]);
+
+  // Like any chat, it follows the newest message.
+  useEffect(() => {
+    const element = sheet.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [turnCount, waiting]);
+
+  if (!context || !chat) return null;
+
+  const { review, draft, disabled, assistant } = context;
+  const key = context.chatKey;
+  const { turns, message, pending } = chat;
   const word = draft.word?.trim() || 'this word';
   const questions = review.uncertainties;
-  const busy = disabled || isLoading;
-  const quiet = questions.length === 0 && turns.length === 0;
-  const { open, setOpen, lastRun } = context;
-  const bodyId = `${context.anchorPrefix}-ai-body`;
+  const busy = disabled || Boolean(pending);
+  const open = assistant.open;
+  const elsewhere = assistant.runningElsewhere(key)[0];
+  const hasSheet = questions.length > 0 || turns.length > 0 || Boolean(pending) || review.guidance.length > 0;
 
-  // Each autocomplete gets one report in the conversation; negative IDs keep it apart from sent messages.
-  if (lastRun && lastRun.id !== reportedRun) {
-    setReportedRun(lastRun.id);
-    setTurns(previous => [
-      ...previous,
-      {
-        id: -lastRun.id,
-        from: 'ai',
-        text: autocompleteMessage(lastRun, word),
-        proposal: null,
-        status: 'answer',
-        rule: { status: 'offered' },
-      },
-    ]);
-  }
-  const newId = () => ++nextId.current;
+  const setMessage = (change: (current: string) => string) =>
+    assistant.update(key, current => ({ ...current, message: change(current.message) }));
   const update = (id: number, change: (turn: AITurn) => Partial<AITurn>) =>
-    setTurns(previous =>
-      previous.map(turn => (turn.id === id && turn.from === 'ai' ? ({ ...turn, ...change(turn) } as Turn) : turn))
-    );
+    assistant.update(key, current => ({
+      ...current,
+      turns: current.turns.map(turn =>
+        turn.id === id && turn.from === 'ai' ? ({ ...turn, ...change(turn) } as Turn) : turn
+      ),
+    }));
 
-  const send = async () => {
+  const send = () => {
     const text = message.trim();
     const { part_of_speech } = draft;
     if (!text || busy || !draft.word || !part_of_speech) return;
-    const history: VocabularyAIChatTurn[] = turns
-      .flatMap(turn => (turn.from === 'event' ? [] : [{ from: turn.from, text: turn.text }]))
-      .slice(-AI_CONVERSATION_HISTORY_LIMIT);
-    const asked = draft;
-    const sent: Turn = { id: newId(), from: 'admin', text };
-    setTurns(previous => [...previous, sent]);
-    setMessage('');
-
-    const result = await requestAutocomplete({
-      word: draft.word,
-      part_of_speech,
-      existingData: asked,
-      conversation: { message: text, history },
-    });
-    if (!result?.reply || !result.data) {
-      // Nothing was answered: the message goes back into the box to send again.
-      setTurns(previous => previous.filter(turn => turn.id !== sent.id));
-      setMessage(current => current || text);
-      return;
-    }
-    const { reply } = result;
-    const changes = Object.entries(result.data).flatMap(([field, value]) =>
-      isCompletable(field) && !sameWordValue(draftValue(asked, field), value)
-        ? [{ field, value, basis: snapshot(draftValue(asked, field)) }]
-        : []
-    );
-    const proposal: Proposal = {
-      changes,
-      answered: reply.answered,
-      remember: reply.remember,
-      rule: reply.rule,
-      prompt: text,
-    };
-    const actionable = changes.length > 0 || reply.answered.length > 0 || reply.remember.length > 0 || !!reply.rule;
-    setTurns(previous => [
-      // A newer answer replaces one the admin had not accepted yet.
-      ...previous.map(turn =>
-        turn.from === 'ai' && turn.status === 'pending' ? { ...turn, status: 'replaced' as const } : turn
-      ),
-      {
-        id: newId(),
-        from: 'ai',
-        text: reply.message,
-        proposal: actionable ? proposal : null,
-        status: actionable ? 'pending' : 'answer',
-        rule: { status: 'offered' },
-      },
-    ]);
+    void assistant.send(key, { word: draft.word, part_of_speech, asked: draft, text });
   };
 
   const undoRule = async (turnId: number, ruleId: string) => {
@@ -615,11 +537,11 @@ export function AIReviewPanel() {
         .map(change => change.field)
     );
     const fresh = proposal.changes.filter(change => !stale.has(change.field));
-    const open = new Set(questions.map(question => question.field));
+    const asked = new Set(questions.map(question => question.field));
     context.acceptReply({
       changes: Object.fromEntries(fresh.map(change => [change.field, change.value])),
       closed: [...new Set([...proposal.answered, ...fresh.map(change => change.field)])].filter(
-        field => open.has(field) && !stale.has(field)
+        field => asked.has(field) && !stale.has(field)
       ),
       notes: proposal.remember.filter(note => !note.field || !stale.has(note.field)),
     });
@@ -649,19 +571,33 @@ export function AIReviewPanel() {
     }
   };
 
-  const keep = (question: VocabularyAIUncertainty) => {
-    if (busy) return;
-    context.keep(
-      question.field,
-      question.question
-        ? `When asked “${question.question}”, an admin confirmed the current value.`
-        : 'An admin confirmed the current value.'
+  /** The field differs from its value when the AI asked: as saved, or as autocomplete left it. */
+  const changedByHand = (field: AICompletableField) =>
+    !sameWordValue(
+      draftValue(draft, field),
+      field in chat.basis ? chat.basis[field] : draftValue(context.saved, field)
     );
-    setTurns(previous => [
-      ...previous,
-      { id: newId(), from: 'event', text: `You kept ${aiFieldLabel(question.field)} as it is.` },
-    ]);
+
+  const close = (question: VocabularyAIUncertainty, note: string, event: string) => {
+    if (busy) return;
+    context.keep(question.field, note);
+    const id = assistant.newTurnId();
+    assistant.update(key, current => {
+      const basis = { ...current.basis };
+      delete basis[question.field];
+      return { ...current, basis, turns: [...current.turns, { id, from: 'event', text: event }] };
+    });
   };
+  const asked = (question: VocabularyAIUncertainty) =>
+    question.question ? `When asked “${question.question}”, an admin` : 'An admin';
+  const keep = (question: VocabularyAIUncertainty) =>
+    close(
+      question,
+      `${asked(question)} confirmed the current value.`,
+      `You kept ${aiFieldLabel(question.field)} as it is.`
+    );
+  const done = (question: VocabularyAIUncertainty) =>
+    close(question, `${asked(question)} set the value by hand.`, `You marked ${aiFieldLabel(question.field)} as done.`);
 
   const pick = (field: AICompletableField, answer: string) => {
     const line = `${aiFieldLabel(field)}: ${answer}`;
@@ -672,115 +608,147 @@ export function AIReviewPanel() {
   const onComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
     event.preventDefault();
-    void send();
+    send();
   };
 
   const summary =
     questions.length > 0
       ? `I'm not sure about ${questions.length === 1 ? 'one thing' : `${questions.length} things`} in ${word}. Pick a suggested answer, or reply in your own words.`
-      : turns.length === 0
-        ? `Tell me what to fix or explain in ${word}. You’ll see every change before it reaches the word.`
-        : null;
+      : null;
 
   return (
-    <section
-      id={assistantId(context.anchorPrefix)}
-      aria-label="AI assistant"
-      className={cn(
-        'scroll-mt-4 overflow-hidden rounded-xl border bg-white shadow-sm',
-        questions.length > 0 ? 'border-amber-300' : 'border-violet-200'
-      )}>
-      <h3>
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={open ? bodyId : undefined}
-          aria-label={open ? 'Hide the AI assistant' : 'Show the AI assistant'}
-          onClick={() => setOpen(!open)}
+    <>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-4">
+        <section
+          aria-label="AI assistant"
+          aria-hidden={open ? undefined : true}
+          inert={!open}
           className={cn(
-            'flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-gray-50',
-            open && 'border-b border-gray-100'
+            'flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl border bg-white shadow-[0_16px_40px_-12px_rgba(15,23,42,0.35)]',
+            SLIDE,
+            questions.length > 0 ? 'border-amber-300' : 'border-violet-200',
+            open ? 'pointer-events-auto' : 'translate-y-[calc(100%+1rem)] opacity-0'
           )}>
-          <AIAvatar />
-          <span className="flex-1 text-sm font-semibold text-gray-900">AI assistant</span>
-          {questions.length > 0 && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
-              {plural(questions.length, 'question')}
-            </span>
-          )}
-          <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm">
-            {open ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
-            {open ? 'Hide' : 'Show'}
-          </span>
-        </button>
-      </h3>
-
-      {open && (
-        <div id={bodyId}>
-          <ol aria-label="Conversation with the AI" aria-live="polite" className="space-y-3 px-4 py-3">
-            {summary && (
-              <AIBubble>
-                <p>{summary}</p>
-              </AIBubble>
-            )}
+          <header className="flex items-center gap-2 border-b border-gray-100 py-1.5 pl-3 pr-1.5">
+            <AIAvatar />
+            <h3 className="flex-1 text-sm font-semibold text-gray-900">AI assistant</h3>
             {questions.length > 0 && (
-              <li className="space-y-2 pl-9">
-                {questions.map((question, index) => (
-                  <QuestionCard
-                    key={question.field}
-                    number={index + 1}
-                    question={question}
-                    onPick={answer => pick(question.field, answer)}
-                    onKeep={() => keep(question)}
-                  />
-                ))}
-              </li>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                {plural(questions.length, 'question')}
+              </span>
             )}
-            {turns.map(turn => {
-              if (turn.from === 'event') {
-                return (
-                  <li key={turn.id} className="pl-9 text-xs text-gray-500">
-                    {turn.text}
-                  </li>
-                );
-              }
-              if (turn.from === 'admin') {
-                return (
-                  <li key={turn.id} className="flex justify-end">
-                    <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-gray-100 px-3 py-2 text-sm text-gray-900">
-                      <span className="sr-only">You: </span>
-                      {turn.text}
-                    </p>
-                  </li>
-                );
-              }
-              return (
-                <AIBubble key={turn.id}>
-                  <p className="whitespace-pre-wrap">{turn.text}</p>
-                  {turn.proposal && (
-                    <ProposalView
-                      turn={turn}
-                      busy={busy}
-                      onAccept={() => void accept(turn)}
-                      onDiscard={() => update(turn.id, () => ({ status: 'discarded' }))}
-                      onDeclineRule={() => update(turn.id, () => ({ rule: { status: 'declined' } }))}
-                      onUndoRule={id => void undoRule(turn.id, id)}
-                    />
-                  )}
-                </AIBubble>
-              );
-            })}
-            {isLoading && (
-              <AIBubble>
-                <p className="flex items-center gap-2 text-gray-600">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                  Thinking…
-                </p>
-              </AIBubble>
-            )}
-          </ol>
+            <button
+              type="button"
+              aria-label="Dismiss the AI assistant"
+              title="Dismiss (what you typed is kept)"
+              onClick={() => assistant.setOpen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900">
+              <ChevronDown className="h-5 w-5" aria-hidden />
+            </button>
+          </header>
 
-          <div className="border-t border-gray-100 bg-gray-50/70 px-3 py-2.5">
+          {elsewhere && (
+            <div
+              role="status"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-violet-100 bg-violet-50 px-3 py-1.5 text-xs text-violet-900">
+              <span className="flex flex-1 items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                Still answering about {elsewhere.word}…
+              </span>
+              <button
+                type="button"
+                className="font-medium underline-offset-2 hover:underline"
+                aria-label={`Stop the answer about ${elsewhere.word}`}
+                onClick={() => assistant.stop(elsewhere.key)}>
+                Stop
+              </button>
+              <button
+                type="button"
+                className="font-medium underline-offset-2 hover:underline"
+                aria-label={`Keep going with the answer about ${elsewhere.word}`}
+                onClick={() => assistant.keepGoing(elsewhere.key)}>
+                Keep going
+              </button>
+            </div>
+          )}
+
+          {hasSheet && (
+            <div ref={sheet} className="max-h-[min(55vh,30rem)] overflow-y-auto overscroll-contain">
+              <ol aria-label="Conversation with the AI" aria-live="polite" className="space-y-3 px-4 py-3">
+                {summary && (
+                  <AIBubble>
+                    <p>{summary}</p>
+                  </AIBubble>
+                )}
+                {questions.length > 0 && (
+                  <li className="space-y-2 pl-9">
+                    {questions.map((question, index) => (
+                      <QuestionCard
+                        key={question.field}
+                        number={index + 1}
+                        question={question}
+                        changed={changedByHand(question.field)}
+                        onPick={answer => pick(question.field, answer)}
+                        onKeep={() => keep(question)}
+                        onDone={() => done(question)}
+                      />
+                    ))}
+                  </li>
+                )}
+                {turns.map(turn => {
+                  if (turn.from === 'event') {
+                    return (
+                      <li key={turn.id} className="pl-9 text-xs text-gray-500">
+                        {turn.text}
+                      </li>
+                    );
+                  }
+                  if (turn.from === 'admin') {
+                    return (
+                      <li key={turn.id} className="flex justify-end">
+                        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-gray-100 px-3 py-2 text-sm text-gray-900">
+                          <span className="sr-only">You: </span>
+                          {turn.text}
+                        </p>
+                      </li>
+                    );
+                  }
+                  return (
+                    <AIBubble key={turn.id}>
+                      <p className="whitespace-pre-wrap">{turn.text}</p>
+                      {turn.proposal && (
+                        <ProposalView
+                          turn={turn}
+                          busy={busy}
+                          onAccept={() => void accept(turn)}
+                          onDiscard={() => update(turn.id, () => ({ status: 'discarded' }))}
+                          onDeclineRule={() => update(turn.id, () => ({ rule: { status: 'declined' } }))}
+                          onUndoRule={id => void undoRule(turn.id, id)}
+                        />
+                      )}
+                    </AIBubble>
+                  );
+                })}
+                {pending && (
+                  <AIBubble>
+                    <p className="flex items-center gap-2 text-gray-600">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      <span className="flex-1">Thinking…</span>
+                      <button
+                        type="button"
+                        className="rounded px-1.5 text-xs font-medium text-gray-700 underline-offset-2 hover:underline"
+                        onClick={() => assistant.stop(key)}>
+                        Stop
+                      </button>
+                    </p>
+                  </AIBubble>
+                )}
+              </ol>
+              <MemoryList word={word} />
+            </div>
+          )}
+
+          <div className={cn('px-3 py-2.5', hasSheet && 'border-t border-gray-100 bg-gray-50/70')}>
             <div className="flex items-end gap-2 rounded-xl border border-gray-200 bg-white py-1.5 pl-3 pr-1.5 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">
               <Textarea
                 ref={composer}
@@ -795,7 +763,10 @@ export function AIReviewPanel() {
                     ? 'Answer the AI, or tell it what else to fix…'
                     : `Tell the AI what to fix or explain in ${word}…`
                 }
-                onChange={event => setMessage(event.target.value)}
+                onChange={event => {
+                  const next = event.target.value;
+                  setMessage(() => next);
+                }}
                 onKeyDown={onComposerKeyDown}
                 className="min-h-0 resize-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
               />
@@ -805,21 +776,48 @@ export function AIReviewPanel() {
                 className="h-8 w-8 shrink-0 rounded-lg"
                 aria-label="Send to the AI"
                 disabled={busy || !message.trim()}
-                onClick={() => void send()}>
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+                onClick={send}>
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
               </Button>
             </div>
-            {(!quiet || message) && (
+            {message && (
               <p className="mt-1 px-1 text-[11px] text-gray-500">
                 Enter to send, Shift+Enter for a new line. You’ll see every change before it reaches the word.
               </p>
             )}
           </div>
+        </section>
+      </div>
 
-          <MemoryList word={word} />
-        </div>
-      )}
-    </section>
+      <button
+        type="button"
+        aria-label={
+          questions.length > 0
+            ? `Show the AI assistant (${plural(questions.length, 'question')})`
+            : 'Show the AI assistant'
+        }
+        aria-hidden={open ? true : undefined}
+        inert={open}
+        onClick={() => {
+          assistant.setOpen(true);
+          composer.current?.focus({ preventScroll: true });
+        }}
+        className={cn(
+          'absolute bottom-4 right-4 z-20 inline-flex items-center gap-1.5 rounded-full border bg-white py-1.5 pl-2.5 pr-2 text-sm font-medium shadow-lg hover:bg-violet-50',
+          SLIDE,
+          questions.length > 0 ? 'border-amber-300 text-amber-900' : 'border-violet-200 text-violet-800',
+          open ? 'pointer-events-none translate-y-3 scale-90 opacity-0' : 'translate-y-0 scale-100 opacity-100'
+        )}>
+        <Sparkles className="h-4 w-4" aria-hidden />
+        AI
+        {questions.length > 0 && (
+          <span className="rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900">
+            {questions.length}
+          </span>
+        )}
+        <ChevronUp className="h-4 w-4" aria-hidden />
+      </button>
+    </>
   );
 }
 
@@ -841,9 +839,13 @@ export function AIFieldReview({ field, children }: { field: string; children?: R
         <button
           type="button"
           onClick={() => {
-            // The question is only in the page while the assistant is shown.
-            flushSync(() => context.setOpen(true));
-            reveal(questionAnchor(anchorPrefix, field), () => document.getElementById(composerId(anchorPrefix)));
+            // A dismissed assistant cannot take focus, so it comes back first.
+            flushSync(() => context.assistant.setOpen(true));
+            reveal(
+              questionAnchor(anchorPrefix, field),
+              () => document.getElementById(composerId(anchorPrefix)),
+              'nearest'
+            );
           }}
           aria-label={`AI question about ${aiFieldLabel(field)}`}
           className="absolute -top-3 right-2 z-[1] inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 shadow-sm hover:bg-amber-100">

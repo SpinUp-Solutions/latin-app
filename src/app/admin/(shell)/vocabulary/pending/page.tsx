@@ -13,6 +13,7 @@ import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { AIAssistantProvider } from '@/src/components/ui/admin/vocabulary/aiAssistantStore';
 import { VocabularyAIRulesDialog } from '@/src/components/ui/admin/vocabulary/VocabularyAIRulesDialog';
 import { useLearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
 import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
@@ -237,7 +238,9 @@ function PendingVocabularyPage() {
       </header>
 
       {tab === 'new' ? (
-        <NewWordRequestsReview />
+        <AIAssistantProvider>
+          <NewWordRequestsReview />
+        </AIAssistantProvider>
       ) : (
         <WordUpdateReview requestNavigation={navigationGuard.requestNavigation} onDirtyChange={setProposalDirty} />
       )}

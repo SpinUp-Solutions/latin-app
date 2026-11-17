@@ -16,6 +16,7 @@ import { changedTableCells } from '@/src/utils/vocabulary/word-diff';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
+import { cn } from '@/src/lib/utils';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue } from '@/src/utils/vocabUtils';
@@ -36,13 +37,12 @@ import { AIAutocompleteButton } from './AIAutocompleteButton';
 import {
   AIFieldReview,
   AIReviewContext,
-  AIReviewPanel,
-  revealAIAssistant,
-  useAIAssistantOpen,
+  AIAssistantDock,
+  autocompleteMessage,
   type AcceptedAIReply,
-  type AIAutocompleteRun,
   type AIReviewContextValue,
 } from './VocabularyAIReview';
+import { useAIAssistant } from './aiAssistantStore';
 import { aiFieldLabel } from './wordFields';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
 import {
@@ -202,8 +202,8 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   const [editingCellValue, setEditingCellValue] = useState('');
   const [tableExpanded, setTableExpanded] = useState(true);
   const [aiFieldStatus, setAiFieldStatus] = useState<Map<string, 'filled' | 'missing'>>(new Map());
-  const [assistantOpen, setAssistantOpen] = useAIAssistantOpen();
-  const [aiRun, setAiRun] = useState<AIAutocompleteRun | null>(null);
+  const assistant = useAIAssistant();
+  const chatKey = word?.id ?? 'no-word';
   const [tableErrors, setTableErrors] = useState<string[]>([]);
   const [prevPronounSchema, setPrevPronounSchema] = useState<ReturnType<typeof getPronounTableSchema> | null>(null);
 
@@ -300,10 +300,29 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     }
 
     setAiFieldStatus(fieldStatus);
-    // The assistant opens to report the run: all good, or what the AI still asks.
-    setAiRun(previous => ({ id: (previous?.id ?? 0) + 1, filled, questions: uncertainties.length }));
-    setAssistantOpen(true);
-    revealAIAssistant(anchorPrefix);
+
+    // The assistant comes up to report the run: all good, or what the AI still asks. It remembers
+    // each asked field as autocomplete left it, so only a later edit counts as the admin's own.
+    const after = form.getValues() as unknown as TableData;
+    const basis = Object.fromEntries(
+      uncertainties.map(item => [
+        item.field,
+        editableTable && aiTable && item.field === editableTable.field
+          ? deepMergeNullValues(table, aiTable)
+          : after[item.field],
+      ])
+    );
+    const report = autocompleteMessage({ filled, questions: uncertainties.length }, watchedWord || word.word);
+    const reportId = assistant.newTurnId();
+    assistant.update(chatKey, chat => ({
+      ...chat,
+      basis: { ...chat.basis, ...basis },
+      turns: [
+        ...chat.turns,
+        { id: reportId, from: 'ai', text: report, proposal: null, status: 'answer', rule: { status: 'offered' } },
+      ],
+    }));
+    assistant.setOpen(true);
   };
 
   const updateReview = (change: (review: VocabularyAIReview) => VocabularyAIReview) =>
@@ -450,9 +469,9 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         keep: handleKeep,
         removeNote: handleRemoveNote,
         learnedRules,
-        open: assistantOpen,
-        setOpen: setAssistantOpen,
-        lastRun: aiRun,
+        assistant,
+        chatKey,
+        saved: word ?? {},
       }
     : null;
 
@@ -521,45 +540,49 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
               )}
             </div>
 
-            {/* `relative` keeps the hidden native inputs Radix renders for form controls inside this scroller;
+            {/* The AI assistant floats over the bottom of this area, outside the scroller. */}
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              {/* `relative` keeps the hidden native inputs Radix renders for form controls inside this scroller;
               without it they are positioned against the page and make the whole document scrollable. */}
-            <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
-              <div className="space-y-6">
-                <AIReviewPanel />
-                <BaseWordForm />
-                {renderPosForm()}
+              <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+                {/* Room below the last field, so it can always scroll above the assistant's input. */}
+                <div className={cn('space-y-6', aiReview && 'pb-28')}>
+                  <BaseWordForm />
+                  {renderPosForm()}
 
-                {editableTable && (
-                  <AIFieldReview field={editableTable.field}>
-                    <SchemaTable
-                      schema={
-                        word.part_of_speech === 'pronoun'
-                          ? getPronounTableSchema(pronounType, pronounPerson)
-                          : editableTable.schema
-                      }
-                      data={table}
-                      tableType={editableTable.tableType}
-                      title={
-                        word.part_of_speech === 'pronoun'
-                          ? getPronounTableTitle(pronounType, pronounPerson)
-                          : editableTable.title
-                      }
-                      color={editableTable.color}
-                      isExpanded={tableExpanded}
-                      onToggle={() => setTableExpanded(expanded => !expanded)}
-                      isEditMode={true}
-                      editingCell={editingCell}
-                      editingCellValue={editingCellValue}
-                      editCallbacks={{
-                        onCellDoubleClick: handleCellDoubleClick,
-                        onCellEditSave: handleCellEditSave,
-                        onCellEditCancel: handleCellEditCancel,
-                        onEditingCellValueChange: setEditingCellValue,
-                      }}
-                    />
-                  </AIFieldReview>
-                )}
+                  {editableTable && (
+                    <AIFieldReview field={editableTable.field}>
+                      <SchemaTable
+                        schema={
+                          word.part_of_speech === 'pronoun'
+                            ? getPronounTableSchema(pronounType, pronounPerson)
+                            : editableTable.schema
+                        }
+                        data={table}
+                        tableType={editableTable.tableType}
+                        title={
+                          word.part_of_speech === 'pronoun'
+                            ? getPronounTableTitle(pronounType, pronounPerson)
+                            : editableTable.title
+                        }
+                        color={editableTable.color}
+                        isExpanded={tableExpanded}
+                        onToggle={() => setTableExpanded(expanded => !expanded)}
+                        isEditMode={true}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        editCallbacks={{
+                          onCellDoubleClick: handleCellDoubleClick,
+                          onCellEditSave: handleCellEditSave,
+                          onCellEditCancel: handleCellEditCancel,
+                          onEditingCellValueChange: setEditingCellValue,
+                        }}
+                      />
+                    </AIFieldReview>
+                  )}
+                </div>
               </div>
+              <AIAssistantDock />
             </div>
           </form>
         </AIFilledFieldsContext.Provider>

@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'sonner';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { AIAssistantProvider } from '@/src/components/ui/admin/vocabulary/aiAssistantStore';
 import {
   applyFormValuesToWord,
   toFormDefaultValues,
@@ -15,7 +16,7 @@ import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 
 const mockCallable = jest.fn();
 jest.mock('firebase/functions', () => ({ getFunctions: jest.fn(), httpsCallable: () => mockCallable }));
-jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() } }));
+jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn(), info: jest.fn() } }));
 
 const question = {
   field: 'etymology' as const,
@@ -70,6 +71,21 @@ const reply = (data: Record<string, unknown>, said: Partial<VocabularyAIReply> =
   },
 });
 const assistant = () => screen.getByRole('region', { name: 'AI assistant' });
+const dismiss = () => fireEvent.click(screen.getByRole('button', { name: 'Dismiss the AI assistant' }));
+const tab = () => screen.queryByRole('button', { name: /^Show the AI assistant/ });
+/** The page's store around the editor, keyed by word like the vocabulary page. */
+const OnPage = ({
+  word,
+  onSave = async () => true,
+}: {
+  word: VocabularyWordWithId;
+  onSave?: () => Promise<boolean>;
+}) => (
+  <AIAssistantProvider>
+    <WordEditPanel key={word.id} word={word} onSave={onSave} updating={false} />
+  </AIAssistantProvider>
+);
+const silva = () => ({ ...cloneNoun(), id: 'silva', word: 'silva', ai_review: { uncertainties: [], guidance: [] } });
 const questionCard = (label: string) => screen.queryByRole('group', { name: `AI question about ${label}` });
 const composer = () => screen.getByLabelText('Message to the AI');
 const say = (text: string) => {
@@ -101,6 +117,8 @@ const learnedRules = () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // A queued answer a failed test never used must not reach the next test.
+  mockCallable.mockReset();
   localStorage.clear();
   let uuid = 0;
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => `note-${++uuid}` });
@@ -306,21 +324,21 @@ it('can be asked anything when it has no questions, and answers without proposin
   expect(screen.queryByRole('button', { name: /^Accept/ })).toBeNull();
 });
 
-it('opens when autocomplete finishes, says all good when the AI is sure, and still takes a correction', async () => {
+it('comes back up when autocomplete finishes, says all good when the AI is sure, and still takes a correction', async () => {
   const word = cloneNoun();
   delete word.ai_review;
   mockCallable.mockResolvedValueOnce(answer({ pronunciation: 'ˈro.sa' }));
   render(<WordEditPanel word={word} onSave={async () => true} updating={false} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Hide the AI assistant' }));
-  expect(screen.queryByLabelText('Message to the AI')).toBeNull();
+  dismiss();
+  expect(screen.queryByRole('region', { name: 'AI assistant' })).toBeNull();
+  expect(tab()).not.toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
-  expect(
-    await within(assistant()).findByText(
-      'All good! I filled Pronunciation in rosa and I’m confident about it. If anything is wrong, tell me below and I’ll fix it.'
-    )
-  ).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Hide the AI assistant' })).toHaveAttribute('aria-expanded', 'true');
+  const report = await screen.findByText(
+    'All good! I filled Pronunciation in rosa and I’m confident about it. If anything is wrong, tell me below and I’ll fix it.'
+  );
+  expect(assistant()).toContainElement(report);
+  expect(tab()).toBeNull();
   expect(toast.success).toHaveBeenCalledWith('AI autocomplete finished', undefined);
 
   // Sure is not the same as right: the admin corrects it in the same conversation.
@@ -347,21 +365,113 @@ it('says all good when there was nothing left to fill', async () => {
   ).toBeInTheDocument();
 });
 
-it('hides behind its arrow, stays hidden from word to word, and opens again from a field’s question', () => {
+it('dismisses to a tab that counts open questions, stays dismissed from word to word, and comes back from a field', () => {
   const first = render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Hide the AI assistant' }));
-  expect(questionCard('Etymology')).toBeNull();
-  const show = screen.getByRole('button', { name: 'Show the AI assistant' });
-  expect(show).toHaveAttribute('aria-expanded', 'false');
-  // Hidden, it still says how many questions are open.
-  expect(within(assistant()).getByText('1 question')).toBeInTheDocument();
+  dismiss();
+  expect(screen.queryByRole('region', { name: 'AI assistant' })).toBeNull();
+  expect(tab()).toHaveAccessibleName('Show the AI assistant (1 question)');
 
   first.unmount();
   render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
-  expect(screen.getByRole('button', { name: 'Show the AI assistant' })).toBeInTheDocument();
+  expect(tab()).not.toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'AI question about Etymology' }));
   expect(questionCard('Etymology')).not.toBeNull();
   expect(composer()).toHaveFocus();
+  expect(tab()).toBeNull();
+});
+
+it('keeps what was typed when dismissed, and each word keeps its own conversation', async () => {
+  const view = render(<OnPage word={cloneNoun()} />);
+  fireEvent.change(composer(), { target: { value: 'Half a thought' } });
+  dismiss();
+  fireEvent.click(tab()!);
+  expect(composer()).toHaveValue('Half a thought');
+
+  mockCallable.mockResolvedValueOnce(reply({}, { message: 'It came through Greek.' }));
+  say('Where is rosa from?');
+  expect(await screen.findByText('It came through Greek.')).toBeInTheDocument();
+
+  view.rerender(<OnPage word={silva()} />);
+  expect(screen.queryByText('It came through Greek.')).toBeNull();
+  expect(composer()).toHaveValue('');
+  fireEvent.change(composer(), { target: { value: 'About silva' } });
+
+  view.rerender(<OnPage word={cloneNoun()} />);
+  expect(screen.getByText('It came through Greek.')).toBeInTheDocument();
+  expect(screen.getByText('Where is rosa from?')).toBeInTheDocument();
+  view.rerender(<OnPage word={silva()} />);
+  expect(composer()).toHaveValue('About silva');
+});
+
+it('lets a reply for another word finish there, announced, and acceptable once the admin is back', async () => {
+  const finish = pending();
+  const view = render(<OnPage word={cloneNoun()} />);
+  say('Etymology: It is a loan from Greek rhódon.');
+  view.rerender(<OnPage word={silva()} />);
+
+  const notice = screen.getByRole('status');
+  expect(notice).toHaveTextContent('Still answering about rosa…');
+  fireEvent.click(within(notice).getByRole('button', { name: 'Keep going with the answer about rosa' }));
+  expect(screen.queryByText('Still answering about rosa…')).toBeNull();
+
+  await finish(
+    reply({ etymology: 'From Greek rhódon.' }, { message: 'Rewritten as a loan.', answered: ['etymology'] })
+  );
+  expect(toast.info).toHaveBeenCalledWith('The AI answered about rosa', {
+    description: 'Open rosa to see its answer.',
+  });
+  expect(screen.queryByText('Rewritten as a loan.')).toBeNull();
+
+  view.rerender(<OnPage word={cloneNoun()} />);
+  expect(screen.getByText('Rewritten as a loan.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Accept change' }));
+  expect(screen.getByLabelText('Etymology')).toHaveValue('From Greek rhódon.');
+  expect(questionCard('Etymology')).toBeNull();
+});
+
+it('stops a reply on request, from its own word or another, and ignores the late answer', async () => {
+  const late = pending();
+  const view = render(<OnPage word={cloneNoun()} />);
+  say('First try.');
+  fireEvent.click(within(assistant()).getByRole('button', { name: 'Stop' }));
+  expect(composer()).toHaveValue('First try.');
+  await late(reply({ etymology: 'late' }, { message: 'Too late.' }));
+  expect(screen.queryByText('Too late.')).toBeNull();
+
+  const later = pending();
+  say('Second try.');
+  view.rerender(<OnPage word={silva()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Stop the answer about rosa' }));
+  expect(screen.queryByRole('status')).toBeNull();
+  await later(reply({ etymology: 'late' }, { message: 'Also too late.' }));
+  expect(toast.info).not.toHaveBeenCalled();
+
+  view.rerender(<OnPage word={cloneNoun()} />);
+  expect(screen.queryByText('Also too late.')).toBeNull();
+  expect(composer()).toHaveValue('Second try.');
+});
+
+it('notices a field changed by hand after the AI asked, and Done closes the question with a note', async () => {
+  const onSave = jest.fn(async () => true);
+  render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+  const card = () => questionCard('Etymology')!;
+  expect(within(card()).queryByText(/You changed/)).toBeNull();
+  fireEvent.change(screen.getByLabelText('Etymology'), { target: { value: 'From Greek rhódon.' } });
+  expect(within(card()).getByText('You changed Etymology since the AI asked.')).toBeInTheDocument();
+  expect(within(card()).queryByRole('button', { name: 'Keep as is' })).toBeNull();
+
+  fireEvent.click(within(card()).getByRole('button', { name: 'Done' }));
+  expect(questionCard('Etymology')).toBeNull();
+  expect(screen.getByText('You marked Etymology as done.')).toBeInTheDocument();
+  const { ai_review } = await saveWord(onSave);
+  expect(ai_review.uncertainties).toEqual([]);
+  expect(ai_review.guidance).toEqual([
+    {
+      id: 'note-1',
+      field: 'etymology',
+      instruction: `When asked “${question.question}”, an admin set the value by hand.`,
+    },
+  ]);
 });
 
 it('puts the message back in the box when the AI cannot answer', async () => {
@@ -478,6 +588,8 @@ it('adds new questions from autocomplete without replacing open ones, filling on
     within(assistant()).getByText('Done. I filled Pronunciation in rosa. I have 2 questions for you above.')
   ).toBeInTheDocument();
   expect(within(questionCard('Pronunciation')!).getByText('Is the o long?')).toBeInTheDocument();
+  // Autocomplete filled the field it asks about; only the admin's own edit counts as a change.
+  expect(within(questionCard('Pronunciation')!).queryByText(/You changed/)).toBeNull();
   expect(within(questionCard('Etymology')!).getByText(question.question)).toBeInTheDocument();
   expect(within(assistant()).getByText('2 questions')).toBeInTheDocument();
   const payload = await saveWord(onSave);

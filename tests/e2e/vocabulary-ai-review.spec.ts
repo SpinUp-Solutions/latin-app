@@ -104,6 +104,7 @@ test.describe('Vocabulary AI assistant', () => {
 
     const assistant = page.getByRole('region', { name: 'AI assistant' });
     await expect(assistant).toContainText("I'm not sure about 2 things in rosa.");
+    await page.screenshot({ path: testInfo.outputPath('0-dock.png'), animations: 'disabled' });
     const etymology = assistant.getByRole('group', { name: 'AI question about Etymology' });
     await expect(etymology).toContainText(etymologyQuestion.question);
     await expect(etymology).toContainText('Now: Native Latin.');
@@ -199,6 +200,21 @@ test.describe('Vocabulary AI assistant', () => {
       .db.collection(VOCABULARY_WORDS_COLLECTION)
       .doc(WORD_ID)
       .update({ ai_review: { uncertainties: [], guidance: [] } });
+    // A second complete word to switch to (the shared seed's amo has no definitions, which the editor needs).
+    const { id: _otherId, ...other } = buildEmptyWord('noun');
+    await getE2EAdmin()
+      .db.collection(VOCABULARY_WORDS_COLLECTION)
+      .doc('e2e-silva')
+      .set({
+        ...other,
+        word: 'silva',
+        translation: 'forest',
+        definitions: ['forest'],
+        gender: 'feminine',
+        declension: '1',
+        sort_key: 'silva',
+        random_index: 0.6,
+      });
     await getE2EAdmin()
       .db.collection(VOCABULARY_AI_GUIDANCE_COLLECTION)
       .doc(VOCABULARY_AI_GUIDANCE_DOCUMENT)
@@ -219,15 +235,18 @@ test.describe('Vocabulary AI assistant', () => {
 
     const assistant = page.getByRole('region', { name: 'AI assistant' });
     const composer = assistant.getByLabel('Message to the AI');
-    // Hidden behind its arrow, the assistant opens by itself when autocomplete finishes.
-    await assistant.getByRole('button', { name: 'Hide the AI assistant' }).click();
-    await expect(composer).toBeHidden();
-    await page.screenshot({ path: testInfo.outputPath('0-hidden.png') });
+    // Dismissed to its tab, the assistant comes back by itself when autocomplete finishes.
+    const tab = page.getByRole('button', { name: /^Show the AI assistant/ });
+    await assistant.getByRole('button', { name: 'Dismiss the AI assistant' }).click();
+    await expect(tab).toBeVisible();
+    await expect(page.getByRole('region', { name: 'AI assistant' })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('0-dismissed.png'), animations: 'disabled' });
     await page.getByRole('button', { name: 'AI Autocomplete' }).click();
     await expect(assistant).toContainText('All good! I filled Pronunciation in rosa and I’m confident about it.');
     await expect(composer).toBeVisible();
+    await expect(tab).toHaveCount(0);
     await expect(page.getByLabel('Pronunciation', { exact: true })).toHaveValue('ˈro.sa');
-    await page.screenshot({ path: testInfo.outputPath('0-all-good.png') });
+    await page.screenshot({ path: testInfo.outputPath('0-all-good.png'), animations: 'disabled' });
 
     // Sure or not, the admin can still talk to it.
     await composer.fill('Why first declension?');
@@ -241,6 +260,21 @@ test.describe('Vocabulary AI assistant', () => {
         history: [{ from: 'ai', text: expect.stringContaining('All good!') }],
       },
     });
+
+    // The filled pronunciation is not saved yet, so switching words asks first.
+    await page.getByText('silva', { exact: true }).click();
+    const discard = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
+    await expect(discard).toBeVisible();
+    await discard.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(page.getByLabel('Pronunciation', { exact: true })).toHaveValue('ˈro.sa');
+    await page.getByText('silva', { exact: true }).click();
+    await discard.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(page.getByRole('heading', { name: 'silva' })).toBeVisible();
+    await expect(assistant).not.toContainText('Because rosa, rosae follows the first declension.');
+    // Coming back, rosa's conversation is still there; the discarded draft is not.
+    await page.getByText('rosa', { exact: true }).click();
+    await expect(assistant).toContainText('Because rosa, rosae follows the first declension.');
+    await expect(page.getByLabel('Pronunciation', { exact: true })).toHaveValue('');
 
     await page.getByRole('button', { name: 'AI rules' }).click();
     const dialog = page.getByRole('dialog', { name: 'AI rules for all words' });
