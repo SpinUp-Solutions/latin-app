@@ -130,6 +130,17 @@ describe('admin generated exercise preview route', () => {
     expect(response.status).toBe(404);
   });
 
+  it('rejects a deletion-pending pool like a missing one', async () => {
+    const { words, pool, exercise } = generatedPoolFixture();
+    const db = createFakeGeneratedWordDb({ words, pools: [{ ...pool, _deletionPending: true }] });
+    dbState.collection = db.collection;
+
+    const response = await POST({ json: async () => exercise } as never);
+
+    expect(response.status).toBe(404);
+    expect((response as unknown as { body: { code?: string } }).body.code).toBe('POOL_NOT_FOUND');
+  });
+
   it('rejects a pool source without a selected pool instead of querying the full collection', async () => {
     const response = await POST({
       json: async () => ({
