@@ -8,6 +8,8 @@ import { Loader2, Sparkles, XCircle, Copy, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
 import { useEffect, useEffectEvent, useState } from 'react';
+import type { VocabularyAIUncertainty } from '@/shared/types/vocabulary/ai-review';
+import { aiFieldLabel } from './wordFields';
 
 interface AIAutocompleteButtonProps {
   wordId: string;
@@ -17,9 +19,10 @@ interface AIAutocompleteButtonProps {
   snapshotKey?: string;
   onAutocomplete: (
     data: Partial<VocabularyWord>,
-    fieldStatus?: Record<string, 'filled' | 'missing'>,
-    wordId?: string
-  ) => void | boolean;
+    fieldStatus: Record<string, 'filled' | 'missing'> | undefined,
+    wordId: string,
+    uncertainties: VocabularyAIUncertainty[]
+  ) => void;
   disabled?: boolean;
 }
 
@@ -60,22 +63,19 @@ export function AIAutocompleteButton({
       overwriteExisting: false,
     });
     if (!result?.data) return;
-    const review = result.data.ai_review;
-    const accepted = onAutocomplete(
-      {
-        ...result.data,
-        ai_review: {
-          uncertainties: result.uncertainties ?? review?.uncertainties ?? [],
-          guidance: review?.guidance ?? [],
-        },
-      },
-      result.fieldStatus,
-      wordId
-    );
-    if (accepted === false) return;
+    const uncertainties = result.uncertainties ?? [];
+    onAutocomplete(result.data, result.fieldStatus, wordId, uncertainties);
     const costMessage = result.cost
       ? `Cost: $${result.cost.totalCost.toFixed(4)} (${result.cost.tokens.totalTokens.toLocaleString()} tokens)`
       : '';
+    if (uncertainties.length > 0) {
+      const count = uncertainties.length === 1 ? '1 field' : `${uncertainties.length} fields`;
+      const fields = uncertainties.map(item => aiFieldLabel(item.field)).join(', ');
+      toast.warning(`AI is unsure about ${count}`, {
+        description: `${fields}. They are flagged in the form; check them before saving. ${costMessage}`,
+      });
+      return;
+    }
     toast.success('AI Autocomplete Successful', {
       description: `Empty fields have been filled. Review the suggestions and save your changes. ${costMessage}`,
     });

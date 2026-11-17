@@ -1,7 +1,12 @@
-import React, { useEffect, useEffectEvent, useState } from 'react';
+import React, { useEffect, useEffectEvent, useId, useState } from 'react';
 import { toast } from 'sonner';
-import type { AICompletableField } from '@/shared/openai/types';
-import type { VocabularyAIReview, VocabularyAIUncertainty } from '@/shared/types/vocabulary/ai-review';
+import {
+  addOpenUncertainties,
+  AI_REVIEW_ITEM_LIMIT,
+  EMPTY_AI_REVIEW,
+  type AICompletableField,
+  type VocabularyAIUncertainty,
+} from '@/shared/types/vocabulary/ai-review';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
@@ -22,8 +27,8 @@ import {
   VocabularyFormValues,
 } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
-import { VocabularyAIReviewPanel } from './VocabularyAIReviewPanel';
-import { VocabularyAIGlobalGuidance } from './VocabularyAIGlobalGuidance';
+import { AIFieldReview, AIReviewContext, AIReviewSummary, type AIReviewContextValue } from './VocabularyAIReview';
+import { aiFieldLabel } from './wordFields';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
 import {
   toFormDefaultValues,
@@ -230,26 +235,15 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
 
   const handleAIAutocomplete = (
     aiData: Partial<VocabularyWord>,
-    apiFieldStatus?: Record<string, 'filled' | 'missing'>,
-    requestWordId?: string
+    apiFieldStatus: Record<string, 'filled' | 'missing'> | undefined,
+    requestWordId: string,
+    uncertainties: VocabularyAIUncertainty[] = []
   ) => {
     // Ignore a response that arrives after the admin switched to another word.
-    if (requestWordId && requestWordId !== word?.id) return;
+    if (requestWordId !== word?.id) return;
 
     const fieldStatus = new Map<string, 'filled' | 'missing'>(Object.entries(apiFieldStatus || {}));
 
-    const review = form.getValues('ai_review') ?? { uncertainties: [], guidance: [] };
-    const mergedIssues = [...review.uncertainties];
-    for (const issue of aiData.ai_review?.uncertainties ?? []) {
-      if (!mergedIssues.some(existing => existing.field === issue.field && existing.explanation === issue.explanation))
-        mergedIssues.push(issue);
-    }
-    if (mergedIssues.length > 20) {
-      toast.error(
-        'The result exceeds 20 open AI issues. Resolve some saved issues before requesting another review. No suggestions were applied.'
-      );
-      return false;
-    }
     const current = form.getValues() as unknown as TableData;
     Object.entries(aiData).forEach(([key, value]) => {
       if (key === 'part_of_speech' || key === 'ai_review' || key === editableTable?.field || !(key in current)) return;
@@ -258,9 +252,13 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         form.setValue(key as keyof VocabularyFormValues, merged as never, { shouldValidate: false, shouldDirty: true });
       }
     });
-    if (aiData.ai_review) {
-      // AI output cannot erase open issues or author remembered instructions.
-      form.setValue('ai_review', { ...review, uncertainties: mergedIssues }, { shouldDirty: true });
+    if (uncertainties.length > 0) {
+      // New doubts join the open ones; only the admin closes a doubt.
+      const review = form.getValues('ai_review') ?? EMPTY_AI_REVIEW;
+      const merged = addOpenUncertainties(review.uncertainties, uncertainties);
+      if (merged.length !== review.uncertainties.length) {
+        form.setValue('ai_review', { ...review, uncertainties: merged }, { shouldDirty: true });
+      }
     }
 
     const aiTable = editableTable && (aiData as TableData)[editableTable.field];
@@ -279,11 +277,25 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     setAiFieldStatus(fieldStatus);
   };
 
-  const handleReviewChange = (review: VocabularyAIReview) => {
-    form.setValue('ai_review', review, { shouldDirty: true, shouldValidate: false });
+  /** Closes the field's doubt; the admin's note, if any, is kept on the word for later AI requests. */
+  const closeDoubt = (field: AICompletableField, note: string) => {
+    const review = form.getValues('ai_review') ?? EMPTY_AI_REVIEW;
+    let guidance = review.guidance;
+    if (note && guidance.length >= AI_REVIEW_ITEM_LIMIT) {
+      toast.warning(`This word already has ${AI_REVIEW_ITEM_LIMIT} notes for the AI, so this one was not kept.`, {
+        description: 'Remove an old note to keep new ones.',
+      });
+    } else if (note) {
+      guidance = [...guidance, { id: crypto.randomUUID(), instruction: note, field }];
+    }
+    form.setValue(
+      'ai_review',
+      { uncertainties: review.uncertainties.filter(item => item.field !== field), guidance },
+      { shouldDirty: true, shouldValidate: false }
+    );
   };
 
-  const handleApplyAnswer = (field: AICompletableField, value: unknown, issue: VocabularyAIUncertainty) => {
+  const handleApplyProposal = (field: AICompletableField, value: unknown, note: string) => {
     if (editableTable?.field === field) {
       const schema =
         word?.part_of_speech === 'pronoun'
@@ -296,14 +308,17 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     } else {
       form.setValue(field as keyof VocabularyFormValues, value as never, { shouldDirty: true, shouldValidate: false });
     }
-    const review = form.getValues('ai_review') ?? { uncertainties: [], guidance: [] };
-    handleReviewChange({
-      ...review,
-      uncertainties: review.uncertainties.filter(
-        item => item.field !== issue.field || item.explanation !== issue.explanation
-      ),
-    });
-    toast.success(`Answer applied to the draft. Save the word with ${saveLabel}.`);
+    closeDoubt(field, note);
+    toast.success(`${aiFieldLabel(field)} updated. Save the word with ${saveLabel} to keep it.`);
+  };
+
+  const handleRemoveNote = (id: string) => {
+    const review = form.getValues('ai_review') ?? EMPTY_AI_REVIEW;
+    form.setValue(
+      'ai_review',
+      { ...review, guidance: review.guidance.filter(note => note.id !== id) },
+      { shouldDirty: true, shouldValidate: false }
+    );
   };
 
   const handleSubmit = form.handleSubmit(
@@ -347,9 +362,9 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     () => setTableErrors([])
   );
 
+  const anchorPrefix = useId();
   const watchedValues = form.watch();
   const watchedWord = watchedValues.word;
-  const review = watchedValues.ai_review ?? { uncertainties: [], guidance: [] };
   const aiSnapshot = {
     ...word,
     ...watchedValues,
@@ -376,6 +391,18 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
 
   const isSubmitting = form.formState.isSubmitting;
 
+  const aiReview: AIReviewContextValue | null = allowAIAutocomplete
+    ? {
+        anchorPrefix,
+        review: watchedValues.ai_review ?? EMPTY_AI_REVIEW,
+        draft: aiSnapshot,
+        disabled: updating || isSubmitting || !!editingCell,
+        applyProposal: handleApplyProposal,
+        resolve: closeDoubt,
+        removeNote: handleRemoveNote,
+      }
+    : null;
+
   const dirty = form.formState.isDirty || JSON.stringify(table) !== savedTable;
   const reportDirty = useEffectEvent((value: boolean) => onDirtyChange?.(value));
   useEffect(() => {
@@ -389,109 +416,101 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
 
   return (
     <FormProvider {...form}>
-      <AIFilledFieldsContext.Provider value={aiFieldStatus}>
-        <form
-          onSubmit={handleSubmit}
-          className="flex h-full min-h-0 flex-col overflow-hidden bg-white border-l border-gray-200">
-          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-xl font-serif font-semibold text-roman-red truncate">{watchedWord || word.word}</h2>
-                <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
+      <AIReviewContext.Provider value={aiReview}>
+        <AIFilledFieldsContext.Provider value={aiFieldStatus}>
+          <form
+            onSubmit={handleSubmit}
+            className="flex h-full min-h-0 flex-col overflow-hidden bg-white border-l border-gray-200">
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-xl font-serif font-semibold text-roman-red truncate">
+                    {watchedWord || word.word}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {actions}
+                  {allowAIAutocomplete && (
+                    <AIAutocompleteButton
+                      key={word.id}
+                      wordId={word.id}
+                      word={watchedWord || word.word}
+                      partOfSpeech={word.part_of_speech}
+                      existingData={aiSnapshot}
+                      snapshotKey={snapshotKey}
+                      onAutocomplete={handleAIAutocomplete}
+                      disabled={updating || isSubmitting || !!editingCell}
+                    />
+                  )}
+                  <Button type="submit" disabled={updating || isSubmitting}>
+                    {updating || isSubmitting ? 'Saving...' : saveLabel}
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {actions}
-                {allowAIAutocomplete && (
-                  <AIAutocompleteButton
-                    key={word.id}
-                    wordId={word.id}
-                    word={watchedWord || word.word}
-                    partOfSpeech={word.part_of_speech}
-                    existingData={aiSnapshot}
-                    snapshotKey={snapshotKey}
-                    onAutocomplete={handleAIAutocomplete}
-                    disabled={updating || isSubmitting || !!editingCell}
-                  />
-                )}
-                <Button type="submit" disabled={updating || isSubmitting}>
-                  {updating || isSubmitting ? 'Saving...' : saveLabel}
-                </Button>
-              </div>
+              {Object.keys(form.formState.errors).length > 0 && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                  <div className="font-semibold mb-1">Validation Errors:</div>
+                  <pre className="text-xs overflow-auto">{JSON.stringify(form.formState.errors, null, 2)}</pre>
+                </div>
+              )}
+              {tableErrors.length > 0 && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                  <div className="font-semibold mb-1">Table Validation Errors:</div>
+                  <ul className="list-disc list-inside space-y-1">
+                    {tableErrors.map((error, index) => (
+                      <li key={index} className="text-xs">
+                        {error}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-            {Object.keys(form.formState.errors).length > 0 && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                <div className="font-semibold mb-1">Validation Errors:</div>
-                <pre className="text-xs overflow-auto">{JSON.stringify(form.formState.errors, null, 2)}</pre>
-              </div>
-            )}
-            {tableErrors.length > 0 && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                <div className="font-semibold mb-1">Table Validation Errors:</div>
-                <ul className="list-disc list-inside space-y-1">
-                  {tableErrors.map((error, index) => (
-                    <li key={index} className="text-xs">
-                      {error}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
 
-          {/* `relative` keeps the hidden native inputs Radix renders for form controls inside this scroller;
+            {/* `relative` keeps the hidden native inputs Radix renders for form controls inside this scroller;
               without it they are positioned against the page and make the whole document scrollable. */}
-          <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
-            <div className="space-y-6">
-              {allowAIAutocomplete && (
-                <>
-                  <VocabularyAIReviewPanel
-                    key={word.id}
-                    review={review}
-                    snapshot={aiSnapshot}
-                    snapshotKey={snapshotKey}
-                    onReviewChange={handleReviewChange}
-                    onApply={handleApplyAnswer}
-                    disabled={updating || isSubmitting || !!editingCell}
-                    saveLabel={saveLabel}
-                  />
-                  <VocabularyAIGlobalGuidance disabled={updating || isSubmitting} />
-                </>
-              )}
-              <BaseWordForm />
-              {renderPosForm()}
+            <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+              <div className="space-y-6">
+                <AIReviewSummary />
+                <BaseWordForm />
+                {renderPosForm()}
 
-              {editableTable && (
-                <SchemaTable
-                  schema={
-                    word.part_of_speech === 'pronoun'
-                      ? getPronounTableSchema(pronounType, pronounPerson)
-                      : editableTable.schema
-                  }
-                  data={table}
-                  tableType={editableTable.tableType}
-                  title={
-                    word.part_of_speech === 'pronoun'
-                      ? getPronounTableTitle(pronounType, pronounPerson)
-                      : editableTable.title
-                  }
-                  color={editableTable.color}
-                  isExpanded={tableExpanded}
-                  onToggle={() => setTableExpanded(expanded => !expanded)}
-                  isEditMode={true}
-                  editingCell={editingCell}
-                  editingCellValue={editingCellValue}
-                  editCallbacks={{
-                    onCellDoubleClick: handleCellDoubleClick,
-                    onCellEditSave: handleCellEditSave,
-                    onCellEditCancel: handleCellEditCancel,
-                    onEditingCellValueChange: setEditingCellValue,
-                  }}
-                />
-              )}
+                {editableTable && (
+                  <AIFieldReview field={editableTable.field} doubtFirst>
+                    <SchemaTable
+                      schema={
+                        word.part_of_speech === 'pronoun'
+                          ? getPronounTableSchema(pronounType, pronounPerson)
+                          : editableTable.schema
+                      }
+                      data={table}
+                      tableType={editableTable.tableType}
+                      title={
+                        word.part_of_speech === 'pronoun'
+                          ? getPronounTableTitle(pronounType, pronounPerson)
+                          : editableTable.title
+                      }
+                      color={editableTable.color}
+                      isExpanded={tableExpanded}
+                      onToggle={() => setTableExpanded(expanded => !expanded)}
+                      isEditMode={true}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      editCallbacks={{
+                        onCellDoubleClick: handleCellDoubleClick,
+                        onCellEditSave: handleCellEditSave,
+                        onCellEditCancel: handleCellEditCancel,
+                        onEditingCellValueChange: setEditingCellValue,
+                      }}
+                    />
+                  </AIFieldReview>
+                )}
+              </div>
             </div>
-          </div>
-        </form>
-      </AIFilledFieldsContext.Provider>
+          </form>
+        </AIFilledFieldsContext.Provider>
+      </AIReviewContext.Provider>
     </FormProvider>
   );
 };

@@ -13,6 +13,7 @@ import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { VocabularyAIRulesDialog } from '@/src/components/ui/admin/vocabulary/VocabularyAIRulesDialog';
 import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
@@ -173,6 +174,7 @@ function NewWordRequestsReview() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <VocabularyAIRulesDialog />
             {selectedRequest.status === 'pending' && (
               <>
                 <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>

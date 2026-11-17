@@ -33,7 +33,7 @@ export const AIAutocompleteRequestSchema = z
     const allowed = [...commonFields, ...posFields[request.part_of_speech]];
     if (
       request.fieldsToComplete?.some(field => !allowed.includes(field)) ||
-      (request.followUp && !allowed.includes(request.followUp.uncertainty.field))
+      (request.followUp && !allowed.includes(request.followUp.field))
     ) {
       ctx.addIssue({
         code: 'custom',
@@ -44,12 +44,12 @@ export const AIAutocompleteRequestSchema = z
     if (
       request.followUp &&
       request.fieldsToComplete &&
-      (request.fieldsToComplete.length !== 1 || request.fieldsToComplete[0] !== request.followUp.uncertainty.field)
+      (request.fieldsToComplete.length !== 1 || request.fieldsToComplete[0] !== request.followUp.field)
     ) {
       ctx.addIssue({
         code: 'custom',
         path: ['fieldsToComplete'],
-        message: 'Follow-up must target only its uncertainty field',
+        message: 'A follow-up must target only its own field',
       });
     }
     // Bound draft content sent to the provider without rejecting legitimate unfinished forms.

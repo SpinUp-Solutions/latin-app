@@ -1,9 +1,3 @@
-jest.mock('@/src/components/ui/admin/vocabulary/VocabularyAIReviewPanel', () => ({
-  VocabularyAIReviewPanel: () => null,
-}));
-jest.mock('@/src/components/ui/admin/vocabulary/VocabularyAIGlobalGuidance', () => ({
-  VocabularyAIGlobalGuidance: () => null,
-}));
 import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import React from 'react';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';

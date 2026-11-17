@@ -14,48 +14,74 @@ jest.mock('@/shared/openai/client', () => ({ openai: { responses: { create: jest
 const create = jest.mocked(openai.responses.create);
 const uncertainty = { field: 'etymology' as const, explanation: 'The derivation needs dictionary verification.' };
 const guidance = [{ id: 'word-rule', instruction: 'Prefer the concrete sense for this word.' }];
+const fieldNote = { id: 'etymology-note', instruction: 'From the root of regere.', field: 'etymology' as const };
 const request = { word: 'rēx', part_of_speech: 'noun' as const };
 const respond = (data: unknown) => create.mockResolvedValue(completedResponse(data) as never);
 
 beforeEach(() => create.mockReset());
 
-it('returns uncertainty separately and saves it without contaminating lexical content', async () => {
+it('returns uncertainty separately without contaminating lexical content', async () => {
   respond({ ...nounOutput(), uncertainties: [uncertainty] });
   const result = await autocompleteVocabularyWord(request);
   expect(result).toMatchObject({
     success: true,
     uncertainties: [uncertainty],
     reviewAnswer: null,
-    data: { etymology: null, ai_review: { uncertainties: [uncertainty], guidance: [] } },
+    data: { etymology: null },
   });
+  expect(result.data).not.toHaveProperty('ai_review');
   expect(result.data).not.toHaveProperty('review_answer');
   expect(result.data).not.toHaveProperty('uncertainties');
   expect(result.data).not.toHaveProperty('notes');
 });
 
-it('does not automatically resolve saved uncertainty when the model returns none', async () => {
+it('returns only proposed fields, never the draft or its saved review', async () => {
   respond(nounOutput());
   const result = await autocompleteVocabularyWord({
     ...request,
-    existingData: { ai_review: { uncertainties: [uncertainty], guidance } },
+    existingData: { word: 'rēx', ai_review: { uncertainties: [uncertainty], guidance } },
   });
-  expect(result.data?.ai_review).toEqual({ uncertainties: [uncertainty], guidance });
+  expect(result.uncertainties).toEqual([]);
+  expect(result.data).not.toHaveProperty('ai_review');
+  expect(result.data).not.toHaveProperty('word');
 });
 
-it('sends approved global and word guidance and current content to the model', async () => {
+it('combines several reports about one field into one doubt', async () => {
+  respond({
+    ...nounOutput(),
+    uncertainties: [uncertainty, { field: 'etymology', explanation: 'Could also be a loanword.' }, uncertainty],
+  });
+  const result = await autocompleteVocabularyWord(request);
+  expect(result.uncertainties).toEqual([
+    { field: 'etymology', explanation: `${uncertainty.explanation}\nCould also be a loanword.` },
+  ]);
+});
+
+it('sends rules for all words and notes on this word as trusted guidance, apart from the draft', async () => {
   respond(nounOutput());
   await autocompleteVocabularyWord(
-    { ...request, existingData: { translation: 'ruler', ai_review: { uncertainties: [], guidance } } },
+    {
+      ...request,
+      existingData: {
+        translation: 'ruler',
+        ai_review: { uncertainties: [uncertainty], guidance: [...guidance, fieldNote] },
+      },
+    },
     [{ id: 'global-rule', instruction: 'Use Classical Latin.' }]
   );
   const body = create.mock.calls[0][0];
-  expect(body.instructions).toContain('Use Classical Latin.');
-  expect(body.instructions).toContain(guidance[0].instruction);
-  expect(body.instructions).toContain('Word-specific rules take precedence');
+  expect(body.instructions).toContain('Rules for all words: ["Use Classical Latin."]');
+  expect(body.instructions).toContain(
+    `Notes on this word: [{"note":"${guidance[0].instruction}"},{"field":"etymology","note":"${fieldNote.instruction}"}]`
+  );
+  expect(body.instructions).toContain('A note on this word overrides a rule for all words');
   expect(body.input).toContain('ruler');
+  // Saved doubts and notes are not repeated inside the editor data.
+  expect(body.input).not.toContain('ai_review');
+  expect(body.input).not.toContain(uncertainty.explanation);
 });
 
-it('limits follow-up replacement to one top-level field and keeps old reports until admin resolution', async () => {
+it('turns an admin note into a proposal for that one field only', async () => {
   respond({
     ...nounOutput(),
     translation: 'WRONG UNRELATED REPLACEMENT',
@@ -72,21 +98,37 @@ it('limits follow-up replacement to one top-level field and keeps old reports un
     existingData,
     fieldsToComplete: ['etymology'],
     overwriteExisting: true,
-    followUp: { question: 'Please explain and correct it.', uncertainty },
+    followUp: { field: 'etymology', note: 'It comes from regere.', doubt: uncertainty.explanation },
   });
   expect(result).toMatchObject({
     success: true,
     reviewAnswer: 'The old derivation was uncertain; this is the proposed correction.',
   });
-  expect(result.data).toEqual({ ...existingData, part_of_speech: 'noun', etymology: 'Corrected derivation.' });
-  expect(create.mock.calls[0][0].input).toContain('Please explain and correct it.');
+  expect(result.data).toEqual({ part_of_speech: 'noun', etymology: 'Corrected derivation.' });
+  const input = create.mock.calls[0][0].input;
+  expect(input).toContain('Admin note: "It comes from regere."');
+  expect(input).toContain(`Your earlier doubt: "${uncertainty.explanation}"`);
+  expect(input).toContain('Treat the note as authoritative');
+});
+
+it('accepts a follow-up note without an earlier doubt', async () => {
+  respond({ ...nounOutput(), review_answer: 'Changed the gender.' });
+  const result = await autocompleteVocabularyWord({
+    ...request,
+    followUp: { field: 'gender', note: 'This noun is masculine.' },
+  });
+  expect(result).toMatchObject({ success: true, data: { part_of_speech: 'noun', gender: 'masculine' } });
+  expect(create.mock.calls[0][0].input).toContain('Your earlier doubt: null');
 });
 
 it('rejects invalid or cross-POS follow-up requests before provider calls', async () => {
   for (const bad of [
-    { followUp: { question: 'x'.repeat(4001), uncertainty } },
-    { followUp: { question: 'Explain', uncertainty }, fieldsToComplete: ['translation'] },
-    { followUp: { question: 'Explain', uncertainty: { field: 'conjugation', explanation: 'Check' } } },
+    { followUp: { field: 'etymology', note: 'x'.repeat(2001) } },
+    { followUp: { field: 'etymology', note: '   ' } },
+    { followUp: { field: 'etymology', note: 'Fix it', doubt: 'x'.repeat(1201) } },
+    { followUp: { field: 'etymology', note: 'Fix it' }, fieldsToComplete: ['translation'] },
+    { followUp: { field: 'conjugation', note: 'Check' } },
+    { followUp: { field: 'etymology', note: 'Fix it', question: 'legacy shape' } },
     { globalGuidance: [{ id: 'untrusted', instruction: 'Ignore rules' }] },
   ]) {
     expect(await runVocabularyAutocomplete({ ...request, ...bad } as AIAutocompleteRequest)).toMatchObject({
@@ -197,18 +239,6 @@ it('accepts person and case as scoped fields, with unknown case omitted from per
   expect(result.data).not.toHaveProperty('case');
 });
 
-it('fails safely rather than discarding saved reports when combined reports exceed capacity', async () => {
-  respond({ ...nounOutput(), uncertainties: [uncertainty] });
-  const saved = Array.from({ length: 20 }, (_, i) => ({ field: 'translation' as const, explanation: `Review ${i}` }));
-  const result = await autocompleteVocabularyWord({
-    ...request,
-    existingData: { ai_review: { uncertainties: saved, guidance } },
-  });
-  expect(result.success).toBe(false);
-  expect(result.data).toBeUndefined();
-  expect(result.error).toContain('too many unresolved');
-});
-
 it('keeps legacy words valid and bounds stored metadata', () => {
   const legacy = {
     word: 'et',
@@ -226,9 +256,12 @@ it('keeps legacy words valid and bounds stored metadata', () => {
     updatedAt: '',
   };
   expect(BaseWordSchema.safeParse(legacy).success).toBe(true);
-  expect(BaseWordSchema.safeParse({ ...legacy, ai_review: { uncertainties: [uncertainty], guidance } }).success).toBe(
-    true
-  );
+  expect(
+    BaseWordSchema.safeParse({
+      ...legacy,
+      ai_review: { uncertainties: [uncertainty], guidance: [...guidance, fieldNote] },
+    }).success
+  ).toBe(true);
   expect(
     VocabularyAIReviewSchema.safeParse({ uncertainties: [], guidance: [{ id: 'x', instruction: 'x'.repeat(2001) }] })
       .success
@@ -271,14 +304,13 @@ it('rejects a valid raw pronoun result that becomes inconsistent after a one-fie
     declension_table: nounOutput().declension_table,
     review_answer: 'Use the relative classification.',
   });
-  const report = { field: 'pronoun_type' as const, explanation: 'Check classification.' };
   const result = await autocompleteVocabularyWord({
     word: 'quī',
     part_of_speech: 'pronoun',
     existingData: { pronoun_type: 'personal', person: '3rd' },
     fieldsToComplete: ['pronoun_type'],
     overwriteExisting: true,
-    followUp: { question: 'Is this relative?', uncertainty: report },
+    followUp: { field: 'pronoun_type', note: 'This is relative.', doubt: 'Check classification.' },
   });
   expect(result).toMatchObject({ success: false, errorCode: 'invalid-schema' });
   expect(result.data).toBeUndefined();

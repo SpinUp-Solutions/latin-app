@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AIAutocompleteRequest, AIAutocompleteResponse, CostBreakdown, ErrorDetails } from '@/shared/openai/types';
-import { VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
 export interface ErrorInfo {
@@ -15,12 +13,6 @@ export interface ErrorInfo {
 }
 
 interface UseFirebaseAutocompleteOptions {
-  onSuccess?: (
-    data: Partial<VocabularyWord>,
-    cost?: CostBreakdown,
-    fieldStatus?: Record<string, 'filled' | 'missing'>,
-    notes?: string
-  ) => void;
   onError?: (error: string, errorInfo?: ErrorInfo) => void;
 }
 
@@ -47,6 +39,8 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
     const requestData = { word: request.word, part_of_speech: request.part_of_speech };
 
     try {
+      // Loaded on first use: editors that never call the AI do not pull in the Functions SDK.
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
       const autocompleteWordFunc = httpsCallable<typeof request, AIAutocompleteResponse>(
         getFunctions(),
         'autocompleteWord',
@@ -85,12 +79,5 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
     }
   };
 
-  // Preserve the draft-editor API; review controls need the full response envelope.
-  const autocomplete = async (request: AIAutocompleteRequest) => {
-    const result = await requestAutocomplete(request);
-    if (result?.data) options?.onSuccess?.(result.data, result.cost, result.fieldStatus);
-    return result?.data || null;
-  };
-
-  return { autocomplete, requestAutocomplete, invalidate, isLoading, cost };
+  return { requestAutocomplete, invalidate, isLoading, cost };
 }

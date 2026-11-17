@@ -38,7 +38,8 @@ MEANINGS AND ETYMOLOGY:
 - Definitions should contain meanings and essential usage distinctions, not lists of synonyms/antonyms, quotations, source markers, unfinished text or generation instructions.
 - Etymology is for the word's origin only. State a well-established derivation when known; acknowledge disputed origins or use null when the origin cannot be determined confidently.
 - Do not invent Proto-Indo-European or Proto-Italic reconstructions, semantic histories or literal compound glosses. Distinguish a derivative from a cognate and do not conflate homonyms with different origins.
-- Every response must include uncertainties (an array, empty when confident) and review_answer (null unless answering an admin follow-up). Each uncertainty names one AI-completable top-level field and gives a concrete explanation of what needs review, within the schema limits. Report genuine uncertainty rather than inventing a Latin form or derivation.
+- Every response must include uncertainties (an array, empty when confident) and review_answer (null unless answering an admin correction). Report genuine uncertainty rather than inventing a Latin form or derivation.
+- Each uncertainty names one AI-completable top-level field, at most one entry per field. A teacher reads it next to that field, so write one or two plain sentences: what you are unsure about, and the most likely alternative if there is one. Do not report a field you are confident about.
 - The output schema has no notes field. Do not add one, and never append review notes, table-completion claims or grammatical analysis to etymology, definitions or another content field.
 
 Before returning, check that labels and principal parts agree with the forms, that known exceptions have survived, and that no field contains invented filler. Return only the schema-defined data.`;
