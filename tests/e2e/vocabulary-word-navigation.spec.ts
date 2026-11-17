@@ -1,0 +1,77 @@
+import { expect, test, type Page } from '@playwright/test';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { buildEmptyWord } from '@/src/utils/vocabulary-defaults';
+import { signIn } from './fixtures/journeys';
+import { E2E_USERS, getE2EAdmin, seedAcceptanceData } from './fixtures/seed';
+
+const seedNoun = async (id: string, word: string, translation: string, random_index: number) => {
+  const { id: _placeholderId, ...noun } = buildEmptyWord('noun');
+  await getE2EAdmin()
+    .db.collection(VOCABULARY_WORDS_COLLECTION)
+    .doc(id)
+    .set({
+      ...noun,
+      word,
+      translation,
+      definitions: [translation],
+      gender: 'feminine',
+      declension: '1',
+      sort_key: word,
+      random_index,
+    });
+};
+
+const heading = (page: Page, word: string) => page.getByRole('heading', { name: word, level: 2 });
+
+test.describe('Moving between vocabulary words', () => {
+  test.beforeEach(async ({ page }) => {
+    await seedAcceptanceData();
+    await seedNoun('e2e-rosa', 'rosa', 'rose', 0.4);
+    await seedNoun('e2e-silva', 'silva', 'forest', 0.6);
+    await signIn(page, E2E_USERS.admin, '/admin');
+    await page.goto('/admin/vocabulary');
+  });
+
+  test('the selected word survives every reload, and Back returns to the previous word', async ({ page }) => {
+    await page.getByText('rosa', { exact: true }).click();
+    await expect(heading(page, 'rosa')).toBeVisible();
+    // It used to fail on every second reload: the first reload reopened the word but cleared it from the URL.
+    for (let reload = 1; reload <= 3; reload += 1) {
+      await page.reload();
+      await expect(heading(page, 'rosa')).toBeVisible();
+      await expect(page).toHaveURL(/#word-e2e-rosa$/);
+    }
+
+    await page.getByText('silva', { exact: true }).click();
+    await expect(heading(page, 'silva')).toBeVisible();
+    await expect(page).toHaveURL(/#word-e2e-silva$/);
+    await page.goBack();
+    await expect(heading(page, 'rosa')).toBeVisible();
+    await expect(page).toHaveURL(/#word-e2e-rosa$/);
+  });
+
+  test('Save and next saves the word, then opens the next one in the list', async ({ page }) => {
+    await page.getByText('rosa', { exact: true }).click();
+    await expect(heading(page, 'rosa')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Apply and next/ })).toHaveAttribute(
+      'title',
+      'Apply, then open silva (Ctrl+Enter or ⌘+Enter)'
+    );
+
+    const translation = page.getByLabel('Translation', { exact: true });
+    await translation.fill('a rose');
+    await translation.press('Control+Enter');
+    await expect(heading(page, 'silva')).toBeVisible();
+    await expect(page).toHaveURL(/#word-e2e-silva$/);
+    // The save had succeeded, so there was nothing for the unsaved-changes prompt to ask about.
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect
+      .poll(async () => (await getE2EAdmin().db.collection(VOCABULARY_WORDS_COLLECTION).doc('e2e-rosa').get()).data())
+      .toMatchObject({ translation: 'a rose' });
+
+    // silva is the last word in the list.
+    const last = page.getByRole('button', { name: /^Apply and next/ });
+    await expect(last).toBeDisabled();
+    await expect(last).toHaveAttribute('title', 'This is the last word in the list.');
+  });
+});

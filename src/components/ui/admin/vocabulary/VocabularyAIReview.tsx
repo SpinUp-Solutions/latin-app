@@ -767,7 +767,9 @@ export function AIAssistantDock() {
   };
 
   const onComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+    // Ctrl/⌘+Enter is left to the editor's "Save and next".
+    if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing)
+      return;
     event.preventDefault();
     send();
   };

@@ -66,7 +66,15 @@ interface WordEditPanelProps {
   learnedRules?: LearnedAIRules;
   /** Told whether the word has edits that have not been saved; false again when the panel goes away. */
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * The word after this one in the page's list, for "Save and next" (also Ctrl/⌘+Enter): it saves,
+   * then opens that word only if the save succeeded. A reason instead disables the button; leaving it
+   * out hides it.
+   */
+  next?: SaveAndNext;
 }
+
+export type SaveAndNext = { word: string; open: () => void } | { unavailable: string };
 
 type TableData = Record<string, unknown>;
 
@@ -189,6 +197,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   allowAIAutocomplete = true,
   learnedRules,
   onDirtyChange,
+  next,
 }) => {
   const form = useForm<VocabularyFormValues>({
     resolver: zodResolver(VocabularyFormSchema) as Resolver<VocabularyFormValues>,
@@ -403,39 +412,48 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   const handleRemoveNote = (id: string) =>
     updateReview(review => ({ ...review, guidance: review.guidance.filter(note => note.id !== id) }));
 
-  const handleSubmit = form.handleSubmit(
-    async values => {
-      if (!word) return;
+  /** Saves the word; `after` runs only once the save has succeeded. */
+  const save = (after?: () => void) => async (values: VocabularyFormValues) => {
+    if (!word) return;
 
-      if (editableTable) {
-        const result = currentTableSchema().safeParse(table);
-        if (!result.success) {
-          setTableErrors([result.error.issues[0]?.message ?? 'Invalid table']);
-          return;
-        }
+    if (editableTable) {
+      const result = currentTableSchema().safeParse(table);
+      if (!result.success) {
+        setTableErrors([result.error.issues[0]?.message ?? 'Invalid table']);
+        return;
       }
+    }
 
-      setTableErrors([]);
+    setTableErrors([]);
 
-      const updatedWord = applyFormValuesToWord(word, values);
-      if (editableTable) {
-        (updatedWord as unknown as TableData)[editableTable.field] = cloneTableData(table);
-      }
+    const updatedWord = applyFormValuesToWord(word, values);
+    if (editableTable) {
+      (updatedWord as unknown as TableData)[editableTable.field] = cloneTableData(table);
+    }
 
-      const { id: _id, ...payload } = updatedWord;
+    const { id: _id, ...payload } = updatedWord;
 
-      const success = await onSave(payload);
-      if (success) {
-        form.reset(toFormDefaultValues(updatedWord));
-        setTable(tableFromWord(updatedWord));
-        setSavedTable(JSON.stringify(tableFromWord(updatedWord)));
-        setEditingCell(null);
-        setEditingCellValue('');
-        setAiFieldStatus(new Map());
-      }
-    },
-    () => setTableErrors([])
-  );
+    const success = await onSave(payload);
+    if (success) {
+      form.reset(toFormDefaultValues(updatedWord));
+      setTable(tableFromWord(updatedWord));
+      setSavedTable(JSON.stringify(tableFromWord(updatedWord)));
+      setEditingCell(null);
+      setEditingCellValue('');
+      setAiFieldStatus(new Map());
+      after?.();
+    }
+  };
+  const handleSubmit = form.handleSubmit(save(), () => setTableErrors([]));
+
+  /**
+   * Saves, then opens the next word. A failed save or a form error keeps this word open with its
+   * draft. Open AI questions do not block it: they stay on the word for later.
+   */
+  const saveAndNext = () => {
+    if (!next || !('open' in next) || updating || form.formState.isSubmitting || editingCell) return;
+    void form.handleSubmit(save(next.open), () => setTableErrors([]))();
+  };
 
   const anchorPrefix = useId();
   const watchedValues = form.watch();
@@ -500,6 +518,12 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         <AIFilledFieldsContext.Provider value={aiFieldStatus}>
           <form
             onSubmit={handleSubmit}
+            onKeyDown={event => {
+              if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey) || event.nativeEvent.isComposing) return;
+              if (!next) return;
+              event.preventDefault();
+              saveAndNext();
+            }}
             className="flex h-full min-h-0 flex-col overflow-hidden bg-white border-l border-gray-200">
             <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
               <div className="flex items-center justify-between">
@@ -522,6 +546,25 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
                       onAutocomplete={handleAIAutocomplete}
                       disabled={updating || isSubmitting || !!editingCell}
                     />
+                  )}
+                  {next && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-1.5"
+                      onClick={saveAndNext}
+                      disabled={!('open' in next) || updating || isSubmitting || !!editingCell}
+                      aria-keyshortcuts="Control+Enter Meta+Enter"
+                      title={
+                        'open' in next
+                          ? `${saveLabel}, then open ${next.word} (Ctrl+Enter or ⌘+Enter)`
+                          : next.unavailable
+                      }>
+                      {saveLabel} and next
+                      <kbd className="rounded border border-gray-200 bg-gray-50 px-1 font-sans text-[10px] text-gray-500">
+                        Ctrl ↵
+                      </kbd>
+                    </Button>
                   )}
                   <Button type="submit" disabled={updating || isSubmitting}>
                     {updating || isSubmitting ? 'Saving...' : saveLabel}

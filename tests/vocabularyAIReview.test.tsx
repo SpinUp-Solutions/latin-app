@@ -870,3 +870,75 @@ it('preserves explicit null metadata and adjective dictionary forms through norm
   adjectiveValues.dictionary_forms = null;
   expect(applyFormValuesToWord(adjective, adjectiveValues)).toMatchObject({ dictionary_forms: null });
 });
+
+describe('Save and next', () => {
+  const silvaNext = () => ({ word: 'silva', open: jest.fn() });
+
+  it('saves, then opens the next word, without waiting for open AI questions', async () => {
+    const onSave = jest.fn(async (_updates: Partial<VocabularyWordWithId>) => true);
+    const next = silvaNext();
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} next={next} />);
+    fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'a rose' } });
+    const button = screen.getByRole('button', { name: /^Apply and next/ });
+    expect(button).toHaveAttribute('title', 'Apply, then open silva (Ctrl+Enter or ⌘+Enter)');
+    fireEvent.click(button);
+
+    await waitFor(() => expect(next.open).toHaveBeenCalledTimes(1));
+    const saved = onSave.mock.calls[0][0];
+    expect(saved.translation).toBe('a rose');
+    // The open question stays on the word for later.
+    expect(saved.ai_review?.uncertainties).toEqual(noun.ai_review?.uncertainties);
+    expect(onSave.mock.invocationCallOrder[0]).toBeLessThan(next.open.mock.invocationCallOrder[0]);
+  });
+
+  it('stays on the word with its draft when the save fails or the form is invalid', async () => {
+    const onSave = jest.fn(async () => false);
+    const next = silvaNext();
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} next={next} />);
+    fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'a rose' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Apply and next/ }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(next.open).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Translation')).toHaveValue('a rose');
+
+    fireEvent.change(screen.getByLabelText('Word'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Apply and next/ }));
+    expect(await screen.findByText('Validation Errors:')).toBeInTheDocument();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(next.open).not.toHaveBeenCalled();
+  });
+
+  it('runs on Ctrl/⌘+Enter from a field or the AI box, where plain Enter still sends the message', async () => {
+    const onSave = jest.fn(async () => true);
+    const next = silvaNext();
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} next={next} />);
+    fireEvent.keyDown(screen.getByLabelText('Translation'), { key: 'Enter', ctrlKey: true });
+    await waitFor(() => expect(next.open).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(composer(), { target: { value: 'Unsent thought' } });
+    fireEvent.keyDown(composer(), { key: 'Enter', metaKey: true });
+    await waitFor(() => expect(next.open).toHaveBeenCalledTimes(2));
+    expect(mockCallable).not.toHaveBeenCalled();
+    expect(composer()).toHaveValue('Unsent thought');
+  });
+
+  it('is disabled at the end of the list, says why, and is absent where the page has no list', () => {
+    const onSave = jest.fn(async () => true);
+    const view = render(
+      <WordEditPanel
+        word={cloneNoun()}
+        onSave={onSave}
+        updating={false}
+        next={{ unavailable: 'This is the last word in the list.' }}
+      />
+    );
+    const button = screen.getByRole('button', { name: /^Apply and next/ });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'This is the last word in the list.');
+    fireEvent.keyDown(screen.getByLabelText('Translation'), { key: 'Enter', ctrlKey: true });
+    expect(onSave).not.toHaveBeenCalled();
+
+    view.rerender(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+    expect(screen.queryByRole('button', { name: /and next/ })).toBeNull();
+  });
+});

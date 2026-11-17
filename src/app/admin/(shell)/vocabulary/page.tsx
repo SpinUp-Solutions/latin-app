@@ -20,7 +20,7 @@ import {
 } from '@/src/store/slices/vocabularySlice';
 import { useCurrentWordsQuery } from '@/src/hooks/useCurrentWordsQuery';
 import { useDebounce } from '@/src/hooks/useDebounce';
-import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { WordEditPanel, type SaveAndNext } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { AIAssistantProvider } from '@/src/components/ui/admin/vocabulary/aiAssistantStore';
 import { VocabularyAIRulesDialog } from '@/src/components/ui/admin/vocabulary/VocabularyAIRulesDialog';
 import { useLearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
@@ -207,6 +207,21 @@ function AdminVocabularyPage() {
   const loadingMore = isFetching && lastWordId !== null;
   const selectedWord = creatingWord ?? (selectedWordId ? words.find(w => w.id === selectedWordId) || null : null);
 
+  // "Save and next" follows the list as filtered and sorted. It opens the next word straight away: the save
+  // that precedes it has just succeeded, so there is nothing for the unsaved-changes prompt to protect.
+  const selectedIndex = !creatingWord && selectedWordId ? words.findIndex(w => w.id === selectedWordId) : -1;
+  const nextWord = selectedIndex >= 0 ? words[selectedIndex + 1] : undefined;
+  const next: SaveAndNext | undefined =
+    selectedIndex < 0
+      ? undefined
+      : nextWord
+        ? { word: nextWord.word, open: () => setSelectedWordId(nextWord.id) }
+        : {
+            unavailable: hasMore
+              ? 'This is the last word loaded. Load more words to keep going.'
+              : 'This is the last word in the list.',
+          };
+
   const handleCreatePartOfSpeechChange = (nextPart: PartOfSpeech) =>
     switchEditor(() => {
       setCreatingWord(buildEmptyWord(nextPart));
@@ -342,6 +357,7 @@ function AdminVocabularyPage() {
               updating={updating || creating}
               learnedRules={learnedRules}
               onDirtyChange={setEditorDirty}
+              next={next}
             />
           </div>
         </main>

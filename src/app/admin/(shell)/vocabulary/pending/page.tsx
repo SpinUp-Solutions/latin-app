@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
-import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { WordEditPanel, type SaveAndNext } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { AIAssistantProvider } from '@/src/components/ui/admin/vocabulary/aiAssistantStore';
 import { VocabularyAIRulesDialog } from '@/src/components/ui/admin/vocabulary/VocabularyAIRulesDialog';
 import { useLearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
@@ -67,6 +67,16 @@ function NewWordRequestsReview() {
   const editorWord: VocabularyWordWithId | null = selectedRequest
     ? ({ id: selectedRequest.id, ...selectedRequest.draftWord } as VocabularyWordWithId)
     : null;
+
+  // "Save and next" saves this draft and opens the next request in the list.
+  const selectedIndex = selectedRequest ? requests.findIndex(request => request.id === selectedRequest.id) : -1;
+  const nextRequest = selectedIndex >= 0 ? requests[selectedIndex + 1] : undefined;
+  const next: SaveAndNext | undefined =
+    selectedIndex < 0
+      ? undefined
+      : nextRequest
+        ? { word: nextRequest.draftWord.word, open: () => setSelectedRequestId(nextRequest.id) }
+        : { unavailable: 'This is the last request in the list.' };
 
   const handleSaveDraft = async (updates: Partial<VocabularyWord>) => {
     if (!selectedRequest) return false;
@@ -192,7 +202,13 @@ function NewWordRequestsReview() {
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-hidden">
-        <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} learnedRules={learnedRules} />
+        <WordEditPanel
+          word={editorWord}
+          onSave={handleSaveDraft}
+          updating={updating}
+          learnedRules={learnedRules}
+          next={next}
+        />
       </div>
     </VocabularyReviewLayout>
   );
