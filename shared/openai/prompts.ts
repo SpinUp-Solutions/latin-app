@@ -38,11 +38,28 @@ MEANINGS AND ETYMOLOGY:
 - Definitions should contain meanings and essential usage distinctions, not lists of synonyms/antonyms, quotations, source markers, unfinished text or generation instructions.
 - Etymology is for the word's origin only. State a well-established derivation when known; acknowledge disputed origins or use null when the origin cannot be determined confidently.
 - Do not invent Proto-Indo-European or Proto-Italic reconstructions, semantic histories or literal compound glosses. Distinguish a derivative from a cognate and do not conflate homonyms with different origins.
-- Every response must include uncertainties (an array, empty when confident) and review_answer (null unless answering an admin correction). Report genuine uncertainty rather than inventing a Latin form or derivation.
-- Each uncertainty names one AI-completable top-level field, at most one entry per field. A teacher reads it next to that field, so write one or two plain sentences: what you are unsure about, and the most likely alternative if there is one. Do not report a field you are confident about.
+- When you are unsure, say so in the way the task asks rather than inventing a Latin form or derivation.
 - The output schema has no notes field. Do not add one, and never append review notes, table-completion claims or grammatical analysis to etymology, definitions or another content field.
 
 Before returning, check that labels and principal parts agree with the forms, that known exceptions have survived, and that no field contains invented filler. Return only the schema-defined data.`;
+
+/** Autocomplete only: how the model asks the teacher about what it is unsure of. */
+export const UNCERTAINTY_PROMPT = `QUESTIONS FOR THE TEACHER
+A Latin teacher reviews your output in the editor, and you can ask them about anything you are unsure of.
+- Every response includes uncertainties: an array, empty when you are confident. Do not report a field you are confident about.
+- Each entry names one AI-completable top-level field, at most one entry per field:
+  - question: one short, direct question the teacher can answer, e.g. "Is rosa native Latin or a loan from Greek?"
+  - explanation: one or two plain sentences on what you wrote and why you are unsure.
+  - options: up to three likely answers the teacher can pick with one click, most likely first. Each is a complete statement that makes sense without the question (e.g. "It is a loan from Greek rhódon.", never just "Yes"). Use [] when you cannot suggest any.`;
+
+/** A conversation only: how the model answers the teacher and what it may change or remember. */
+export const CONVERSATION_PROMPT = `CONVERSATION WITH THE TEACHER
+The teacher is editing this word and talking to you in the editor. Their statements about this word are authoritative unless they conflict with the output schema or the offline-knowledge rules above (never invent a source or citation).
+- reply: answer the teacher in one to three plain sentences: what you changed and why, or the answer to their question. If their message is unclear, ask one short question instead and change nothing. Do not paste whole tables or field values into the reply.
+- changes: for each field, null keeps the current value and {"value": ...} replaces it. Replace only the fields the message asks about or that the teacher's answer settles, and give the complete new value of each one you replace (a whole table, not just its changed cells).
+- answered: the fields of your open questions that the message settles, including a question the teacher settles by confirming the current value.
+- remember: up to three facts about this word that the teacher stated and that later requests should follow, each one standalone sentence (e.g. "rosa is a loan from Greek rhódon."), with the field it concerns or null. Use only what the teacher said; add nothing of your own. Use [] when the message states no lasting fact, such as a question or a thank-you.
+- rule: one short instruction for all words, only when the teacher states a principle that clearly applies beyond this word (e.g. "Give locative forms only for nouns with an attested locative."). Restate the teacher's principle without adding claims of your own. Use null when the message is about this word only, or a rule for all words already says it.`;
 
 const NOUN_PROMPT = `Analyze the Latin noun "{word}". Include nominative_singular and genitive_singular with full and shortened forms. Match gender and declension to the actual word. Preserve singular-only, plural-only, heteroclite and defective usage instead of regularizing it. A neuter noun ending in -us must not acquire masculine endings merely from its spelling.`;
 

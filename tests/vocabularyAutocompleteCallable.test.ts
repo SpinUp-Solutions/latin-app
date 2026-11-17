@@ -86,7 +86,6 @@ beforeEach(() => {
     success: true,
     data: { translation: 'and' },
     uncertainties: [],
-    reviewAnswer: null,
   });
 });
 
@@ -108,10 +107,8 @@ it('rejects nonadmins before guidance reads or generation', async () => {
 
 it.each([
   { ...validData, part_of_speech: 'unsupported' },
-  {
-    ...validData,
-    followUp: { question: 'x'.repeat(4001), uncertainty: { field: 'translation', explanation: 'Check' } },
-  },
+  { ...validData, conversation: { message: 'x'.repeat(2001), history: [] } },
+  { ...validData, conversation: { message: 'Fix it', history: [] }, fieldsToComplete: ['translation'] },
   { ...validData, fieldsToComplete: ['conjugation'] },
   { ...validData, globalGuidance: [] },
   {

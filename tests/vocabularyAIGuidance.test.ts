@@ -7,6 +7,8 @@ jest.mock('@/src/services/firebase-admin', () => ({
 }));
 
 import { GET, PUT } from '@/src/app/api/admin/vocabulary-ai-guidance/route';
+import { POST as LEARN } from '@/src/app/api/admin/vocabulary-ai-guidance/rules/route';
+import { DELETE as FORGET } from '@/src/app/api/admin/vocabulary-ai-guidance/rules/[id]/route';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { AdminAccessError } from '@/src/lib/admin-access-error';
 import { readVocabularyAIGuidance } from '@/src/lib/vocabulary-ai-guidance/persistence.server';
@@ -68,6 +70,12 @@ let mockDb: FakeStore;
 const request = (body: unknown = {}) => ({ json: async () => body }) as never;
 const rule = (id = 'rule-1') => ({ id, instruction: 'Leave participle locatives empty.' });
 const auth = jest.mocked(verifyAdminAccess);
+const body = (response: unknown) => (response as { body: Record<string, unknown> }).body;
+const learned = (instruction = 'Give locative forms only for nouns with an attested locative.') => ({
+  instruction,
+  learnedFrom: { word: 'rosa', message: 'No locative: only place names have one.' },
+});
+const forget = (id: string) => FORGET(request(), { params: Promise.resolve({ id }) });
 
 beforeEach(() => {
   mockDb = new FakeStore();
@@ -151,4 +159,108 @@ it.each([
   expect((await GET(request())).status).toBe(409);
   expect((await PUT(request({ revision: 0, rules: [] }))).status).toBe(409);
   expect(mockDb.writes).toBe(0);
+});
+
+describe('rules the AI learns from answers', () => {
+  it.each([401, 403])('rejects unauthorized requests before accessing data (%s)', async status => {
+    auth.mockRejectedValue(new AdminAccessError('Denied', status));
+    expect((await LEARN(request(learned()))).status).toBe(status);
+    expect((await forget('rule-1')).status).toBe(status);
+    expect(mockDb.reads).toBe(0);
+    expect(mockDb.writes).toBe(0);
+  });
+
+  it('appends a rule with its source, without a revision from the client, and keeps existing rules', async () => {
+    await PUT(request({ revision: 0, rules: [rule()] }));
+    const response = await LEARN(request(learned()));
+    expect(response.status).toBe(200);
+    const {
+      rule: saved,
+      added,
+      settings,
+    } = body(response) as {
+      rule: { id: string };
+      added: boolean;
+      settings: Record<string, unknown>;
+    };
+    expect(added).toBe(true);
+    expect(saved).toEqual({ id: expect.any(String), ...learned() });
+    expect(settings).toMatchObject({ revision: 2, updatedBy: 'verified-admin' });
+    expect(mockDb.data?.rules).toEqual([rule(), saved]);
+    // The callable reads the same document, so the model gets the new rule on its next request.
+    expect((await readVocabularyAIGuidance(mockDb as never)).rules).toContainEqual(saved);
+  });
+
+  it('does not add a rule that differs only in spacing, case or a closing full stop', async () => {
+    const first = body(await LEARN(request(learned())));
+    const writes = mockDb.writes;
+    const again = await LEARN(request(learned('  give locative forms only for nouns with an attested LOCATIVE ')));
+    expect(again.status).toBe(200);
+    expect(body(again)).toMatchObject({ added: false, rule: first.rule });
+    expect(mockDb.writes).toBe(writes);
+    expect(mockDb.data?.rules).toHaveLength(1);
+  });
+
+  it('keeps both of two rules learned at the same time', async () => {
+    const responses = await Promise.all([
+      LEARN(request(learned('Mark long vowels.'))),
+      LEARN(request(learned('Label postclassical senses.'))),
+    ]);
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    expect((mockDb.data?.rules as { instruction: string }[]).map(item => item.instruction).sort()).toEqual([
+      'Label postclassical senses.',
+      'Mark long vowels.',
+    ]);
+    expect(mockDb.data?.revision).toBe(2);
+  });
+
+  it('refuses a rule past the limit with a message that says what to do', async () => {
+    await PUT(request({ revision: 0, rules: Array.from({ length: 20 }, (_, i) => rule(String(i))) }));
+    const response = await LEARN(request(learned()));
+    expect(response.status).toBe(409);
+    expect(body(response)).toMatchObject({ code: 'VOCABULARY_AI_RULES_FULL' });
+    expect(String(body(response).error)).toContain('Remove one in AI rules');
+    expect(mockDb.data?.rules).toHaveLength(20);
+  });
+
+  it('undoes a learned rule, and undoing it again changes nothing', async () => {
+    await PUT(request({ revision: 0, rules: [rule()] }));
+    const { rule: saved } = body(await LEARN(request(learned()))) as { rule: { id: string } };
+    const removed = await forget(saved.id);
+    expect(removed.status).toBe(200);
+    expect(body(removed)).toMatchObject({ revision: 3, rules: [rule()] });
+    const writes = mockDb.writes;
+    expect((await forget(saved.id)).status).toBe(200);
+    expect(mockDb.writes).toBe(writes);
+    expect(mockDb.data?.rules).toEqual([rule()]);
+  });
+
+  it.each([
+    {},
+    { instruction: 'Mark long vowels.' },
+    { ...learned(), instruction: ' ' },
+    { ...learned(), instruction: 'x'.repeat(2001) },
+    { ...learned(), learnedFrom: { word: 'rosa' } },
+    { ...learned(), id: 'chosen-by-client' },
+    { ...learned(), updatedBy: 'spoofed-actor' },
+  ])('rejects an invalid learned rule before any transaction: %j', async input => {
+    expect((await LEARN(request(input))).status).toBe(400);
+    expect(mockDb.reads).toBe(0);
+    expect(mockDb.writes).toBe(0);
+  });
+
+  it('rejects an invalid rule id before any transaction', async () => {
+    expect((await forget('x'.repeat(101))).status).toBe(400);
+    expect(mockDb.reads).toBe(0);
+  });
+
+  it.each([{ rules: [] }, { revision: 1, rules: [], updatedAt: null, updatedBy: null, _deletionPending: true }])(
+    'fails closed on invalid or deletion-pending persisted guidance: %j',
+    async data => {
+      mockDb.data = data;
+      expect((await LEARN(request(learned()))).status).toBe(409);
+      expect((await forget('rule-1')).status).toBe(409);
+      expect(mockDb.writes).toBe(0);
+    }
+  );
 });

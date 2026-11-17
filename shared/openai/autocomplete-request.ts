@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   AICompletableFieldSchema,
-  VocabularyAIFollowUpSchema,
+  VocabularyAIConversationSchema,
   VocabularyAIReviewSchema,
 } from '../types/vocabulary/ai-review';
 import { PartOfSpeechSchema } from '../types/vocabulary/schemas/enums';
@@ -26,30 +26,24 @@ export const AIAutocompleteRequestSchema = z
     existingData: z.object({ ai_review: VocabularyAIReviewSchema.optional() }).catchall(z.unknown()).optional(),
     fieldsToComplete: z.array(AICompletableFieldSchema).max(19).optional(),
     overwriteExisting: z.boolean().optional(),
-    followUp: VocabularyAIFollowUpSchema.optional(),
+    /** The admin talking to the AI about the word; the AI may then change any of its fields. */
+    conversation: VocabularyAIConversationSchema.optional(),
   })
   .strict()
   .superRefine((request, ctx) => {
     const allowed = [...commonFields, ...posFields[request.part_of_speech]];
-    if (
-      request.fieldsToComplete?.some(field => !allowed.includes(field)) ||
-      (request.followUp && !allowed.includes(request.followUp.field))
-    ) {
+    if (request.fieldsToComplete?.some(field => !allowed.includes(field))) {
       ctx.addIssue({
         code: 'custom',
         path: ['fieldsToComplete'],
         message: 'Field does not apply to this part of speech',
       });
     }
-    if (
-      request.followUp &&
-      request.fieldsToComplete &&
-      (request.fieldsToComplete.length !== 1 || request.fieldsToComplete[0] !== request.followUp.field)
-    ) {
+    if (request.conversation && (request.fieldsToComplete || request.overwriteExisting !== undefined)) {
       ctx.addIssue({
         code: 'custom',
-        path: ['fieldsToComplete'],
-        message: 'A follow-up must target only its own field',
+        path: ['conversation'],
+        message: 'A conversation proposes replacements for any field; it takes no field list or overwrite flag',
       });
     }
     // Bound draft content sent to the provider without rejecting legitimate unfinished forms.

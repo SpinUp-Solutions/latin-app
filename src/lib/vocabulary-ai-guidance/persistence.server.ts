@@ -1,13 +1,18 @@
+import { randomUUID } from 'crypto';
 import type { Firestore } from 'firebase-admin/firestore';
 import {
   VOCABULARY_AI_GUIDANCE_COLLECTION,
   VOCABULARY_AI_GUIDANCE_DOCUMENT,
 } from '../../../shared/constants/firestore';
 import {
+  LearnVocabularyAIRuleSchema,
   SaveVocabularyAIGuidanceSchema,
   VocabularyAIGuidanceSettingsSchema,
+  type LearnVocabularyAIRuleResult,
   type VocabularyAIGuidanceSettings,
+  type VocabularyAIRule,
 } from '../../../shared/types/vocabulary/ai-guidance-settings';
+import { AI_REVIEW_ITEM_LIMIT } from '../../../shared/types/vocabulary/ai-review';
 import { DomainError } from '../domain-error';
 
 /** Shared by Next.js admin routes and the Firebase callable; no client import. */
@@ -71,6 +76,78 @@ export async function saveVocabularyAIGuidance(
     const next = {
       revision: current.revision + 1,
       rules: request.rules,
+      updatedAt: new Date().toISOString(),
+      updatedBy: actorUid,
+    };
+    transaction.set(ref, next);
+    return next;
+  });
+}
+
+/** Rules that differ only in spacing, case or a closing full stop say the same thing. */
+const sameRule = (left: string, right: string) => {
+  const normalize = (text: string) =>
+    text
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/[.!]+$/, '')
+      .toLowerCase();
+  return normalize(left) === normalize(right);
+};
+
+/**
+ * Adds a rule the AI drew from an admin's answer. It needs no revision from the
+ * client: it only appends, so it cannot overwrite an edit made meanwhile.
+ */
+export async function learnVocabularyAIRule(
+  db: Firestore,
+  actorUid: string,
+  input: unknown
+): Promise<LearnVocabularyAIRuleResult> {
+  const request = LearnVocabularyAIRuleSchema.parse(input);
+  const ref = reference(db);
+  return db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    const current = decode(snapshot.exists, snapshot.data());
+    const existing = current.rules.find(rule => sameRule(rule.instruction, request.instruction));
+    if (existing) return { settings: current, rule: existing, added: false };
+    if (current.rules.length >= AI_REVIEW_ITEM_LIMIT) {
+      throw new VocabularyAIGuidanceError(
+        409,
+        'VOCABULARY_AI_RULES_FULL',
+        `There are already ${AI_REVIEW_ITEM_LIMIT} rules for all words. Remove one in AI rules so the AI can learn new ones.`
+      );
+    }
+    const rule: VocabularyAIRule = {
+      id: randomUUID(),
+      instruction: request.instruction,
+      learnedFrom: request.learnedFrom,
+    };
+    const next = {
+      revision: current.revision + 1,
+      rules: [...current.rules, rule],
+      updatedAt: new Date().toISOString(),
+      updatedBy: actorUid,
+    };
+    transaction.set(ref, next);
+    return { settings: next, rule, added: true };
+  });
+}
+
+/** Removes one rule, such as one the admin undid right after the AI learned it. Removing it twice is harmless. */
+export async function forgetVocabularyAIRule(
+  db: Firestore,
+  actorUid: string,
+  ruleId: string
+): Promise<VocabularyAIGuidanceSettings> {
+  const ref = reference(db);
+  return db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    const current = decode(snapshot.exists, snapshot.data());
+    if (!current.rules.some(rule => rule.id === ruleId)) return current;
+    const next = {
+      revision: current.revision + 1,
+      rules: current.rules.filter(rule => rule.id !== ruleId),
       updatedAt: new Date().toISOString(),
       updatedBy: actorUid,
     };

@@ -1,4 +1,9 @@
-import type { AICompletableField, VocabularyAIFollowUp, VocabularyAIUncertainty } from '../types/vocabulary/ai-review';
+import type {
+  AICompletableField,
+  VocabularyAIConversation,
+  VocabularyAIReply,
+  VocabularyAIUncertainty,
+} from '../types/vocabulary/ai-review';
 export type { AICompletableField } from '../types/vocabulary/ai-review';
 import type { VocabularyWord } from '../types/vocabulary/schemas';
 import type { PartOfSpeech } from '../types/vocabulary/schemas/enums';
@@ -9,7 +14,8 @@ export interface AIAutocompleteRequest {
   existingData?: Partial<VocabularyWord>;
   fieldsToComplete?: AICompletableField[];
   overwriteExisting?: boolean;
-  followUp?: VocabularyAIFollowUp;
+  /** The admin's message to the AI about this word; the AI answers and proposes replacements for any field. */
+  conversation?: VocabularyAIConversation;
 }
 
 export interface TokenUsage {
@@ -63,7 +69,8 @@ export interface AIAutocompleteResponse {
   cost?: CostBreakdown;
   fieldStatus?: Record<string, 'filled' | 'missing'>;
   uncertainties?: VocabularyAIUncertainty[];
-  reviewAnswer?: string | null;
+  /** The AI's answer to the admin, in a conversation only; `data` then holds just the fields it would replace. */
+  reply?: VocabularyAIReply;
 }
 
 export type TranslationDirection = 'latin-to-english' | 'english-to-latin';

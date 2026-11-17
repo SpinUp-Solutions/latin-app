@@ -69,11 +69,13 @@ export function AIAutocompleteButton({
       ? `Cost: $${result.cost.totalCost.toFixed(4)} (${result.cost.tokens.totalTokens.toLocaleString()} tokens)`
       : '';
     if (uncertainties.length > 0) {
-      const count = uncertainties.length === 1 ? '1 field' : `${uncertainties.length} fields`;
       const fields = uncertainties.map(item => aiFieldLabel(item.field)).join(', ');
-      toast.warning(`AI is unsure about ${count}`, {
-        description: `${fields}. They are flagged in the form; check them before saving. ${costMessage}`,
-      });
+      toast.warning(
+        uncertainties.length === 1 ? 'The AI has a question' : `The AI has ${uncertainties.length} questions`,
+        {
+          description: `About ${fields}. Answer in the AI assistant at the top of the editor. ${costMessage}`,
+        }
+      );
       return;
     }
     toast.success('AI Autocomplete Successful', {

@@ -14,6 +14,7 @@ import { Badge } from '@/src/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { VocabularyAIRulesDialog } from '@/src/components/ui/admin/vocabulary/VocabularyAIRulesDialog';
+import { useLearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
 import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
@@ -44,6 +45,7 @@ const statusIcon = {
 
 /** AI-generated drafts of words that do not exist yet. */
 function NewWordRequestsReview() {
+  const learnedRules = useLearnedAIRules();
   const [status, setStatus] = useState<VocabularyWordRequestStatus>('pending');
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
@@ -189,7 +191,7 @@ function NewWordRequestsReview() {
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-hidden">
-        <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} />
+        <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} learnedRules={learnedRules} />
       </div>
     </VocabularyReviewLayout>
   );

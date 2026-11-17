@@ -1,9 +1,22 @@
 import { z } from 'zod';
-import { VocabularyAIGuidanceSchema } from './ai-review';
+import { ADMIN_NOTE_MAX, AI_REVIEW_ITEM_LIMIT, VocabularyAIGuidanceSchema } from './ai-review';
+
+/** The admin's answer the AI drew a rule from, so an admin reviewing the rules can judge it. */
+const LearnedFromSchema = z
+  .object({
+    word: z.string().trim().min(1).max(500),
+    message: z.string().trim().min(1).max(ADMIN_NOTE_MAX),
+  })
+  .strict();
+
+/** A rule for every word; the AI writes it from an admin's answer, and admins may edit or remove it. */
+export const VocabularyAIRuleSchema = VocabularyAIGuidanceSchema.extend({
+  learnedFrom: LearnedFromSchema.optional(),
+}).strict();
 
 export const VocabularyAIGuidanceRulesSchema = z
-  .array(VocabularyAIGuidanceSchema)
-  .max(20)
+  .array(VocabularyAIRuleSchema)
+  .max(AI_REVIEW_ITEM_LIMIT)
   .refine(rules => new Set(rules.map(rule => rule.id)).size === rules.length, {
     message: 'Guidance rule IDs must be unique',
   });
@@ -22,5 +35,22 @@ export const SaveVocabularyAIGuidanceSchema = z
   })
   .strict();
 
+/** A rule the AI drew from an admin's answer, added when the admin accepts that answer. */
+export const LearnVocabularyAIRuleSchema = z
+  .object({
+    instruction: z.string().trim().min(1).max(ADMIN_NOTE_MAX),
+    learnedFrom: LearnedFromSchema,
+  })
+  .strict();
+
+export type VocabularyAIRule = z.infer<typeof VocabularyAIRuleSchema>;
 export type VocabularyAIGuidanceSettings = z.infer<typeof VocabularyAIGuidanceSettingsSchema>;
 export type SaveVocabularyAIGuidance = z.infer<typeof SaveVocabularyAIGuidanceSchema>;
+export type LearnVocabularyAIRule = z.infer<typeof LearnVocabularyAIRuleSchema>;
+
+export interface LearnVocabularyAIRuleResult {
+  settings: VocabularyAIGuidanceSettings;
+  rule: VocabularyAIRule;
+  /** False when an existing rule already said the same thing. */
+  added: boolean;
+}

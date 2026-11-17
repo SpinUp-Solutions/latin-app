@@ -16,7 +16,6 @@ const save = () => fireEvent.click(screen.getByRole('button', { name: 'Save rule
 
 beforeEach(() => {
   jest.clearAllMocks();
-  Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'new-rule' });
   mockSettings = {
     revision: 3,
     rules: [{ id: 'r1', instruction: 'Keep defective forms empty.' }],
@@ -62,7 +61,7 @@ it('keeps a stale draft until the admin explicitly discards it and reloads', asy
   await waitFor(() => expect(screen.getByLabelText('Rule 1')).toHaveValue('Another admin rule.'));
 });
 
-it('removes or adds a rule only on Save, and Cancel discards the change', async () => {
+it('removes a rule only on Save, and Cancel discards the change', async () => {
   render(<VocabularyAIRulesDialog />);
   open();
   fireEvent.click(screen.getByRole('button', { name: 'Remove rule 1' }));
@@ -71,15 +70,37 @@ it('removes or adds a rule only on Save, and Cancel discards the change', async 
   open();
   expect(screen.getByLabelText('Rule 1')).toHaveValue('Keep defective forms empty.');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Add rule' }));
-  expect(screen.getByRole('button', { name: 'Save rules' })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('Rule 2'), { target: { value: 'Use Classical spelling.' } });
   fireEvent.click(screen.getByRole('button', { name: 'Remove rule 1' }));
+  save();
+  await waitFor(() => expect(mockSave).toHaveBeenCalledWith({ revision: 3, rules: [] }));
+});
+
+it('shows where the AI learned each rule and keeps that source when the rule is edited', async () => {
+  const learnedFrom = { word: 'rosa', message: 'No locative: only place names have one.' };
+  mockSettings = {
+    ...mockSettings,
+    rules: [{ id: 'learned', instruction: 'Give locatives only for place names.', learnedFrom }],
+  };
+  render(<VocabularyAIRulesDialog />);
+  open();
+  expect(screen.getByText(/Learned from an answer about/)).toHaveTextContent(
+    'Learned from an answer about rosa: “No locative: only place names have one.”'
+  );
+  // Rules come from the AI, so there is nothing to add by hand.
+  expect(screen.queryByRole('button', { name: 'Add rule' })).toBeNull();
+  fireEvent.change(screen.getByLabelText('Rule 1'), { target: { value: 'Give locatives only for towns.' } });
   save();
   await waitFor(() =>
     expect(mockSave).toHaveBeenCalledWith({
       revision: 3,
-      rules: [{ id: expect.any(String), instruction: 'Use Classical spelling.' }],
+      rules: [{ id: 'learned', instruction: 'Give locatives only for towns.', learnedFrom }],
     })
   );
+});
+
+it('explains where rules come from when there are none', () => {
+  mockSettings = { ...mockSettings, rules: [] };
+  render(<VocabularyAIRulesDialog />);
+  open();
+  expect(screen.getByText(/the AI turns it into a rule here/)).toBeInTheDocument();
 });

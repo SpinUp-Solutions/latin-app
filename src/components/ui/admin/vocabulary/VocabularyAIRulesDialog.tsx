@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BookMarked, Plus, Trash2 } from 'lucide-react';
+import { Lightbulb, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ADMIN_NOTE_MAX, AI_REVIEW_ITEM_LIMIT } from '@/shared/types/vocabulary/ai-review';
 import type { SaveVocabularyAIGuidance } from '@/shared/types/vocabulary/ai-guidance-settings';
@@ -21,7 +21,10 @@ import {
   useSaveVocabularyAIGuidanceMutation,
 } from '@/src/store/api/vocabularyAIGuidanceApi';
 
-/** Loaded fresh each time the dialog opens; saved as one revision-checked set. */
+/**
+ * Loaded fresh each time the dialog opens; edits and removals are saved as one
+ * revision-checked set. New rules come from the AI, drawn from admins' answers.
+ */
 function RulesEditor({ onClose }: { onClose: () => void }) {
   const query = useGetVocabularyAIGuidanceQuery();
   const [save, { isLoading: saving }] = useSaveVocabularyAIGuidanceMutation();
@@ -64,50 +67,52 @@ function RulesEditor({ onClose }: { onClose: () => void }) {
     <div className="space-y-3">
       {rules.length === 0 && (
         <p className="text-sm text-gray-600">
-          No rules yet. Add one when a correction applies to every word, for example “Label postclassical senses as
-          such.” A correction for one word belongs in a note on that word.
+          No rules yet. When you answer the AI about a word and your answer applies to every word, for example “only
+          give locative forms for place names”, the AI turns it into a rule here.
         </p>
       )}
-      <ol className="space-y-2">
+      <ol className="space-y-3">
         {rules.map((rule, index) => (
-          <li key={rule.id} className="flex items-start gap-2">
-            <Textarea
-              aria-label={`Rule ${index + 1}`}
-              rows={2}
-              value={rule.instruction}
-              maxLength={ADMIN_NOTE_MAX}
-              disabled={saving}
-              onChange={event =>
-                edit(rules.map(item => (item.id === rule.id ? { ...item, instruction: event.target.value } : item)))
-              }
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`Remove rule ${index + 1}`}
-              disabled={saving}
-              onClick={() => edit(rules.filter(item => item.id !== rule.id))}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+          <li key={rule.id} className="space-y-1">
+            <div className="flex items-start gap-2">
+              <Textarea
+                aria-label={`Rule ${index + 1}`}
+                rows={2}
+                value={rule.instruction}
+                maxLength={ADMIN_NOTE_MAX}
+                disabled={saving}
+                onChange={event =>
+                  edit(rules.map(item => (item.id === rule.id ? { ...item, instruction: event.target.value } : item)))
+                }
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove rule ${index + 1}`}
+                disabled={saving}
+                onClick={() => edit(rules.filter(item => item.id !== rule.id))}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+            {rule.learnedFrom && (
+              <p className="pr-12 text-xs text-gray-500" title={rule.learnedFrom.message}>
+                Learned from an answer about <span className="font-medium">{rule.learnedFrom.word}</span>: “
+                {rule.learnedFrom.message.length > 160
+                  ? `${rule.learnedFrom.message.slice(0, 159)}…`
+                  : rule.learnedFrom.message}
+                ”
+              </p>
+            )}
           </li>
         ))}
       </ol>
-      <div className="flex items-center gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          disabled={saving || rules.length >= AI_REVIEW_ITEM_LIMIT}
-          onClick={() => edit([...rules, { id: crypto.randomUUID(), instruction: '' }])}>
-          <Plus className="h-3.5 w-3.5" />
-          Add rule
-        </Button>
-        <span className="text-xs text-gray-500">
-          {rules.length} of {AI_REVIEW_ITEM_LIMIT}
-        </span>
-      </div>
+      {rules.length > 0 && (
+        <p className="text-xs text-gray-500">
+          {rules.length} of {AI_REVIEW_ITEM_LIMIT} rules. At {AI_REVIEW_ITEM_LIMIT}, remove one so the AI can learn
+          more.
+        </p>
+      )}
       {error && (
         <div role="alert" className="space-y-2 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
           <p>{error}</p>
@@ -131,7 +136,7 @@ function RulesEditor({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Rules the AI follows for every word, saved on their own rather than with a word. */
+/** Rules the AI follows for every word, which it learns from admins' answers; saved on their own rather than with a word. */
 export function VocabularyAIRulesDialog({ disabled = false }: { disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
@@ -143,14 +148,15 @@ export function VocabularyAIRulesDialog({ disabled = false }: { disabled?: boole
         className="gap-1.5"
         disabled={disabled}
         onClick={() => setOpen(true)}>
-        <BookMarked className="h-4 w-4" />
+        <Lightbulb className="h-4 w-4" />
         AI rules
       </Button>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>AI rules for all words</DialogTitle>
           <DialogDescription>
-            Sent with every vocabulary AI request. A note on a single word takes precedence over these rules.
+            The AI writes these from your answers when a correction applies to every word, and follows them in every
+            request. A note on a single word takes precedence. Edit or remove any rule that is wrong.
           </DialogDescription>
         </DialogHeader>
         {open && <RulesEditor onClose={() => setOpen(false)} />}

@@ -7,7 +7,6 @@ export const commonOutput = {
   pronunciation: null,
   alternate_form: null,
   uncertainties: [],
-  review_answer: null,
 };
 
 export const nounOutput = (): NounStructuredOutput => ({

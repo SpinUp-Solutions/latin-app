@@ -5,8 +5,13 @@ import {
   AI_REVIEW_ITEM_LIMIT,
   EMPTY_AI_REVIEW,
   type AICompletableField,
+  type VocabularyAIGuidance,
+  type VocabularyAIMemory,
+  type VocabularyAIReview,
   type VocabularyAIUncertainty,
 } from '@/shared/types/vocabulary/ai-review';
+import type { LearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
+import { changedTableCells } from '@/src/utils/vocabulary/word-diff';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
@@ -27,7 +32,13 @@ import {
   VocabularyFormValues,
 } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
-import { AIFieldReview, AIReviewContext, AIReviewSummary, type AIReviewContextValue } from './VocabularyAIReview';
+import {
+  AIFieldReview,
+  AIReviewContext,
+  AIReviewPanel,
+  type AcceptedAIReply,
+  type AIReviewContextValue,
+} from './VocabularyAIReview';
 import { aiFieldLabel } from './wordFields';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
 import {
@@ -47,6 +58,8 @@ interface WordEditPanelProps {
   /** Buttons shown before the save button. */
   actions?: React.ReactNode;
   allowAIAutocomplete?: boolean;
+  /** Saves the rules for all words that the AI learns from the admin's answers. */
+  learnedRules?: LearnedAIRules;
   /** Told whether the word has edits that have not been saved; false again when the panel goes away. */
   onDirtyChange?: (dirty: boolean) => void;
 }
@@ -170,6 +183,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   saveLabel = 'Apply',
   actions,
   allowAIAutocomplete = true,
+  learnedRules,
   onDirtyChange,
 }) => {
   const form = useForm<VocabularyFormValues>({
@@ -277,63 +291,83 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     setAiFieldStatus(fieldStatus);
   };
 
-  /** Closes the field's doubt; the admin's note, if any, is kept on the word for later AI requests. */
-  const closeDoubt = (field: AICompletableField, note: string) => {
-    const review = form.getValues('ai_review') ?? EMPTY_AI_REVIEW;
-    let guidance = review.guidance;
-    if (note && guidance.length >= AI_REVIEW_ITEM_LIMIT) {
-      toast.warning(`This word already has ${AI_REVIEW_ITEM_LIMIT} notes for the AI, so this one was not kept.`, {
-        description: 'Remove an old note to keep new ones.',
-      });
-    } else if (note) {
-      guidance = [...guidance, { id: crypto.randomUUID(), instruction: note, field }];
+  const updateReview = (change: (review: VocabularyAIReview) => VocabularyAIReview) =>
+    form.setValue('ai_review', change(form.getValues('ai_review') ?? EMPTY_AI_REVIEW), {
+      shouldDirty: true,
+      shouldValidate: false,
+    });
+
+  /** Notes for later AI requests, up to the limit a word can hold. */
+  const withNotes = (guidance: VocabularyAIGuidance[], notes: VocabularyAIMemory[]) => {
+    const room = Math.max(0, AI_REVIEW_ITEM_LIMIT - guidance.length);
+    if (notes.length > room) {
+      toast.warning(
+        `This word already holds ${AI_REVIEW_ITEM_LIMIT} notes for the AI, so not everything was remembered.`,
+        {
+          description: 'Remove old notes in the AI assistant to keep new ones.',
+        }
+      );
     }
-    form.setValue(
-      'ai_review',
-      { uncertainties: review.uncertainties.filter(item => item.field !== field), guidance },
-      { shouldDirty: true, shouldValidate: false }
-    );
+    return [
+      ...guidance,
+      ...notes
+        .slice(0, room)
+        .map(({ field, note }) => ({ id: crypto.randomUUID(), instruction: note, ...(field ? { field } : {}) })),
+    ];
   };
 
-  const handleApplyProposal = (field: AICompletableField, value: unknown, note: string) => {
-    if (editableTable?.field === field) {
-      const schema =
-        word?.part_of_speech === 'pronoun'
-          ? getPronounTableSchema(
-              form.getValues('pronoun_type') as PronounType | null,
-              form.getValues('person') as PronounPerson | null
-            )
-          : editableTable.schema;
-      setTable(value === null ? buildEmptyFromSchema(schema) : cloneTableData(value));
-    } else {
-      form.setValue(field as keyof VocabularyFormValues, value as never, { shouldDirty: true, shouldValidate: false });
+  const currentTableSchema = () =>
+    word?.part_of_speech === 'pronoun'
+      ? getPronounTableSchema(
+          form.getValues('pronoun_type') as PronounType | null,
+          form.getValues('person') as PronounPerson | null
+        )
+      : editableTable!.schema;
+
+  /** Puts the values the admin accepted in the draft, closes the questions they settle and keeps the notes. */
+  const handleAcceptReply = ({ changes, closed, notes }: AcceptedAIReply) => {
+    const highlighted = new Map(aiFieldStatus);
+    for (const [field, value] of Object.entries(changes)) {
+      if (editableTable?.field === field) {
+        const next = cloneTableData(value === null ? buildEmptyFromSchema(currentTableSchema()) : value);
+        for (const path of changedTableCells(table, next)) highlighted.set(`${field}.${path}`, 'filled');
+        setTable(next);
+      } else {
+        form.setValue(field as keyof VocabularyFormValues, value as never, {
+          shouldDirty: true,
+          shouldValidate: false,
+        });
+        highlighted.set(field, 'filled');
+      }
     }
-    closeDoubt(field, note);
-    toast.success(`${aiFieldLabel(field)} updated. Save the word with ${saveLabel} to keep it.`);
+    setAiFieldStatus(highlighted);
+    if (closed.length > 0 || notes.length > 0) {
+      updateReview(review => ({
+        uncertainties: review.uncertainties.filter(item => !closed.includes(item.field)),
+        guidance: withNotes(review.guidance, notes),
+      }));
+    }
+    const fields = Object.keys(changes).map(aiFieldLabel);
+    if (fields.length > 0) toast.success(`Updated ${fields.join(', ')}. Save the word with ${saveLabel} to keep it.`);
+    else if (closed.length > 0 || notes.length > 0)
+      toast.success(`Answer noted. Save the word with ${saveLabel} to keep it.`);
   };
 
-  const handleRemoveNote = (id: string) => {
-    const review = form.getValues('ai_review') ?? EMPTY_AI_REVIEW;
-    form.setValue(
-      'ai_review',
-      { ...review, guidance: review.guidance.filter(note => note.id !== id) },
-      { shouldDirty: true, shouldValidate: false }
-    );
-  };
+  const handleKeep = (field: AICompletableField, note: string) =>
+    updateReview(review => ({
+      uncertainties: review.uncertainties.filter(item => item.field !== field),
+      guidance: withNotes(review.guidance, [{ field, note }]),
+    }));
+
+  const handleRemoveNote = (id: string) =>
+    updateReview(review => ({ ...review, guidance: review.guidance.filter(note => note.id !== id) }));
 
   const handleSubmit = form.handleSubmit(
     async values => {
       if (!word) return;
 
       if (editableTable) {
-        const schema =
-          word.part_of_speech === 'pronoun'
-            ? getPronounTableSchema(
-                form.getValues('pronoun_type') as PronounType | null,
-                form.getValues('person') as PronounPerson | null
-              )
-            : editableTable.schema;
-        const result = schema.safeParse(table);
+        const result = currentTableSchema().safeParse(table);
         if (!result.success) {
           setTableErrors([result.error.issues[0]?.message ?? 'Invalid table']);
           return;
@@ -397,9 +431,10 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         review: watchedValues.ai_review ?? EMPTY_AI_REVIEW,
         draft: aiSnapshot,
         disabled: updating || isSubmitting || !!editingCell,
-        applyProposal: handleApplyProposal,
-        resolve: closeDoubt,
+        acceptReply: handleAcceptReply,
+        keep: handleKeep,
         removeNote: handleRemoveNote,
+        learnedRules,
       }
     : null;
 
@@ -472,12 +507,12 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
               without it they are positioned against the page and make the whole document scrollable. */}
             <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
               <div className="space-y-6">
-                <AIReviewSummary />
+                <AIReviewPanel />
                 <BaseWordForm />
                 {renderPosForm()}
 
                 {editableTable && (
-                  <AIFieldReview field={editableTable.field} doubtFirst>
+                  <AIFieldReview field={editableTable.field}>
                     <SchemaTable
                       schema={
                         word.part_of_speech === 'pronoun'

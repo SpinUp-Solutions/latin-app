@@ -22,6 +22,7 @@ import { useCurrentWordsQuery } from '@/src/hooks/useCurrentWordsQuery';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { VocabularyAIRulesDialog } from '@/src/components/ui/admin/vocabulary/VocabularyAIRulesDialog';
+import { useLearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
@@ -41,6 +42,7 @@ function omitUndefinedFields<T extends object>(updates: T): Partial<T> {
 
 function AdminVocabularyPage() {
   const dispatch = useDispatch();
+  const learnedRules = useLearnedAIRules();
   const filters = useSelector(selectVocabularyFilters);
   const debouncedSearch = useDebounce(filters.search, 150);
 
@@ -322,6 +324,7 @@ function AdminVocabularyPage() {
             word={selectedWord}
             onSave={handleSaveWord}
             updating={updating || creating}
+            learnedRules={learnedRules}
           />
         </div>
       </main>
