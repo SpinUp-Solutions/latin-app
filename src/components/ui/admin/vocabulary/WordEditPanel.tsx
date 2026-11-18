@@ -351,6 +351,27 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     }
 
     let aiTable = editableTable && (aiData as TableData)[editableTable.field];
+    // A pronoun whose type or person this answer filled in may now use a table of another shape (first and
+    // second person have no genders). The AI's table is then taken whole: merged into the old shape it
+    // would fit neither, and the shape change would replace it with an empty table right after. Whatever
+    // the old table held, the shape change would have emptied it anyway.
+    const pronounShape = (values: TableData) =>
+      getPronounTableSchema(values.pronoun_type as PronounType | null, values.person as PronounPerson | null);
+    const newShape =
+      word?.part_of_speech === 'pronoun' &&
+      pronounShape(form.getValues() as unknown as TableData) !== pronounShape(current) &&
+      pronounShape(form.getValues() as unknown as TableData);
+    if (editableTable && aiTable && newShape) {
+      const next = cloneTableData(aiTable);
+      const formsGiven = changedTableCells({}, next);
+      for (const path of findNullPaths(next)) fieldStatus.set(`${editableTable.field}.${path}`, 'missing');
+      for (const path of formsGiven) fieldStatus.set(`${editableTable.field}.${path}`, 'filled');
+      const tableField = AICompletableFieldSchema.safeParse(editableTable.field);
+      if (tableField.success && formsGiven.length > 0) filled.push(tableField.data);
+      setTable(next);
+      setPrevPronounSchema(newShape);
+      aiTable = undefined;
+    }
     if (editableTable && aiTable) {
       // A cell the admin emptied while the AI ran stays empty: the AI's value there is the one they removed.
       const emptyWhenAsked = new Set(findNullPaths(askedData[editableTable.field]));

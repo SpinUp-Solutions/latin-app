@@ -1066,6 +1066,32 @@ describe('when the admin keeps working while autocomplete runs', () => {
     expect((await saveWord(onSave)).dictionary_forms).toEqual(completed);
   });
 
+  it('keeps the table it gives a personal pronoun whose person it fills in', async () => {
+    const ego = {
+      ...cloneNoun(),
+      id: 'ego',
+      word: 'ego',
+      part_of_speech: 'pronoun',
+      pronoun_type: 'personal',
+      person: null,
+      declension_table: buildEmptyFromSchema(getPronounTableSchema('personal', null)),
+      ai_review: { uncertainties: [], guidance: [] },
+    } as unknown as VocabularyWordWithId;
+    // No person yet means the gendered table; first person has none.
+    const firstPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '1st')) as Record<string, unknown>;
+    firstPerson.nominative = { singular: ['ego'], plural: ['nōs'] };
+    mockCallable.mockResolvedValueOnce(answer({ person: '1st', declension_table: firstPerson }));
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={ego} onSave={onSave} updating={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+
+    expect(await within(assistant()).findByText(/I filled Person and Declension table/)).toBeInTheDocument();
+    expect(screen.getByText('nōs')).toBeInTheDocument();
+    const saved = await saveWord(onSave);
+    expect(saved.person).toBe('1st');
+    expect(saved.declension_table.nominative).toEqual({ singular: ['ego'], plural: ['nōs'] });
+  });
+
   it('applies nothing when the admin renamed the word meanwhile, and says so', async () => {
     const finish = pending();
     render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
