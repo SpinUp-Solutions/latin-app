@@ -458,12 +458,13 @@ export async function autocompleteVocabularyWord(
       const selectedFields = request.fieldsToComplete?.length
         ? request.fieldsToComplete.filter(field => schemaFields.includes(field))
         : schemaFields;
+      const uncertainFields = new Set((structured.uncertainties as VocabularyAIUncertainty[]).map(item => item.field));
       for (const field of selectedFields) {
         if (field === 'case' && structured[field] === null) continue;
         data[field] = mergeValue(
           existing[field],
           structured[field],
-          Boolean(request.overwriteExisting),
+          Boolean(request.overwriteExisting) && !(field.endsWith('_table') && uncertainFields.has(field)),
           field.endsWith('_table') && !isValueEmpty(existing[field])
         );
       }

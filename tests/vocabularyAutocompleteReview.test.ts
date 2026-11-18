@@ -308,6 +308,35 @@ it('fills an entirely empty new-word paradigm while preserving nulls in partiall
   expect(result.data).toMatchObject({ declension_table: nounOutput().declension_table });
 });
 
+it('keeps a disputed passive infinitive and genuine gaps when asked to overwrite a table', async () => {
+  const cellQuestion = {
+    ...question,
+    field: 'conjugation_table',
+    question: 'Keep discēdī as the present passive infinitive?',
+  };
+  const output = verbOutput();
+  const existingTable = structuredClone(output.conjugation_table);
+  existingTable.nonFinite.infinitive.present.passive = ['discēdī'];
+  respond({ ...output, uncertainties: [cellQuestion] });
+  const result = await autocompleteVocabularyWord({
+    word: 'discēdō',
+    part_of_speech: 'verb',
+    fieldsToComplete: ['conjugation_table'],
+    overwriteExisting: true,
+    existingData: { conjugation_table: existingTable },
+  });
+  expect(result).toMatchObject({
+    success: true,
+    uncertainties: [cellQuestion],
+    data: {
+      conjugation_table: {
+        nonFinite: { infinitive: { present: { passive: ['discēdī'] } } },
+        indicative: { passive: { present: { singular: { first: null } } } },
+      },
+    },
+  });
+});
+
 it('preserves existing principal-part arrays of a different length', async () => {
   respond(verbOutput());
   const principal_parts = [{ full_form: 'ferō', shortened_form: 'ferō' }];
