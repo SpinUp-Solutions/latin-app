@@ -323,6 +323,31 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         field in aiData &&
         snapshotValue((aiData as TableData)[field]) !== snapshotValue(askedData[field])
     );
+    // A pronoun's type and person decide its table's shape, so they go with the table, as on Accept: if the
+    // admin edited the table while the AI ran and the answer's type or person would change that shape, all
+    // three are left out. Applying them would replace the edited table with one of another shape.
+    const pronounShape = (values: TableData) =>
+      getPronounTableSchema(values.pronoun_type as PronounType | null, values.person as PronounPerson | null);
+    let shapeLeftOut = false;
+    if (
+      word?.part_of_speech === 'pronoun' &&
+      editableTable &&
+      snapshotValue(askedData[editableTable.field]) !== snapshotValue(table)
+    ) {
+      const answered = (field: 'person' | 'pronoun_type') =>
+        edited.has(field) ? current[field] : deepMergeNullValues(current[field], (aiData as TableData)[field]);
+      if (
+        pronounShape({ pronoun_type: answered('pronoun_type'), person: answered('person') }) !== pronounShape(current)
+      ) {
+        edited.add('person');
+        edited.add('pronoun_type');
+        shapeLeftOut = true;
+        toast.info('Autocomplete left the person and the table as they are', {
+          description:
+            'You edited the table while it ran, and the person it found would change the table to another shape.',
+        });
+      }
+    }
     const uncertainties = allUncertainties.filter(item => !edited.has(item.field));
     const filled: AICompletableField[] = [];
     Object.entries(aiData).forEach(([key, value]) => {
@@ -350,13 +375,12 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       }
     }
 
-    let aiTable = editableTable && (aiData as TableData)[editableTable.field];
+    // A table of the other shape, left out with its person (above).
+    let aiTable = !shapeLeftOut && editableTable && (aiData as TableData)[editableTable.field];
     // A pronoun whose type or person this answer filled in may now use a table of another shape (first and
     // second person have no genders). The AI's table is then taken whole: merged into the old shape it
-    // would fit neither, and the shape change would replace it with an empty table right after. Whatever
-    // the old table held, the shape change would have emptied it anyway.
-    const pronounShape = (values: TableData) =>
-      getPronounTableSchema(values.pronoun_type as PronounType | null, values.person as PronounPerson | null);
+    // would fit neither, and the shape change would replace it with an empty table right after. The old
+    // table was not edited during the run (otherwise the shape change is left out above).
     const newShape =
       word?.part_of_speech === 'pronoun' &&
       pronounShape(form.getValues() as unknown as TableData) !== pronounShape(current) &&

@@ -1092,6 +1092,42 @@ describe('when the admin keeps working while autocomplete runs', () => {
     expect(saved.declension_table.nominative).toEqual({ singular: ['ego'], plural: ['nōs'] });
   });
 
+  it('leaves a new person and its table out when the admin edited the table meanwhile', async () => {
+    const gendered = buildEmptyFromSchema(getPronounTableSchema('personal', null)) as Record<
+      string,
+      Record<string, { singular: string[] | null; plural: string[] | null }>
+    >;
+    gendered.nominative.masculine = { singular: ['egoform'], plural: null };
+    const ego = {
+      ...cloneNoun(),
+      id: 'ego',
+      word: 'ego',
+      part_of_speech: 'pronoun',
+      pronoun_type: 'personal',
+      person: null,
+      declension_table: gendered,
+      ai_review: { uncertainties: [], guidance: [] },
+    } as unknown as VocabularyWordWithId;
+    const firstPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '1st')) as Record<string, unknown>;
+    firstPerson.nominative = { singular: ['ego'], plural: ['nōs'] };
+    const finish = pending();
+    render(<WordEditPanel word={ego} onSave={async () => true} updating={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.doubleClick(screen.getByText('egoform'));
+    fireEvent.change(screen.getByPlaceholderText('Enter value...'), { target: { value: 'edited meanwhile' } });
+    fireEvent.keyDown(screen.getByPlaceholderText('Enter value...'), { key: 'Enter' });
+    await finish(answer({ person: '1st', declension_table: firstPerson }));
+
+    expect(toast.info).toHaveBeenCalledWith('Autocomplete left the person and the table as they are', {
+      description:
+        'You edited the table while it ran, and the person it found would change the table to another shape.',
+    });
+    // The edited table stays, in its shape, and the person stays unset for the admin to choose.
+    expect(screen.getByText('edited meanwhile')).toBeInTheDocument();
+    expect(screen.queryByText('nōs')).toBeNull();
+    expect(screen.getByText('Select person')).toBeInTheDocument();
+  });
+
   it('applies nothing when the admin renamed the word meanwhile, and says so', async () => {
     const finish = pending();
     render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
