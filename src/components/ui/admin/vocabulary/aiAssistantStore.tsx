@@ -26,6 +26,11 @@ export interface Proposal {
   changes: ProposedChange[];
   answered: AICompletableField[];
   remember: VocabularyAIMemory[];
+  /**
+   * The value the AI saw for each field it settles a question about or keeps a note on without changing,
+   * so Accept notices an edit made since, as it does for a proposed change.
+   */
+  seen: Partial<Record<AICompletableField, string>>;
   rule: string | null;
   /** The admin message the AI answered; a learned rule records it as its source. */
   prompt: string;
@@ -196,7 +201,9 @@ function useAIAssistantState(): AIAssistantStore {
 
   const send = async (key: string, { word, part_of_speech, asked, text }: SendToAI) => {
     const chat = chats[key] ?? EMPTY_CHAT;
-    if (chat.pending) return;
+    // `chats` is this render's copy: a second send before the next render would still see no pending
+    // reply, so the request in flight is checked too. Otherwise both are billed and one answer is lost.
+    if (chat.pending || active.current.has(key)) return;
     const history: VocabularyAIChatTurn[] = chat.turns
       .flatMap(turn => (turn.from === 'event' ? [] : [{ from: turn.from, text: historyText(turn) }]))
       .slice(-AI_CONVERSATION_HISTORY_LIMIT);
@@ -232,10 +239,18 @@ function useAIAssistantState(): AIAssistantStore {
         ? [{ field, value, basis: snapshotValue(draftValue(asked, field)) }]
         : []
     );
+    const changed = new Set(changes.map(change => change.field));
+    const touched = [...reply.answered, ...reply.remember.flatMap(note => (note.field ? [note.field] : []))];
+    const seen = Object.fromEntries(
+      touched
+        .filter(field => !changed.has(field))
+        .map(field => [field, snapshotValue(draftValue(asked, field))])
+    ) as Proposal['seen'];
     const proposal: Proposal = {
       changes,
       answered: reply.answered,
       remember: reply.remember,
+      seen,
       rule: reply.rule,
       prompt: text,
     };

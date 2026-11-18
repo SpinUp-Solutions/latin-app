@@ -679,12 +679,16 @@ export function AIAssistantDock() {
     const proposal = turn.proposal;
     if (!proposal || turn.status !== 'pending' || busy) return;
     // Stale means the draft no longer holds the value the AI saw. A field changed and then changed
-    // back is not stale: the AI's change still applies to exactly what it was asked about.
-    const stale = new Set(
-      proposal.changes
+    // back is not stale: the AI's change still applies to exactly what it was asked about. That holds
+    // for every field the reply touches: one it only settles a question or keeps a note about is
+    // stale too, so the question stays open and the note, which may now contradict the field, goes.
+    const seen = Object.entries(proposal.seen) as [AICompletableField, string][];
+    const stale = new Set([
+      ...proposal.changes
         .filter(change => snapshot(draftValue(draft, change.field)) !== change.basis)
-        .map(change => change.field)
-    );
+        .map(change => change.field),
+      ...seen.filter(([field, basis]) => snapshot(draftValue(draft, field)) !== basis).map(([field]) => field),
+    ]);
     const fresh = proposal.changes.filter(change => !stale.has(change.field));
     const asked = new Set(questions.map(question => question.field));
     const values = Object.fromEntries(fresh.map(change => [change.field, change.value]));

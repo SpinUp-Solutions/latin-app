@@ -1,8 +1,8 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'sonner';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
-import { AIAssistantProvider } from '@/src/components/ui/admin/vocabulary/aiAssistantStore';
+import { AIAssistantProvider, useAIAssistant } from '@/src/components/ui/admin/vocabulary/aiAssistantStore';
 import {
   applyFormValuesToWord,
   toFormDefaultValues,
@@ -358,6 +358,56 @@ it('applies a change to a field the admin changed and then changed back while th
   expect(screen.queryByText(/You edited Etymology after asking/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Accept change' }));
   expect(screen.getByLabelText('Etymology')).toHaveValue('From Greek rhódon.');
+});
+
+it('keeps a question open and drops its note when the admin edited the field the answer only settles', async () => {
+  const finish = pending();
+  const onSave = jest.fn(async () => true);
+  render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+  say('Etymology: It is a loan from Greek rhódon.');
+  fireEvent.change(screen.getByLabelText('Etymology'), { target: { value: 'typed by the admin' } });
+  // The reply changes no field: it only settles the question and keeps notes.
+  await finish(
+    reply(
+      {},
+      {
+        message: 'Noted.',
+        answered: ['etymology'],
+        remember: [
+          { field: 'etymology', note: 'rosa comes from Greek.' },
+          { field: null, note: 'The admin checks loans against Greek.' },
+        ],
+      }
+    )
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+  expect(
+    screen.getByText('Accepted. Remembering 1 note. Skipped Etymology, which you had edited.')
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText('Etymology')).toHaveValue('typed by the admin');
+  // The admin's own value has not been judged against the answer, so the question stays open.
+  expect(questionCard('Etymology')).not.toBeNull();
+  // The note about the field may contradict what the admin typed; a note about no field stays.
+  const saved = await saveWord(onSave);
+  expect(saved.ai_review.guidance).toEqual([
+    expect.objectContaining({ instruction: 'The admin checks loans against Greek.' }),
+  ]);
+  expect(saved.ai_review.guidance[0]).not.toHaveProperty('field');
+  expect(saved.ai_review.uncertainties).toEqual([question]);
+});
+
+it('sends one request when a message is sent twice before the next render', async () => {
+  mockCallable.mockResolvedValue(reply({}, { message: 'Once.' }));
+  const { result } = renderHook(() => useAIAssistant(), { wrapper: AIAssistantProvider });
+  const message = { word: 'rosa', part_of_speech: 'noun' as const, asked: cloneNoun(), text: 'Why?' };
+  await act(async () => {
+    const store = result.current;
+    await Promise.all([store.send('rosa', message), store.send('rosa', message)]);
+  });
+
+  expect(mockCallable).toHaveBeenCalledTimes(1);
+  expect(result.current.chat('rosa').turns.filter(turn => turn.from === 'admin')).toHaveLength(1);
 });
 
 it('follows up in the same conversation, and a newer answer replaces one not yet accepted', async () => {

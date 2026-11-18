@@ -12,8 +12,10 @@
  * The merge gate fails on unrelated or contradictory changes, on a teacher's edit overwritten without
  * acceptance, or on an accepted and saved correction not retained. This script checks retention itself and
  * flags changes outside each case's expected fields as REVIEW: a related fix (a table that follows from a
- * corrected conjugation) is fine, so a person decides. Overwriting without acceptance cannot happen here;
- * nothing lands without Accept, which the editor's tests cover.
+ * corrected conjugation) is fine, so a person decides. Overwriting a teacher's edit is the editor's job to
+ * prevent, and its tests cover it: a chat answer lands only on Accept and skips fields edited since, and
+ * autocomplete fills the unsaved draft directly but only empty fields, leaving any the teacher changed
+ * meanwhile. Saving the word is the checkpoint for both.
  */
 import { createRequire } from 'node:module';
 import { existsSync, writeFileSync } from 'node:fs';
