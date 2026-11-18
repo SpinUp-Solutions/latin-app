@@ -123,9 +123,33 @@ const OPEN_KEY = 'vocabulary-ai-assistant-open';
 export const STOP_WAITING_HINT = 'This stops waiting for the answer. Generation may continue and still incur charges.';
 const STOPPED_NOTE = 'You stopped waiting for this answer. Generation may continue and still incur charges.';
 const isCompletable = (field: string): field is AICompletableField => AICompletableFieldSchema.safeParse(field).success;
-const draftValue = (draft: Partial<VocabularyWord>, field: AICompletableField): unknown =>
+export const draftValue = (draft: Partial<VocabularyWord>, field: AICompletableField): unknown =>
   (draft as Record<string, unknown>)[field];
+
+/*
+ * Two equality rules, on purpose.
+ * - Edited since asking is exact (`snapshotValue`): the AI answered about the exact value it saw, so a
+ *   field whose value now differs, even '' where it saw null, makes that part of its answer stale. Only
+ *   the end state counts: an edit reverted is no edit, and a missing field reads as null.
+ * - Shows the same is loose (`sameWordValue`, which treats null, '', and empty lists and tables alike):
+ *   it decides whether a reply proposes a change at all, and whether an accepted value is still the one in
+ *   the draft or the saved word, where '' against null is only the editor's noise.
+ */
 export const snapshotValue = (value: unknown) => JSON.stringify(value ?? null);
+
+/**
+ * The fields of a reply the admin has edited since asking: those it changes, and those it only settles a
+ * question or keeps a note about. A field changed and then changed back is not stale.
+ */
+export function staleFields(proposal: Proposal, draft: Partial<VocabularyWord>): Set<AICompletableField> {
+  const seen: [AICompletableField, string][] = [
+    ...proposal.changes.map(change => [change.field, change.basis] as [AICompletableField, string]),
+    ...(Object.entries(proposal.seen) as [AICompletableField, string][]),
+  ];
+  return new Set(
+    seen.filter(([field, basis]) => snapshotValue(draftValue(draft, field)) !== basis).map(([field]) => field)
+  );
+}
 
 function readOpen(): boolean {
   try {
@@ -242,9 +266,7 @@ function useAIAssistantState(): AIAssistantStore {
     const changed = new Set(changes.map(change => change.field));
     const touched = [...reply.answered, ...reply.remember.flatMap(note => (note.field ? [note.field] : []))];
     const seen = Object.fromEntries(
-      touched
-        .filter(field => !changed.has(field))
-        .map(field => [field, snapshotValue(draftValue(asked, field))])
+      touched.filter(field => !changed.has(field)).map(field => [field, snapshotValue(draftValue(asked, field))])
     ) as Proposal['seen'];
     const proposal: Proposal = {
       changes,
