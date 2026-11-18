@@ -410,49 +410,55 @@ it('sends one request when a message is sent twice before the next render', asyn
   expect(result.current.chat('rosa').turns.filter(turn => turn.from === 'admin')).toHaveLength(1);
 });
 
-it('skips a new person with the table when the admin edited the table while the AI answered', async () => {
-  const thirdPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '3rd')) as Record<
-    string,
-    Record<string, { singular: string[] | null; plural: string[] | null }>
-  >;
-  thirdPerson.nominative.masculine = { singular: ['isform'], plural: ['eī'] };
-  const is = {
-    ...cloneNoun(),
-    id: 'is',
-    word: 'is',
-    part_of_speech: 'pronoun',
-    pronoun_type: 'personal',
-    person: '3rd',
-    declension_table: thirdPerson,
-    ai_review: { uncertainties: [], guidance: [] },
-  } as unknown as VocabularyWordWithId;
-  const firstPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '1st')) as Record<
-    string,
-    { singular: string[] | null; plural: string[] | null }
-  >;
-  firstPerson.nominative = { singular: ['ego'], plural: ['nōs'] };
-  const finish = pending();
-  const onSave = jest.fn(async () => true);
-  render(<WordEditPanel word={is} onSave={onSave} updating={false} />);
-  say('Make it first person.');
-  fireEvent.doubleClick(screen.getByText('isform'));
-  fireEvent.change(screen.getByPlaceholderText('Enter value...'), { target: { value: 'ille' } });
-  fireEvent.keyDown(screen.getByPlaceholderText('Enter value...'), { key: 'Enter' });
-  await finish({
-    data: {
-      success: true,
-      uncertainties: [],
-      data: { part_of_speech: 'pronoun', person: '1st', declension_table: firstPerson },
-      reply: { message: 'First person now.', answered: [], remember: [], rule: null },
-    },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+it.each([
+  ['with', true],
+  ['without', false],
+])(
+  'skips a new person %s a new table when the admin edited the table while the AI answered',
+  async (_case, withTable) => {
+    const thirdPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '3rd')) as Record<
+      string,
+      Record<string, { singular: string[] | null; plural: string[] | null }>
+    >;
+    thirdPerson.nominative.masculine = { singular: ['isform'], plural: ['eī'] };
+    const is = {
+      ...cloneNoun(),
+      id: 'is',
+      word: 'is',
+      part_of_speech: 'pronoun',
+      pronoun_type: 'personal',
+      person: '3rd',
+      declension_table: thirdPerson,
+      ai_review: { uncertainties: [], guidance: [] },
+    } as unknown as VocabularyWordWithId;
+    const firstPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '1st')) as Record<
+      string,
+      { singular: string[] | null; plural: string[] | null }
+    >;
+    firstPerson.nominative = { singular: ['ego'], plural: ['nōs'] };
+    const finish = pending();
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={is} onSave={onSave} updating={false} />);
+    say('Make it first person.');
+    fireEvent.doubleClick(screen.getByText('isform'));
+    fireEvent.change(screen.getByPlaceholderText('Enter value...'), { target: { value: 'ille' } });
+    fireEvent.keyDown(screen.getByPlaceholderText('Enter value...'), { key: 'Enter' });
+    await finish({
+      data: {
+        success: true,
+        uncertainties: [],
+        data: { part_of_speech: 'pronoun', person: '1st', ...(withTable ? { declension_table: firstPerson } : {}) },
+        reply: { message: 'First person now.', answered: [], remember: [], rule: null },
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
-  // The person would change the table's shape and empty the table the admin edited, so both are skipped.
-  const saved = await saveWord(onSave);
-  expect(saved.person).toBe('3rd');
-  expect(saved.declension_table.nominative.masculine).toEqual({ singular: ['ille'], plural: ['eī'] });
-});
+    // The person would change the table's shape and empty the table the admin edited, so it is skipped.
+    const saved = await saveWord(onSave);
+    expect(saved.person).toBe('3rd');
+    expect(saved.declension_table.nominative.masculine).toEqual({ singular: ['ille'], plural: ['eī'] });
+  }
+);
 
 it('keeps an accepted pronoun table when the same reply changes the person', async () => {
   const onSave = jest.fn(async () => true);
@@ -1294,6 +1300,22 @@ describe('Save and next', () => {
     expect(screen.getByPlaceholderText('Enter value...')).toHaveValue('typed in a cell');
     expect(next.open).not.toHaveBeenCalled();
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it('asks to finish an open table cell before saving', async () => {
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+    fireEvent.doubleClick(screen.getByText('rosam'));
+    fireEvent.change(screen.getByPlaceholderText('Enter value...'), { target: { value: 'not committed' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith('Finish editing the table cell first', {
+        description: 'Press Enter to keep it or Escape to cancel, then save.',
+      })
+    );
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('Enter value...')).toHaveValue('not committed');
   });
 
   it('counts removing a definition as an unsaved change', () => {

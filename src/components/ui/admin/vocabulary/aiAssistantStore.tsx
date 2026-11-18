@@ -156,6 +156,9 @@ export const headwordOf = (draft: Partial<VocabularyWord>) => (draft.word ?? '')
  * The fields of a reply the admin has edited since asking: those it changes, and those it only settles a
  * question or keeps a note about. A field changed and then changed back is not stale.
  */
+/** The fields that decide which table shape a pronoun uses. */
+const PRONOUN_SHAPE = new Set<AICompletableField>(['person', 'pronoun_type']);
+
 export function staleFields(proposal: Proposal, draft: Partial<VocabularyWord>): Set<AICompletableField> {
   const seen: [AICompletableField, string][] = [
     ...proposal.changes.map(change => [change.field, change.basis] as [AICompletableField, string]),
@@ -164,12 +167,14 @@ export function staleFields(proposal: Proposal, draft: Partial<VocabularyWord>):
   const stale = new Set(
     seen.filter(([field, basis]) => snapshotValue(draftValue(draft, field)) !== basis).map(([field]) => field)
   );
-  // A pronoun's type and person decide its table's shape, so they go with the table: applying a new person
-  // while skipping the table the admin edited would replace that table with an empty one of the new shape.
-  if (stale.has('declension_table')) {
-    for (const change of proposal.changes) {
-      if (change.field === 'person' || change.field === 'pronoun_type') stale.add(change.field);
-    }
+  // A pronoun's type and person decide its table's shape, so a reply's changes to them and to the table go
+  // together. A new person applied over a table the admin edited meanwhile would empty that table, and a
+  // new table applied while its person change is skipped would have the wrong shape.
+  const linked = [...proposal.changes.map(change => change.field), ...Object.keys(proposal.seen)].filter(
+    field => field === 'declension_table' || PRONOUN_SHAPE.has(field as AICompletableField)
+  ) as AICompletableField[];
+  if (linked.some(field => stale.has(field))) {
+    for (const field of linked) stale.add(field);
   }
   return stale;
 }
@@ -288,7 +293,12 @@ function useAIAssistantState(): AIAssistantStore {
         : []
     );
     const changed = new Set(changes.map(change => change.field));
-    const touched = [...reply.answered, ...reply.remember.flatMap(note => (note.field ? [note.field] : []))];
+    const touched = [
+      ...reply.answered,
+      ...reply.remember.flatMap(note => (note.field ? [note.field] : [])),
+      // A pronoun's shape fields and its table depend on each other: see `staleFields`.
+      ...(changes.some(change => PRONOUN_SHAPE.has(change.field)) ? (['declension_table'] as const) : []),
+    ];
     const seen = Object.fromEntries(
       touched.filter(field => !changed.has(field)).map(field => [field, snapshotValue(draftValue(asked, field))])
     ) as Proposal['seen'];

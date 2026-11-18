@@ -492,6 +492,13 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   /** Saves the word; `after` runs only once the save has succeeded. */
   const save = (after?: () => void) => async (values: VocabularyFormValues) => {
     if (!word) return;
+    // A cell being edited is not in the table until committed, so saving now would leave it out.
+    if (editingCell) {
+      toast.info('Finish editing the table cell first', {
+        description: 'Press Enter to keep it or Escape to cancel, then save.',
+      });
+      return;
+    }
 
     if (editableTable) {
       const result = currentTableSchema().safeParse(table);
