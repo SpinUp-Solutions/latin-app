@@ -40,11 +40,11 @@ import { cn } from '@/src/lib/utils';
 import { changedTableCells, sameWordValue, WORD_TABLE_FIELDS } from '@/src/utils/vocabulary/word-diff';
 import { aiFieldLabel, WORD_FIELDS } from './wordFields';
 import {
-  snapshotValue as snapshot,
+  draftValue,
+  staleFields,
   STOP_WAITING_HINT,
   type AIAssistantStore,
   type AITurn,
-  type ProposedChange,
   type Turn,
 } from './aiAssistantStore';
 
@@ -98,8 +98,6 @@ const questionAnchor = (prefix: string, field: string) => `${prefix}-ai-question
 const fieldAnchor = (prefix: string, field: string) => `${prefix}-ai-field-${field}`;
 const composerId = (prefix: string) => `${prefix}-ai-composer`;
 
-const draftValue = (draft: Partial<VocabularyWord>, field: AICompletableField): unknown =>
-  (draft as Record<string, unknown>)[field];
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 const truncate = (text: string, length: number) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
 
@@ -366,7 +364,7 @@ function ChangeList({ turn }: { turn: AITurn }) {
   const context = useContext(AIReviewContext)!;
   const proposal = turn.proposal!;
   const pending = turn.status === 'pending';
-  const stale = (change: ProposedChange) => snapshot(draftValue(context.draft, change.field)) !== change.basis;
+  const stale = staleFields(proposal, context.draft);
   if (proposal.changes.length === 0) return null;
   return (
     <ul aria-label="Proposed changes" className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
@@ -379,7 +377,7 @@ function ChangeList({ turn }: { turn: AITurn }) {
               current={pending ? draftValue(context.draft, change.field) : JSON.parse(change.basis)}
               proposed={change.value}
             />
-            {pending && stale(change) && (
+            {pending && stale.has(change.field) && (
               <p role="status" className="text-xs text-amber-800">
                 You edited {aiFieldLabel(change.field)} after asking, so this change will not be applied. Ask again to
                 update it.
@@ -533,7 +531,8 @@ function ProposalView({
     );
   }
 
-  const fresh = proposal.changes.filter(change => snapshot(draftValue(context.draft, change.field)) === change.basis);
+  const stale = staleFields(proposal, context.draft);
+  const fresh = proposal.changes.filter(change => !stale.has(change.field));
   const acceptLabel = fresh.length ? `Accept ${fresh.length === 1 ? 'change' : `${fresh.length} changes`}` : 'Accept';
   return (
     <div className="space-y-2">
@@ -678,17 +677,9 @@ export function AIAssistantDock() {
   const accept = async (turn: AITurn) => {
     const proposal = turn.proposal;
     if (!proposal || turn.status !== 'pending' || busy) return;
-    // Stale means the draft no longer holds the value the AI saw. A field changed and then changed
-    // back is not stale: the AI's change still applies to exactly what it was asked about. That holds
-    // for every field the reply touches: one it only settles a question or keeps a note about is
-    // stale too, so the question stays open and the note, which may now contradict the field, goes.
-    const seen = Object.entries(proposal.seen) as [AICompletableField, string][];
-    const stale = new Set([
-      ...proposal.changes
-        .filter(change => snapshot(draftValue(draft, change.field)) !== change.basis)
-        .map(change => change.field),
-      ...seen.filter(([field, basis]) => snapshot(draftValue(draft, field)) !== basis).map(([field]) => field),
-    ]);
+    // A stale field is skipped whatever the reply did with it: a change is not applied, its question
+    // stays open, and its note, which may now contradict the admin's value, is dropped.
+    const stale = staleFields(proposal, draft);
     const fresh = proposal.changes.filter(change => !stale.has(change.field));
     const asked = new Set(questions.map(question => question.field));
     const values = Object.fromEntries(fresh.map(change => [change.field, change.value]));
