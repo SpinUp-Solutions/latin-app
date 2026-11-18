@@ -7,7 +7,9 @@
  *   OPENAI_API_KEY=sk-... node scripts/vocabulary-ai-smoke.mjs [report.json]
  *
  * Cases: a noun and a verb filled from scratch, a correction, an answer to an open question, a rule for all
- * words, and a later fill that must follow the note kept from the correction.
+ * words (whose reply must not promise to follow it), a request the schema cannot express (emptying a
+ * preposition's case), a mixed-declension noun with a real locative (domus), and a later fill that must
+ * follow the note kept from the correction.
  *
  * The merge gate fails on unrelated or contradictory changes, on a teacher's edit overwritten without
  * acceptance, or on an accepted and saved correction not retained. This script checks retention itself and
@@ -68,6 +70,17 @@ const emptyVerb = {
   is_deponent: false,
 };
 
+const emptyPreposition = {
+  word: 'ad',
+  part_of_speech: 'preposition',
+  translation: 'to, toward',
+  definitions: ['to, toward'],
+  etymology: null,
+  pronunciation: null,
+  alternate_form: null,
+  case: 'accusative',
+};
+
 async function call(name, request) {
   const started = Date.now();
   const response = await autocompleteVocabularyWord(request, RULES);
@@ -95,8 +108,16 @@ function record(name, verdict, notes, extra = {}) {
 const proposed = response => Object.keys(response.data ?? {}).filter(field => field !== 'part_of_speech');
 const mentions = (value, pattern) => pattern.test(JSON.stringify(value ?? ''));
 
-/** One conversation turn, checked against the fields it may change and what it should say back. */
-async function converse(name, draft, message, { allowed, expect }) {
+/** A reply that may promise later behaviour ("I'll…", "I will…", "from now on…"). A heuristic: REVIEW only. */
+const PROMISE = /\bI['’]ll\b|\bI will\b|\bfrom now on\b|\bgoing forward\b/i;
+/** A reply that may say a request cannot be done. A heuristic: REVIEW only. */
+const CANNOT = /\bcan(?:not|['’]t)\b|\bunable\b|\bnot possible\b|\bmust (?:have|hold|keep)\b|\brequires?\b/i;
+
+/**
+ * One conversation turn, checked against the fields it may change and what it should say back.
+ * `expect` lists problems that fail the case; `review` lists doubts a person should judge.
+ */
+async function converse(name, draft, message, { allowed, expect, review = () => [] }) {
   const result = await call(name, {
     word: draft.word,
     part_of_speech: draft.part_of_speech,
@@ -116,11 +137,14 @@ async function converse(name, draft, message, { allowed, expect }) {
     `Suggested rule for all words: ${reply?.rule ?? 'none'}`,
   ];
   const problems = expect(response);
+  const doubts = review(response);
   const outside = changed.filter(field => !allowed.includes(field));
   if (outside.length)
     notes.push(`Changes outside ${allowed.join(', ') || 'none'}: ${outside.join(', ')}. Related or not?`);
+  notes.push(...doubts.map(doubt => `Check: ${doubt}`));
   notes.push(...problems.map(problem => `Problem: ${problem}`));
-  record(name, problems.length ? 'FAIL' : outside.length ? 'REVIEW' : 'PASS', notes, { seconds, cost, response });
+  const verdict = problems.length ? 'FAIL' : outside.length || doubts.length ? 'REVIEW' : 'PASS';
+  record(name, verdict, notes, { seconds, cost, response });
   return response;
 }
 
@@ -222,6 +246,11 @@ await converse(
       ...(!response.reply?.answered.includes('pronunciation') ? ['It did not mark the question as settled.'] : []),
       ...(response.reply?.rule ? ['It suggested a rule for all words from an answer about one word.'] : []),
     ],
+    review: response => [
+      ...(!('pronunciation' in (response.data ?? {})) ? ['It settled the question without shortening the o.'] : []),
+      // One note is by design: it is how the answer reaches later requests. More may be redundant.
+      ...(response.reply?.remember.length > 1 ? ['It kept more than one note for a one-line answer: redundant?'] : []),
+    ],
   }
 );
 
@@ -233,10 +262,65 @@ await converse(
   {
     allowed: ['declension_table'],
     expect: response => (response.reply?.rule ? [] : ['It did not suggest a rule for all words.']),
+    review: response =>
+      PROMISE.test(response.reply?.message ?? '')
+        ? ['Its reply may promise to follow the rule, which applies only once the teacher saves it.']
+        : [],
   }
 );
 
-// 6. The correction, once accepted and saved, is followed by a later request.
+// 6. A request the schema cannot express: a saved preposition always keeps a case.
+await converse(
+  'Ask to empty a field that must hold a value',
+  emptyPreposition,
+  'Remove the case of ad. Leave it empty.',
+  {
+    allowed: [],
+    expect: response => ('case' in (response.data ?? {}) ? ['It changed the case instead of saying it cannot.'] : []),
+    review: response =>
+      CANNOT.test(response.reply?.message ?? '')
+        ? []
+        : ['Its reply may not explain that the case cannot be left empty: read it.'],
+  }
+);
+
+// 7. Mixed and disputed forms: domus mixes the second and fourth declensions and has a real locative.
+const domus = await call('Fill a mixed-declension noun (domus)', {
+  word: 'domus',
+  part_of_speech: 'noun',
+  existingData: { ...emptyNoun, word: 'domus' },
+});
+if (domus) {
+  const table = domus.response.data.declension_table ?? {};
+  const cell = (kase, number) => (table[kase]?.[number] ?? []).map(form => String(form).normalize('NFC').trim());
+  const shown = (kase, number) => cell(kase, number).join(', ') || 'none';
+  const problems = [];
+  const doubts = [];
+  // The usual form passes; an attested variant alone is for a person to judge; anything else fails.
+  const expectForm = (label, forms, usual, variant) => {
+    if (forms.includes(usual)) return;
+    if (forms.includes(variant)) doubts.push(`Check: ${label} gives only the rarer ${variant}, not ${usual}.`);
+    else problems.push(`Problem: ${label} has neither ${usual} nor ${variant}.`);
+  };
+  expectForm('the locative singular', cell('locative', 'singular'), 'domī', 'domuī');
+  expectForm('the ablative singular', cell('ablative', 'singular'), 'domō', 'domū');
+  record(
+    'Fill a mixed-declension noun (domus)',
+    problems.length ? 'FAIL' : doubts.length ? 'REVIEW' : 'PASS',
+    [
+      `Locative singular: ${shown('locative', 'singular')}`,
+      `Genitive singular: ${shown('genitive', 'singular')}`,
+      `Ablative singular: ${shown('ablative', 'singular')}`,
+      `Accusative plural: ${shown('accusative', 'plural')}`,
+      ...fillNotes(domus.response, Object.keys(emptyNoun)),
+      ...doubts,
+      ...problems,
+    ],
+    domus
+  );
+}
+
+// 8. The correction, once accepted and saved, is followed by a later request.
 const remembered = (
   correction?.reply?.remember.length
     ? correction.reply.remember
@@ -263,15 +347,16 @@ if (later) {
   );
 }
 
+const CHAT_CASES = [
+  'Correct the etymology',
+  'Answer an open question',
+  'State a rule for all words',
+  'Ask to empty a field that must hold a value',
+];
 const counts = Object.fromEntries(
   ['PASS', 'REVIEW', 'FAIL'].map(verdict => [verdict, results.filter(r => r.verdict === verdict).length])
 );
-const chat = results.filter(
-  r =>
-    ['Correct the etymology', 'Answer an open question', 'State a rule for all words'].includes(r.name) &&
-    r.seconds !== undefined &&
-    r.verdict !== 'FAIL'
-);
+const chat = results.filter(r => CHAT_CASES.includes(r.name) && r.seconds !== undefined && r.verdict !== 'FAIL');
 console.log(
   `\n${counts.PASS} passed, ${counts.REVIEW} to review, ${counts.FAIL} failed. Total cost $${totalCost.toFixed(4)}.` +
     (chat.length
