@@ -61,6 +61,13 @@ function contentFields(partOfSpeech: PartOfSpeech): AICompletableField[] {
 }
 
 /**
+ * Fields a fill may leave unknown (null) but a saved word cannot hold as null, so no edit can empty
+ * them: a preposition's case is unknown only by being absent, and saving a word never removes a field.
+ * A conversation can set them to a real value, never clear them; the prompt has it say so instead.
+ */
+const SET_ONLY_FIELDS = new Set<string>(['case']);
+
+/**
  * The model's side of a conversation. Every field is null (keep) or {value}
  * (replace), so the model writes out only what it changes, and a value it
  * merely repeats cannot be mistaken for a correction.
@@ -68,7 +75,10 @@ function contentFields(partOfSpeech: PartOfSpeech): AICompletableField[] {
 function conversationSchema(partOfSpeech: PartOfSpeech) {
   const shape: Record<string, z.ZodType> = OUTPUT_SCHEMAS[partOfSpeech].shape;
   const changes = Object.fromEntries(
-    contentFields(partOfSpeech).map(field => [field, z.object({ value: shape[field] }).strict().nullable()])
+    contentFields(partOfSpeech).map(field => {
+      const value = SET_ONLY_FIELDS.has(field) ? (shape[field] as z.ZodNullable<z.ZodType>).unwrap() : shape[field];
+      return [field, z.object({ value }).strict().nullable()];
+    })
   );
   return z
     .object({
@@ -450,8 +460,8 @@ export async function autocompleteVocabularyWord(
     if (conversation) {
       for (const field of schemaFields) {
         const change = conversation.changes[field];
-        // The persisted preposition schema represents unknown case by absence, not null.
-        if (!change || (field === 'case' && change.value === null)) continue;
+        // A set-only field cannot come back as {value: null}: its schema does not allow it.
+        if (!change) continue;
         data[field] = change.value;
       }
     } else {

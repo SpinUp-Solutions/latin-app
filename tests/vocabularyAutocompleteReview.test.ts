@@ -374,6 +374,37 @@ it('accepts person and case as scoped fields, with unknown case omitted from per
   expect(result.data).not.toHaveProperty('case');
 });
 
+it('lets a conversation set a preposition case but never clear it, since a saved word cannot hold none', async () => {
+  type Schema = { properties: Record<string, unknown> & { changes: { properties: Record<string, unknown> } } };
+  const chat = vocabularyAutocompleteRequestBody('preposition', 'in', talk('Remove the case.')).format.schema as Schema;
+  const fill = vocabularyAutocompleteRequestBody('preposition', 'in', {}).format.schema as Schema;
+  const governed = { type: 'string', enum: ['accusative', 'ablative', 'both'] };
+  // In a conversation: keep (null) or set a real case, nothing else.
+  expect(chat.properties.changes.properties.case).toEqual({
+    anyOf: [
+      { type: 'object', properties: { value: governed }, required: ['value'], additionalProperties: false },
+      { type: 'null' },
+    ],
+  });
+  // A fill may still say it does not know.
+  expect(fill.properties.case).toEqual({ anyOf: [governed, { type: 'null' }] });
+
+  respond(conversationOutput('preposition', { case: 'both' }));
+  await expect(
+    autocompleteVocabularyWord({ word: 'in', part_of_speech: 'preposition', ...talk('It takes both cases.') })
+  ).resolves.toMatchObject({ success: true, data: { case: 'both' } });
+
+  // A proposal to empty it is refused, not dropped in silence under a reply that claims it.
+  respond(conversationOutput('preposition', { case: null }, { reply: 'I removed the case.' }));
+  const cleared = await autocompleteVocabularyWord({
+    word: 'in',
+    part_of_speech: 'preposition',
+    ...talk('Remove the case.'),
+  });
+  expect(cleared).toMatchObject({ success: false, errorCode: 'invalid-schema' });
+  expect(cleared.reply).toBeUndefined();
+});
+
 it('keeps legacy words valid and bounds stored metadata', () => {
   const legacy = {
     word: 'et',
