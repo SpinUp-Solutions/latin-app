@@ -41,6 +41,7 @@ import { changedTableCells, sameWordValue, WORD_TABLE_FIELDS } from '@/src/utils
 import { aiFieldLabel, WORD_FIELDS } from './wordFields';
 import {
   draftValue,
+  headwordOf,
   staleFields,
   STOP_WAITING_HINT,
   type AIAssistantStore,
@@ -92,7 +93,6 @@ const isCompletable = (field: string): field is AICompletableField => AICompleta
 /** Fields the editor shows in its form or as its table, which a question can link to. */
 const INLINE_FIELDS = new Set<string>([...Object.keys(WORD_FIELDS), ...WORD_TABLE_FIELDS]);
 const TABLE_FIELDS = new Set<string>(WORD_TABLE_FIELDS);
-const MAX_LISTED_CELLS = 40;
 
 const questionAnchor = (prefix: string, field: string) => `${prefix}-ai-question-${field}`;
 const fieldAnchor = (prefix: string, field: string) => `${prefix}-ai-field-${field}`;
@@ -169,8 +169,11 @@ function ChangeView({ field, current, proposed }: { field: AICompletableField; c
         <p className="text-xs text-gray-600">
           {cells.length === 1 ? '1 cell changes' : `${cells.length} cells change`}
         </p>
-        <ul className="max-h-48 overflow-auto rounded border border-gray-200 text-xs">
-          {cells.slice(0, MAX_LISTED_CELLS).map(path => (
+        {/* Every cell, scrolling: Accept replaces the whole table, so each change must be reviewable. */}
+        <ul
+          aria-label={`Changed cells in ${aiFieldLabel(field)}`}
+          className="max-h-48 overflow-auto rounded border border-gray-200 text-xs">
+          {cells.map(path => (
             <li key={path} className="flex flex-wrap justify-between gap-x-3 px-2 py-1 odd:bg-gray-50">
               <span className="text-gray-600">{path.split('.').join(' · ')}</span>
               <span>
@@ -181,9 +184,6 @@ function ChangeView({ field, current, proposed }: { field: AICompletableField; c
             </li>
           ))}
         </ul>
-        {cells.length > MAX_LISTED_CELLS && (
-          <p className="text-xs text-gray-600">…and {cells.length - MAX_LISTED_CELLS} more.</p>
-        )}
       </div>
     );
   }
@@ -534,15 +534,24 @@ function ProposalView({
   const stale = staleFields(proposal, context.draft);
   const fresh = proposal.changes.filter(change => !stale.has(change.field));
   const acceptLabel = fresh.length ? `Accept ${fresh.length === 1 ? 'change' : `${fresh.length} changes`}` : 'Accept';
+  const renamed = headwordOf(context.draft) !== proposal.headword;
   return (
     <div className="space-y-2">
       <ChangeList turn={turn} />
       <NoteList title={`I'll remember for ${word}:`} notes={proposal.remember.map(note => note.note)} />
       {rule}
+      {renamed && (
+        <p className="text-xs text-amber-700">
+          This answer is about {proposal.headword || 'the word as it was'}, and you have renamed the word since, so it
+          can no longer be accepted. Ask again about the word as it is now.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2 pt-1">
-        <Button type="button" size="sm" onClick={onAccept} disabled={busy}>
-          {acceptLabel}
-        </Button>
+        {!renamed && (
+          <Button type="button" size="sm" onClick={onAccept} disabled={busy}>
+            {acceptLabel}
+          </Button>
+        )}
         <Button type="button" size="sm" variant="ghost" onClick={onDiscard} disabled={busy}>
           Discard
         </Button>
@@ -676,7 +685,7 @@ export function AIAssistantDock() {
 
   const accept = async (turn: AITurn) => {
     const proposal = turn.proposal;
-    if (!proposal || turn.status !== 'pending' || busy) return;
+    if (!proposal || turn.status !== 'pending' || busy || headwordOf(draft) !== proposal.headword) return;
     // A stale field is skipped whatever the reply did with it: a change is not applied, its question
     // stays open, and its note, which may now contradict the admin's value, is dropped.
     const stale = staleFields(proposal, draft);

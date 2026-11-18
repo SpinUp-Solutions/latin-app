@@ -59,6 +59,9 @@ function NewWordRequestsReview() {
   const [updateRequest, { isLoading: updating }] = useUpdateVocabularyWordRequestMutation();
   const [approveRequest, { isLoading: approving }] = useApproveVocabularyWordRequestMutation();
   const [dismissRequest, { isLoading: dismissing }] = useDismissVocabularyWordRequestMutation();
+  // Approve creates the word from the saved draft, so unsaved edits (an accepted AI answer included) would
+  // be left out of it. It waits until they are saved.
+  const [draftDirty, setDraftDirty] = useState(false);
   const requestErrorMessage = requestError
     ? getApiErrorMessage(requestError, 'Could not load vocabulary requests')
     : null;
@@ -96,7 +99,7 @@ function NewWordRequestsReview() {
   };
 
   const handleApprove = async () => {
-    if (!selectedRequest) return;
+    if (!selectedRequest || draftDirty) return;
 
     try {
       const result = await approveRequest(selectedRequest.id).unwrap();
@@ -193,7 +196,12 @@ function NewWordRequestsReview() {
                 <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>
                   {dismissing ? 'Dismissing...' : 'Dismiss'}
                 </Button>
-                <Button onClick={handleApprove} disabled={approving || dismissing || updating}>
+                <Button
+                  onClick={handleApprove}
+                  disabled={approving || dismissing || updating || draftDirty}
+                  title={
+                    draftDirty ? 'Save the draft first: Approve creates the word from the saved draft.' : undefined
+                  }>
                   {approving ? 'Approving...' : 'Approve'}
                 </Button>
               </>
@@ -208,6 +216,7 @@ function NewWordRequestsReview() {
           updating={updating}
           learnedRules={learnedRules}
           next={next}
+          onDirtyChange={setDraftDirty}
         />
       </div>
     </VocabularyReviewLayout>

@@ -410,6 +410,102 @@ it('sends one request when a message is sent twice before the next render', asyn
   expect(result.current.chat('rosa').turns.filter(turn => turn.from === 'admin')).toHaveLength(1);
 });
 
+it('keeps an accepted pronoun table when the same reply changes the person', async () => {
+  const onSave = jest.fn(async () => true);
+  const ego = {
+    ...cloneNoun(),
+    id: 'ego',
+    word: 'ego',
+    part_of_speech: 'pronoun',
+    pronoun_type: 'personal',
+    person: '3rd',
+    declension_table: buildEmptyFromSchema(getPronounTableSchema('personal', '3rd')),
+    ai_review: { uncertainties: [], guidance: [] },
+  } as unknown as VocabularyWordWithId;
+  const firstPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '1st')) as Record<
+    string,
+    { singular: string[] | null; plural: string[] | null }
+  >;
+  firstPerson.nominative = { singular: ['ego'], plural: ['nōs'] };
+  mockCallable.mockResolvedValueOnce({
+    data: {
+      success: true,
+      uncertainties: [],
+      data: { part_of_speech: 'pronoun', person: '1st', declension_table: firstPerson },
+      reply: { message: 'It is first person.', answered: [], remember: [], rule: null },
+    },
+  });
+  render(<WordEditPanel word={ego} onSave={onSave} updating={false} />);
+  say('ego is first person. Fix the person and the table.');
+  fireEvent.click(await screen.findByRole('button', { name: 'Accept 2 changes' }));
+
+  const saved = await saveWord(onSave);
+  expect(saved.person).toBe('1st');
+  expect(saved.declension_table.nominative).toEqual({ singular: ['ego'], plural: ['nōs'] });
+});
+
+it('lists every changed cell of a large table before Accept', async () => {
+  const empty = buildEmptyFromSchema(getPronounTableSchema('demonstrative', null));
+  const hic = {
+    ...cloneNoun(),
+    id: 'hic',
+    word: 'hic',
+    part_of_speech: 'pronoun',
+    pronoun_type: 'demonstrative',
+    person: null,
+    declension_table: empty,
+    ai_review: { uncertainties: [], guidance: [] },
+  } as unknown as VocabularyWordWithId;
+  // Every cell of the gendered table filled: 3 genders × 7 cases × 2 numbers.
+  const filled = JSON.parse(JSON.stringify(empty), (_key, value) => (value === null ? ['x'] : value));
+  mockCallable.mockResolvedValueOnce({
+    data: {
+      success: true,
+      uncertainties: [],
+      data: { part_of_speech: 'pronoun', declension_table: filled },
+      reply: { message: 'Filled.', answered: [], remember: [], rule: null },
+    },
+  });
+  render(<WordEditPanel word={hic} onSave={async () => true} updating={false} />);
+  say('Fill the table.');
+  const cells = await screen.findByRole('list', { name: 'Changed cells in Declension table' });
+
+  expect(screen.getByText('42 cells change')).toBeInTheDocument();
+  expect(within(cells).getAllByRole('listitem')).toHaveLength(42);
+});
+
+it('offers no Accept for an answer about the word before the admin renamed it', async () => {
+  const finish = pending();
+  render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
+  say('Fix the etymology.');
+  fireEvent.change(screen.getByLabelText('Word'), { target: { value: 'via' } });
+  await finish(reply({ etymology: 'From Greek rhódon.' }, { message: 'Fixed.' }));
+
+  expect(screen.queryByRole('button', { name: /^Accept/ })).toBeNull();
+  expect(screen.getByText(/This answer is about rosa, and you have renamed the word since/)).toBeInTheDocument();
+  // Renaming it back makes the answer apply again: it is about this word as it is.
+  fireEvent.change(screen.getByLabelText('Word'), { target: { value: 'rosa' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Accept change' }));
+  expect(screen.getByLabelText('Etymology')).toHaveValue('From Greek rhódon.');
+});
+
+it('skips a change to a definition the admin typed while the AI answered', async () => {
+  const finish = pending();
+  render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
+  say('Improve the definition.');
+  // The definition input shares its list with the form, which edits that list in place.
+  const definition = screen
+    .getAllByDisplayValue('rose')
+    .find(input => input !== screen.getByLabelText('Translation')) as HTMLInputElement;
+  fireEvent.change(definition, { target: { value: 'typed by the admin' } });
+  await finish(reply({ definitions: ['a rose, the flower'] }, { message: 'Improved.' }));
+
+  expect(mockCallable.mock.calls[0][0].existingData.definitions).toEqual(['rose']);
+  fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+  expect(screen.getByText('Accepted. Skipped Definitions, which you had edited.')).toBeInTheDocument();
+  expect(definition).toHaveValue('typed by the admin');
+});
+
 it('follows up in the same conversation, and a newer answer replaces one not yet accepted', async () => {
   mockCallable
     .mockResolvedValueOnce(reply({ etymology: 'From Greek.' }, { message: 'I rewrote it as Greek.' }))
@@ -870,6 +966,30 @@ describe('when the admin keeps working while autocomplete runs', () => {
     expect(payload.alternate_form).toBe('rhoda');
   });
 
+  it('takes the server completion of a partly filled list', async () => {
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={{ ...cloneNoun(), definitions: ['rose', ''] }} onSave={onSave} updating={false} />);
+    mockCallable.mockResolvedValueOnce(answer({ definitions: ['rose', 'a red flower'] }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    await screen.findByDisplayValue('a red flower');
+
+    expect((await saveWord(onSave)).definitions).toEqual(['rose', 'a red flower']);
+  });
+
+  it('applies nothing when the admin renamed the word meanwhile, and says so', async () => {
+    const finish = pending();
+    render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.change(screen.getByLabelText('Word'), { target: { value: 'via' } });
+    await finish(answer({ pronunciation: 'ˈro.sa', alternate_form: 'rhoda' }));
+
+    expect(screen.getByLabelText('Pronunciation')).toHaveValue('');
+    expect(screen.getByLabelText('Alternate Form')).toHaveValue('');
+    expect(toast.info).toHaveBeenCalledWith('Autocomplete answer not applied', {
+      description: 'It was about rosa, and you renamed the word since. Run it again.',
+    });
+  });
+
   it('leaves a table cell empty that the admin emptied meanwhile, and fills the other empty cells', async () => {
     const finish = pending();
     const onSave = jest.fn(async () => true);
@@ -1016,6 +1136,34 @@ describe('Save and next', () => {
     // The open question stays on the word for later.
     expect(saved.ai_review?.uncertainties).toEqual(noun.ai_review?.uncertainties);
     expect(onSave.mock.invocationCallOrder[0]).toBeLessThan(next.open.mock.invocationCallOrder[0]);
+  });
+
+  it('keeps what the admin typed while the save ran, unsaved, and does not move on', async () => {
+    let finishSave!: (saved: boolean) => void;
+    const onSave = jest.fn(
+      (_updates: Partial<VocabularyWordWithId>) =>
+        new Promise<boolean>(resolve => {
+          finishSave = resolve;
+        })
+    );
+    const next = silvaNext();
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} next={next} />);
+    fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'a rose' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Apply and next/ }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByLabelText('Pronunciation'), { target: { value: 'typed while saving' } });
+    await act(async () => finishSave(true));
+
+    expect(screen.getByLabelText('Pronunciation')).toHaveValue('typed while saving');
+    expect(screen.getByLabelText('Translation')).toHaveValue('a rose');
+    expect(next.open).not.toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith('Saved, without the changes you made while it saved', {
+      description: 'Those are still in the draft. Save again with Apply to keep them.',
+    });
+    // The next save carries them.
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
+    expect(onSave.mock.calls[1][0].pronunciation).toBe('typed while saving');
   });
 
   it('stays on the word with its draft when the save fails or the form is invalid', async () => {

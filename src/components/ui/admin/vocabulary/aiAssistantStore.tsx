@@ -31,6 +31,8 @@ export interface Proposal {
    * so Accept notices an edit made since, as it does for a proposed change.
    */
   seen: Partial<Record<AICompletableField, string>>;
+  /** The headword the AI answered about. A reply is about that word only. */
+  headword: string;
   rule: string | null;
   /** The admin message the AI answered; a learned rule records it as its source. */
   prompt: string;
@@ -138,6 +140,19 @@ export const draftValue = (draft: Partial<VocabularyWord>, field: AICompletableF
 export const snapshotValue = (value: unknown) => JSON.stringify(value ?? null);
 
 /**
+ * A copy of the draft to send to the AI and to measure its answer against. The form's values share
+ * their lists with the form, which edits them in place, so without a copy a definition typed while the
+ * AI answers would already be in "what the AI saw", and Accept would overwrite it.
+ */
+export const copyDraft = (draft: Partial<VocabularyWord>): Partial<VocabularyWord> => JSON.parse(JSON.stringify(draft));
+
+/**
+ * The headword of a draft, as the AI is asked about it. An answer about rosa does not apply once the
+ * admin has renamed the word to via, even if the document is the same.
+ */
+export const headwordOf = (draft: Partial<VocabularyWord>) => (draft.word ?? '').trim();
+
+/**
  * The fields of a reply the admin has edited since asking: those it changes, and those it only settles a
  * question or keeps a note about. A field changed and then changed back is not stale.
  */
@@ -223,7 +238,8 @@ function useAIAssistantState(): AIAssistantStore {
 
   const newTurnId = () => ++turnIds.current;
 
-  const send = async (key: string, { word, part_of_speech, asked, text }: SendToAI) => {
+  const send = async (key: string, { word, part_of_speech, asked: draft, text }: SendToAI) => {
+    const asked = copyDraft(draft);
     const chat = chats[key] ?? EMPTY_CHAT;
     // `chats` is this render's copy: a second send before the next render would still see no pending
     // reply, so the request in flight is checked too. Otherwise both are billed and one answer is lost.
@@ -273,6 +289,7 @@ function useAIAssistantState(): AIAssistantStore {
       answered: reply.answered,
       remember: reply.remember,
       seen,
+      headword: headwordOf(asked),
       rule: reply.rule,
       prompt: text,
     };

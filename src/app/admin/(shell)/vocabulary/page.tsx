@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useEffectEvent } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
 import { BookOpen, Download } from 'lucide-react';
@@ -97,9 +97,19 @@ function AdminVocabularyPage() {
     }
   }, [selectedWordId]);
 
+  // Back, Forward or an edited URL changes the word too, so it asks first like any other switch. Until the
+  // admin decides, the URL goes back to the word being edited.
+  const followHash = useEffectEvent(() => {
+    const id = wordIdFromHash();
+    if (id === selectedWordId) return;
+    if (editorDirty) {
+      const here = selectedWordId ? `#word-${selectedWordId}` : '';
+      history.replaceState(null, '', window.location.pathname + window.location.search + here);
+    }
+    switchEditor(() => setSelectedWordId(id));
+  });
   useEffect(() => {
-    const handleHashChange = () => setSelectedWordId(wordIdFromHash());
-
+    const handleHashChange = () => followHash();
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
@@ -205,7 +215,12 @@ function AdminVocabularyPage() {
 
   const hasMore = data?.hasMore ?? false;
   const loadingMore = isFetching && lastWordId !== null;
-  const selectedWord = creatingWord ?? (selectedWordId ? words.find(w => w.id === selectedWordId) || null : null);
+  // The open word stays open when a filter or search leaves it out of the list: the editor, and any unsaved
+  // edits in it, belong to the word, not to the list.
+  const listedWord = selectedWordId ? (words.find(w => w.id === selectedWordId) ?? null) : null;
+  const [keptWord, setKeptWord] = useState<VocabularyWordWithId | null>(null);
+  if (listedWord && listedWord !== keptWord) setKeptWord(listedWord);
+  const selectedWord = creatingWord ?? listedWord ?? (keptWord && keptWord.id === selectedWordId ? keptWord : null);
 
   // "Save and next" follows the list as filtered and sorted. It opens the next word straight away: the save
   // that precedes it has just succeeded, so there is nothing for the unsaved-changes prompt to protect.

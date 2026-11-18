@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { VOCABULARY_WORD_REQUESTS_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { buildEmptyWord } from '@/src/utils/vocabulary-defaults';
 import { signIn } from './fixtures/journeys';
 import { E2E_USERS, getE2EAdmin, seedAcceptanceData } from './fixtures/seed';
@@ -50,6 +50,30 @@ test.describe('Moving between vocabulary words', () => {
     await expect(page).toHaveURL(/#word-e2e-rosa$/);
   });
 
+  test('Back and a filter keep unsaved edits: Back asks first, a filter leaves the word open', async ({ page }) => {
+    await page.getByText('rosa', { exact: true }).click();
+    await page.getByText('silva', { exact: true }).click();
+    await expect(heading(page, 'silva')).toBeVisible();
+    const translation = page.getByLabel('Translation', { exact: true });
+    await translation.fill('a dark forest');
+
+    // Back would open rosa: it asks, and the URL stays on silva until the admin decides.
+    await page.goBack();
+    const discard = page.getByRole('alertdialog');
+    await expect(discard).toBeVisible();
+    await expect(page).toHaveURL(/#word-e2e-silva$/);
+    await discard.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(heading(page, 'silva')).toBeVisible();
+    await expect(translation).toHaveValue('a dark forest');
+
+    // A search that leaves silva out of the list does not close it.
+    await page.getByPlaceholder('Search words...').fill('rosa');
+    await expect(page.getByRole('button', { name: /details for silva/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /details for rosa/ }).first()).toBeVisible();
+    await expect(heading(page, 'silva')).toBeVisible();
+    await expect(translation).toHaveValue('a dark forest');
+  });
+
   test('Save and next saves the word, then opens the next one in the list', async ({ page }) => {
     await page.getByText('rosa', { exact: true }).click();
     await expect(heading(page, 'rosa')).toBeVisible();
@@ -73,5 +97,55 @@ test.describe('Moving between vocabulary words', () => {
     const last = page.getByRole('button', { name: /^Apply and next/ });
     await expect(last).toBeDisabled();
     await expect(last).toHaveAttribute('title', 'This is the last word in the list.');
+  });
+});
+
+test.describe('Approving a requested word', () => {
+  test('Approve waits until the draft is saved, so the word holds every edit', async ({ page }) => {
+    await seedAcceptanceData();
+    const { id: _placeholderId, ...draftWord } = buildEmptyWord('noun');
+    const now = new Date().toISOString();
+    const candidate = { word: 'aqua', part_of_speech: 'noun', confidence: 'high' };
+    await getE2EAdmin()
+      .db.collection(VOCABULARY_WORD_REQUESTS_COLLECTION)
+      .doc('e2e-aqua-request')
+      .set({
+        status: 'pending',
+        sourceText: 'aquam',
+        selectedCandidate: candidate,
+        candidates: [candidate],
+        draftWord: {
+          ...draftWord,
+          word: 'aqua',
+          translation: 'water',
+          definitions: ['water'],
+          gender: 'feminine',
+          declension: '1',
+          sort_key: 'aqua',
+        },
+        createdBy: 'e2e',
+        createdAt: now,
+        updatedAt: now,
+      });
+    await signIn(page, E2E_USERS.admin, '/admin');
+    await page.goto('/admin/vocabulary/pending');
+    await expect(heading(page, 'aqua')).toBeVisible();
+
+    const approve = page.getByRole('button', { name: 'Approve', exact: true });
+    await expect(approve).toBeEnabled();
+    await page.getByLabel('Translation', { exact: true }).fill('water, a body of water');
+    await expect(approve).toBeDisabled();
+    await expect(approve).toHaveAttribute(
+      'title',
+      'Save the draft first: Approve creates the word from the saved draft.'
+    );
+
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
+    await expect(approve).toBeEnabled();
+    await expect
+      .poll(async () =>
+        (await getE2EAdmin().db.collection(VOCABULARY_WORD_REQUESTS_COLLECTION).doc('e2e-aqua-request').get()).data()
+      )
+      .toMatchObject({ draftWord: { translation: 'water, a body of water' } });
   });
 });

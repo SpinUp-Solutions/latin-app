@@ -1,4 +1,4 @@
-import React, { useEffect, useEffectEvent, useId, useState } from 'react';
+import React, { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   addOpenUncertainties,
@@ -42,7 +42,7 @@ import {
   type AcceptedAIReply,
   type AIReviewContextValue,
 } from './VocabularyAIReview';
-import { snapshotValue, useAIAssistant } from './aiAssistantStore';
+import { headwordOf, snapshotValue, useAIAssistant } from './aiAssistantStore';
 import { aiFieldLabel } from './wordFields';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
 import {
@@ -173,7 +173,9 @@ const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown =
     ) {
       return aiGenerated;
     }
-    return existing;
+    // Item by item, as the server merges: keep each item there, complete each empty one (a principal
+    // part's shortened form, a blank definition). Keeping the list whole would drop those completions.
+    return existing.map((item, index) => deepMergeNullValues(item, aiGenerated[index]));
   }
 
   if (typeof aiGenerated === 'object' && typeof existing === 'object') {
@@ -206,6 +208,11 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   });
 
   const [table, setTable] = useState<TableData>(() => tableFromWord(word));
+  // The table as it is now, for a save that finishes after more edits.
+  const latestTable = useRef(table);
+  useEffect(() => {
+    latestTable.current = table;
+  });
   const [savedTable, setSavedTable] = useState(() => JSON.stringify(tableFromWord(word)));
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editingCellValue, setEditingCellValue] = useState('');
@@ -271,6 +278,13 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   ) => {
     // Ignore a response that arrives after the admin switched to another word.
     if (requestWordId !== word?.id) return;
+    // Or after renaming this one: an answer about rosa must not fill in via.
+    if (asked && headwordOf(asked) !== headwordOf(form.getValues() as Partial<VocabularyWord>)) {
+      toast.info('Autocomplete answer not applied', {
+        description: `It was about ${headwordOf(asked) || 'the word as it was'}, and you renamed the word since. Run it again.`,
+      });
+      return;
+    }
 
     const fieldStatus = new Map<string, 'filled' | 'missing'>(Object.entries(apiFieldStatus || {}));
 
@@ -428,6 +442,16 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         highlighted.set(field, 'filled');
       }
     }
+    // A reply that changes a pronoun's type or person together with its table gives a table of the new
+    // shape. Without this the shape change would replace it with an empty one right after.
+    if (word?.part_of_speech === 'pronoun' && editableTable && editableTable.field in changes) {
+      setPrevPronounSchema(
+        getPronounTableSchema(
+          form.getValues('pronoun_type') as PronounType | null,
+          form.getValues('person') as PronounPerson | null
+        )
+      );
+    }
     setAiFieldStatus(highlighted);
     if (closed.length > 0 || notes.length > 0) {
       updateReview(review => ({
@@ -472,7 +496,23 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
 
     const { id: _id, ...payload } = updatedWord;
 
+    // The fields stay editable while the save runs. What the admin types meanwhile, or an AI answer
+    // that lands meanwhile, is not in this save, and must not be reset away when it succeeds.
+    const submittedValues = JSON.stringify(form.getValues());
+    const submittedTable = JSON.stringify(latestTable.current);
     const success = await onSave(payload);
+    if (
+      success &&
+      (JSON.stringify(form.getValues()) !== submittedValues || JSON.stringify(latestTable.current) !== submittedTable)
+    ) {
+      // The saved word becomes the baseline; the newer edits stay, as unsaved changes against it.
+      form.reset(toFormDefaultValues(updatedWord), { keepValues: true });
+      setSavedTable(JSON.stringify(tableFromWord(updatedWord)));
+      toast.info('Saved, without the changes you made while it saved', {
+        description: `Those are still in the draft. Save again with ${saveLabel} to keep them.`,
+      });
+      return;
+    }
     if (success) {
       form.reset(toFormDefaultValues(updatedWord));
       setTable(tableFromWord(updatedWord));

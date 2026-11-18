@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
 import { useEffect, useRef, useState } from 'react';
 import type { VocabularyAIUncertainty } from '@/shared/types/vocabulary/ai-review';
+import { copyDraft } from './aiAssistantStore';
 
 interface AIAutocompleteButtonProps {
   wordId: string;
@@ -57,7 +58,7 @@ export function AIAutocompleteButton({
       return;
     }
     setErrorDetails(null);
-    const asked = existingData ?? {};
+    const asked = copyDraft(existingData ?? {});
     const result = await requestAutocomplete({
       word,
       part_of_speech: partOfSpeech,
