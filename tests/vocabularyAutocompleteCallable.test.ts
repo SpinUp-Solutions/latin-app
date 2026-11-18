@@ -138,3 +138,116 @@ it('fails closed for corrupt saved guidance without exposing persistence details
   });
   expect(autocomplete).not.toHaveBeenCalled();
 });
+
+describe('usage log', () => {
+  const lines = (log: jest.SpyInstance) =>
+    log.mock.calls
+      .map(([line]) => (typeof line === 'string' && line.startsWith('{') ? JSON.parse(line) : null))
+      .filter(entry => entry?.event === 'vocabulary_ai_call');
+  let log: jest.SpyInstance;
+  beforeEach(() => {
+    log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('writes one line per fill with who, word, model, cost and time', async () => {
+    autocomplete.mockResolvedValue({
+      success: true,
+      data: { translation: 'and' },
+      model: 'gpt-test',
+      cost: {
+        inputCost: 0.001,
+        outputCost: 0.002,
+        totalCost: 0.003,
+        tokens: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      },
+    });
+    await call({ auth: { uid: 'admin' }, data: validData });
+    expect(lines(log)).toEqual([
+      {
+        severity: 'INFO',
+        message: 'autocompleteWord fill success',
+        event: 'vocabulary_ai_call',
+        uid: 'admin',
+        intent: 'fill',
+        word: 'et',
+        outcome: 'success',
+        model: 'gpt-test',
+        cost: 0.003,
+        inputTokens: 100,
+        outputTokens: 50,
+        latencyMs: expect.any(Number),
+      },
+    ]);
+  });
+
+  it('marks a conversation turn as a message and never logs what the admin wrote', async () => {
+    const data = { ...validData, conversation: { message: 'A private remark about et', history: [] } };
+    await call({ auth: { uid: 'admin' }, data });
+    expect(lines(log)).toEqual([expect.objectContaining({ intent: 'message', outcome: 'success' })]);
+    expect(JSON.stringify(log.mock.calls)).not.toContain('A private remark');
+  });
+
+  it.each([
+    [
+      'a model failure',
+      () => autocomplete.mockResolvedValue({ success: false, errorCode: 'provider-error' }),
+      'model-error',
+    ],
+    ['an unexpected error', () => autocomplete.mockRejectedValue(new Error('boom')), 'internal'],
+    [
+      'invalid saved guidance',
+      () => read.mockRejectedValue(new VocabularyAIGuidanceError(409, 'INVALID', 'x')),
+      'failed-precondition',
+    ],
+  ])('logs %s with its outcome', async (_name, arrange, outcome) => {
+    arrange();
+    await call({ auth: { uid: 'admin' }, data: validData }).catch(() => undefined);
+    expect(lines(log)).toEqual([expect.objectContaining({ severity: 'WARNING', uid: 'admin', word: 'et', outcome })]);
+  });
+
+  it('logs rejected calls too, before any word is known', async () => {
+    await call({ data: validData }).catch(() => undefined);
+    mockGetUser.mockResolvedValue({ data: () => ({ role: 'student' }) });
+    await call({ auth: { uid: 'student' }, data: validData }).catch(() => undefined);
+    mockGetUser.mockResolvedValue({ data: () => ({ role: 'admin' }) });
+    await call({ auth: { uid: 'admin' }, data: { ...validData, part_of_speech: 'unsupported' } }).catch(
+      () => undefined
+    );
+    expect(lines(log)).toEqual([
+      expect.objectContaining({ uid: null, outcome: 'unauthenticated' }),
+      expect.objectContaining({ uid: 'student', outcome: 'permission-denied' }),
+      expect.objectContaining({ uid: 'admin', outcome: 'invalid-argument' }),
+    ]);
+    expect(lines(log).some(entry => 'word' in entry)).toBe(false);
+  });
+
+  it('keeps the code of an HttpsError raised while answering, in the response and the log', async () => {
+    const { HttpsError } = callableHttps();
+    autocomplete.mockRejectedValue(new HttpsError('resource-exhausted', 'Too many requests'));
+    await expect(call({ auth: { uid: 'admin' }, data: validData })).rejects.toMatchObject({
+      code: 'resource-exhausted',
+    });
+    expect(lines(log)).toEqual([expect.objectContaining({ outcome: 'resource-exhausted' })]);
+  });
+
+  it('still returns the answer when the log line cannot be written', async () => {
+    log.mockImplementation(() => {
+      throw new Error('stdout closed');
+    });
+    await expect(call({ auth: { uid: 'admin' }, data: validData })).resolves.toMatchObject({
+      success: true,
+      data: { translation: 'and' },
+    });
+  });
+});
+
+/** The callable's HttpsError, as mocked where the callable resolves it. */
+function callableHttps(): { HttpsError: new (code: string, message: string) => Error } {
+  try {
+    return jest.requireMock(functionsRequire.resolve('firebase-functions/v2/https'));
+  } catch {
+    return jest.requireMock('firebase-functions/v2/https');
+  }
+}
