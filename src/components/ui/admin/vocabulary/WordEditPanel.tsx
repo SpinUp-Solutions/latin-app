@@ -156,6 +156,16 @@ const findNullPaths = (value: unknown, path = ''): string[] => {
   return [];
 };
 
+/** Empty as the server's merge counts it: nothing, '', or an object (a word form) with only empty values. */
+const isEmptyItem = (value: unknown): boolean =>
+  value === null ||
+  value === undefined ||
+  value === '' ||
+  (typeof value === 'object' && !Array.isArray(value) && Object.values(value).every(isEmptyItem));
+
+const isWordFormItem = (value: unknown) =>
+  !!value && typeof value === 'object' && ('full_form' in value || 'shortened_form' in value);
+
 const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown => {
   if (aiGenerated === null || aiGenerated === undefined) {
     return existing;
@@ -166,16 +176,15 @@ const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown =
   }
 
   if (Array.isArray(aiGenerated)) {
-    if (
-      !Array.isArray(existing) ||
-      existing.length === 0 ||
-      existing.every(item => item === null || item === undefined || item === '')
-    ) {
-      return aiGenerated;
+    // The server's rules for a list (`mergeValue`), so the browser keeps what the server completed: an
+    // empty list, or one of empty items such as a blank principal-part row, takes the answer whole; a list
+    // of word forms of the same length is completed form by form (a missing shortened form); any other
+    // list with content stays as it is.
+    if (!Array.isArray(existing) || existing.length === 0 || existing.every(isEmptyItem)) return aiGenerated;
+    if (existing.length === aiGenerated.length && existing.every(isWordFormItem)) {
+      return existing.map((item, index) => deepMergeNullValues(item, aiGenerated[index]));
     }
-    // Item by item, as the server merges: keep each item there, complete each empty one (a principal
-    // part's shortened form, a blank definition). Keeping the list whole would drop those completions.
-    return existing.map((item, index) => deepMergeNullValues(item, aiGenerated[index]));
+    return existing;
   }
 
   if (typeof aiGenerated === 'object' && typeof existing === 'object') {
@@ -215,6 +224,11 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   });
   const [savedTable, setSavedTable] = useState(() => JSON.stringify(tableFromWord(word)));
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  // The cell being edited as it is now, for a save that finishes while one is open.
+  const latestEditingCell = useRef(editingCell);
+  useEffect(() => {
+    latestEditingCell.current = editingCell;
+  });
   const [editingCellValue, setEditingCellValue] = useState('');
   const [tableExpanded, setTableExpanded] = useState(true);
   const [aiFieldStatus, setAiFieldStatus] = useState<Map<string, 'filled' | 'missing'>>(new Map());
@@ -503,10 +517,21 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     const success = await onSave(payload);
     if (
       success &&
-      (JSON.stringify(form.getValues()) !== submittedValues || JSON.stringify(latestTable.current) !== submittedTable)
+      (JSON.stringify(form.getValues()) !== submittedValues ||
+        JSON.stringify(latestTable.current) !== submittedTable ||
+        latestEditingCell.current !== null)
     ) {
-      // The saved word becomes the baseline; the newer edits stay, as unsaved changes against it.
-      form.reset(toFormDefaultValues(updatedWord), { keepValues: true });
+      // The saved word becomes the baseline; the newer edits stay, as unsaved changes against it. Each field
+      // that differs from it is marked changed again: an edit typed back to the old value is clean against
+      // the old baseline, yet differs from what was just saved.
+      const baseline = toFormDefaultValues(updatedWord);
+      form.reset(baseline, { keepValues: true });
+      const values = form.getValues() as unknown as Record<string, unknown>;
+      for (const [field, value] of Object.entries(values)) {
+        if (JSON.stringify(value) !== JSON.stringify((baseline as unknown as Record<string, unknown>)[field])) {
+          form.setValue(field as keyof VocabularyFormValues, value as never, { shouldDirty: true });
+        }
+      }
       setSavedTable(JSON.stringify(tableFromWord(updatedWord)));
       toast.info('Saved, without the changes you made while it saved', {
         description: `Those are still in the draft. Save again with ${saveLabel} to keep them.`,
@@ -579,7 +604,8 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       }
     : null;
 
-  const dirty = form.formState.isDirty || JSON.stringify(table) !== savedTable;
+  // A table cell being edited counts too: its text is in the draft only once committed.
+  const dirty = form.formState.isDirty || JSON.stringify(table) !== savedTable || editingCell !== null;
   const reportDirty = useEffectEvent((value: boolean) => onDirtyChange?.(value));
   useEffect(() => {
     reportDirty(dirty);

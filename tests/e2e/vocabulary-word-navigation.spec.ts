@@ -65,6 +65,18 @@ test.describe('Moving between vocabulary words', () => {
     await discard.getByRole('button', { name: 'Keep editing' }).click();
     await expect(heading(page, 'silva')).toBeVisible();
     await expect(translation).toHaveValue('a dark forest');
+    // rosa's history entry is still there: Back reaches it again, and Discard changes opens it.
+    await page.goBack();
+    await expect(discard).toBeVisible();
+    await expect(page).toHaveURL(/#word-e2e-silva$/);
+    await discard.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(heading(page, 'rosa')).toBeVisible();
+    await expect(page).toHaveURL(/#word-e2e-rosa$/);
+
+    // Back on silva with a fresh edit, for the filter check.
+    await page.getByText('silva', { exact: true }).click();
+    await expect(heading(page, 'silva')).toBeVisible();
+    await translation.fill('a dark forest');
 
     // A search that leaves silva out of the list does not close it.
     await page.getByPlaceholder('Search words...').fill('rosa');

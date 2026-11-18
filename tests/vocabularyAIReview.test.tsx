@@ -11,7 +11,7 @@ import {
 import type { VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
 import type { VocabularyAIReply } from '@/shared/types/vocabulary/ai-review';
 import type { LearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
-import { getPronounTableSchema } from '@/src/components/ui/admin/vocabulary/wordTables';
+import { getEditableTable, getPronounTableSchema } from '@/src/components/ui/admin/vocabulary/wordTables';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 
 const mockCallable = jest.fn();
@@ -410,6 +410,50 @@ it('sends one request when a message is sent twice before the next render', asyn
   expect(result.current.chat('rosa').turns.filter(turn => turn.from === 'admin')).toHaveLength(1);
 });
 
+it('skips a new person with the table when the admin edited the table while the AI answered', async () => {
+  const thirdPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '3rd')) as Record<
+    string,
+    Record<string, { singular: string[] | null; plural: string[] | null }>
+  >;
+  thirdPerson.nominative.masculine = { singular: ['isform'], plural: ['eī'] };
+  const is = {
+    ...cloneNoun(),
+    id: 'is',
+    word: 'is',
+    part_of_speech: 'pronoun',
+    pronoun_type: 'personal',
+    person: '3rd',
+    declension_table: thirdPerson,
+    ai_review: { uncertainties: [], guidance: [] },
+  } as unknown as VocabularyWordWithId;
+  const firstPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '1st')) as Record<
+    string,
+    { singular: string[] | null; plural: string[] | null }
+  >;
+  firstPerson.nominative = { singular: ['ego'], plural: ['nōs'] };
+  const finish = pending();
+  const onSave = jest.fn(async () => true);
+  render(<WordEditPanel word={is} onSave={onSave} updating={false} />);
+  say('Make it first person.');
+  fireEvent.doubleClick(screen.getByText('isform'));
+  fireEvent.change(screen.getByPlaceholderText('Enter value...'), { target: { value: 'ille' } });
+  fireEvent.keyDown(screen.getByPlaceholderText('Enter value...'), { key: 'Enter' });
+  await finish({
+    data: {
+      success: true,
+      uncertainties: [],
+      data: { part_of_speech: 'pronoun', person: '1st', declension_table: firstPerson },
+      reply: { message: 'First person now.', answered: [], remember: [], rule: null },
+    },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+  // The person would change the table's shape and empty the table the admin edited, so both are skipped.
+  const saved = await saveWord(onSave);
+  expect(saved.person).toBe('3rd');
+  expect(saved.declension_table.nominative.masculine).toEqual({ singular: ['ille'], plural: ['eī'] });
+});
+
 it('keeps an accepted pronoun table when the same reply changes the person', async () => {
   const onSave = jest.fn(async () => true);
   const ego = {
@@ -487,6 +531,22 @@ it('offers no Accept for an answer about the word before the admin renamed it', 
   fireEvent.change(screen.getByLabelText('Word'), { target: { value: 'rosa' } });
   fireEvent.click(screen.getByRole('button', { name: 'Accept change' }));
   expect(screen.getByLabelText('Etymology')).toHaveValue('From Greek rhódon.');
+});
+
+it("records the word the admin asked about as a rule's source, even after a rename", async () => {
+  const finish = pending();
+  const rules = learnedRules();
+  render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} learnedRules={rules} />);
+  say('Never give a locative by analogy.');
+  fireEvent.change(screen.getByLabelText('Word'), { target: { value: 'via' } });
+  await finish(reply({}, { message: 'Noted.', rule: 'Never give a locative by analogy.' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save as rule for all words' }));
+
+  await waitFor(() => expect(rules.learn).toHaveBeenCalledTimes(1));
+  expect(rules.learn.mock.calls[0][0].learnedFrom).toEqual({
+    word: 'rosa',
+    message: 'Never give a locative by analogy.',
+  });
 });
 
 it('skips a change to a definition the admin typed while the AI answered', async () => {
@@ -966,14 +1026,38 @@ describe('when the admin keeps working while autocomplete runs', () => {
     expect(payload.alternate_form).toBe('rhoda');
   });
 
-  it('takes the server completion of a partly filled list', async () => {
+  it.each([
+    [
+      'a word form missing its shortened form',
+      [
+        { full_form: 'bonus', shortened_form: 'bonus' },
+        { full_form: 'bona', shortened_form: '' },
+      ],
+    ],
+    ['a single blank row', [{ full_form: '', shortened_form: '' }]],
+  ])('takes the server completion of a list of word forms with %s', async (_case, existing) => {
+    const completed = [
+      { full_form: 'bonus', shortened_form: 'bonus' },
+      { full_form: 'bona', shortened_form: '-a' },
+    ];
     const onSave = jest.fn(async () => true);
-    render(<WordEditPanel word={{ ...cloneNoun(), definitions: ['rose', ''] }} onSave={onSave} updating={false} />);
-    mockCallable.mockResolvedValueOnce(answer({ definitions: ['rose', 'a red flower'] }));
+    const adjective = {
+      ...cloneNoun(),
+      id: 'bonus',
+      word: 'bonus',
+      part_of_speech: 'adjective',
+      declension: '1-2',
+      dictionary_forms: existing,
+      degrees_table: buildEmptyFromSchema(getEditableTable({ part_of_speech: 'adjective' })!.schema),
+      ai_review: { uncertainties: [], guidance: [] },
+    } as unknown as VocabularyWordWithId;
+    render(<WordEditPanel word={adjective} onSave={onSave} updating={false} />);
+    // What the callable returns once the server has merged its answer into this draft.
+    mockCallable.mockResolvedValueOnce(answer({ dictionary_forms: completed }));
     fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
-    await screen.findByDisplayValue('a red flower');
+    await within(assistant()).findByText(/I filled Dictionary forms/);
 
-    expect((await saveWord(onSave)).definitions).toEqual(['rose', 'a red flower']);
+    expect((await saveWord(onSave)).dictionary_forms).toEqual(completed);
   });
 
   it('applies nothing when the admin renamed the word meanwhile, and says so', async () => {
@@ -1164,6 +1248,67 @@ describe('Save and next', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
     expect(onSave.mock.calls[1][0].pronunciation).toBe('typed while saving');
+  });
+
+  it('keeps an edit typed back to the old value while saving marked as unsaved', async () => {
+    let finishSave!: (saved: boolean) => void;
+    const onSave = jest.fn(
+      (_updates: Partial<VocabularyWordWithId>) =>
+        new Promise<boolean>(resolve => {
+          finishSave = resolve;
+        })
+    );
+    const onDirtyChange = jest.fn();
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} onDirtyChange={onDirtyChange} />);
+    fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'a rose' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    // Back to the value before the save: clean against the old baseline, not against what is saved now.
+    fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'rose' } });
+    await act(async () => finishSave(true));
+
+    expect(screen.getByLabelText('Translation')).toHaveValue('rose');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it('counts a table cell being edited as unsaved, and keeps it open when a save finishes', async () => {
+    let finishSave!: (saved: boolean) => void;
+    const onSave = jest.fn(
+      (_updates: Partial<VocabularyWordWithId>) =>
+        new Promise<boolean>(resolve => {
+          finishSave = resolve;
+        })
+    );
+    const onDirtyChange = jest.fn();
+    const next = silvaNext();
+    render(
+      <WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} onDirtyChange={onDirtyChange} next={next} />
+    );
+    fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'a rose' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Apply and next/ }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    fireEvent.doubleClick(screen.getByText('rosam'));
+    fireEvent.change(screen.getByPlaceholderText('Enter value...'), { target: { value: 'typed in a cell' } });
+    await act(async () => finishSave(true));
+
+    expect(screen.getByPlaceholderText('Enter value...')).toHaveValue('typed in a cell');
+    expect(next.open).not.toHaveBeenCalled();
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it('counts removing a definition as an unsaved change', () => {
+    const onDirtyChange = jest.fn();
+    render(
+      <WordEditPanel
+        word={{ ...cloneNoun(), definitions: ['rose', 'the flower'] }}
+        onSave={async () => true}
+        updating={false}
+        onDirtyChange={onDirtyChange}
+      />
+    );
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    fireEvent.click(screen.getAllByTitle('Remove definition')[1]);
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 
   it('stays on the word with its draft when the save fails or the form is invalid', async () => {

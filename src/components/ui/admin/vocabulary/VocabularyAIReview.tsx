@@ -724,7 +724,8 @@ export function AIAssistantDock() {
     try {
       const { rule, added } = await learned.learn({
         instruction,
-        learnedFrom: { word, message: turn.proposal!.prompt },
+        // The word the admin asked about, even if renamed since.
+        learnedFrom: { word: turn.proposal!.headword || word, message: turn.proposal!.prompt },
       });
       update(turn.id, () => ({ rule: added ? { status: 'saved', id: rule.id } : { status: 'known' } }));
       if (added) {

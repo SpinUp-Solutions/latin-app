@@ -14,13 +14,14 @@ export const BaseWordForm = () => {
   const definitions = form.watch('definitions') || [];
 
   const addDefinition = () => {
-    form.setValue('definitions', [...definitions, '']);
+    form.setValue('definitions', [...definitions, ''], { shouldDirty: true });
   };
 
   const removeDefinition = (index: number) => {
     form.setValue(
       'definitions',
-      definitions.filter((_, i) => i !== index)
+      definitions.filter((_, i) => i !== index),
+      { shouldDirty: true }
     );
   };
 

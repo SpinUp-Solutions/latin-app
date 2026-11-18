@@ -161,9 +161,17 @@ export function staleFields(proposal: Proposal, draft: Partial<VocabularyWord>):
     ...proposal.changes.map(change => [change.field, change.basis] as [AICompletableField, string]),
     ...(Object.entries(proposal.seen) as [AICompletableField, string][]),
   ];
-  return new Set(
+  const stale = new Set(
     seen.filter(([field, basis]) => snapshotValue(draftValue(draft, field)) !== basis).map(([field]) => field)
   );
+  // A pronoun's type and person decide its table's shape, so they go with the table: applying a new person
+  // while skipping the table the admin edited would replace that table with an empty one of the new shape.
+  if (stale.has('declension_table')) {
+    for (const change of proposal.changes) {
+      if (change.field === 'person' || change.field === 'pronoun_type') stale.add(change.field);
+    }
+  }
+  return stale;
 }
 
 function readOpen(): boolean {

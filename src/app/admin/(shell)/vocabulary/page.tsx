@@ -98,13 +98,14 @@ function AdminVocabularyPage() {
   }, [selectedWordId]);
 
   // Back, Forward or an edited URL changes the word too, so it asks first like any other switch. Until the
-  // admin decides, the URL goes back to the word being edited.
+  // admin decides, the URL shows the word being edited again, as a new entry: rewriting the current one
+  // would replace the entry Back just reached, and a second Back would skip that word.
   const followHash = useEffectEvent(() => {
     const id = wordIdFromHash();
     if (id === selectedWordId) return;
     if (editorDirty) {
       const here = selectedWordId ? `#word-${selectedWordId}` : '';
-      history.replaceState(null, '', window.location.pathname + window.location.search + here);
+      history.pushState(null, '', window.location.pathname + window.location.search + here);
     }
     switchEditor(() => setSelectedWordId(id));
   });
@@ -152,7 +153,10 @@ function AdminVocabularyPage() {
       delete cleanedUpdates.random_index;
 
       console.debug('VocabularyPage cleaned updates', cleanedUpdates);
-      await updateWord({ wordId: selectedWordId, updates: cleanedUpdates }).unwrap();
+      const saved = await updateWord({ wordId: selectedWordId, updates: cleanedUpdates }).unwrap();
+      // A word kept open while a filter hides it is not refreshed by the list, so it takes the saved
+      // version here: reopening it later must not start from the version before this save.
+      setKeptWord(current => (current?.id === saved.id ? saved : current));
       toast.success('Word updated successfully');
       return true;
     } catch (error) {
