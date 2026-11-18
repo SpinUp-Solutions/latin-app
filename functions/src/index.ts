@@ -66,24 +66,90 @@ export const autocompleteWord = onCall(
     secrets: [openaiApiKey],
   },
   async request => {
-    await requireAdmin(request.auth);
-    const parsed = AIAutocompleteRequestSchema.safeParse(request.data);
-    if (!parsed.success) throw new HttpsError('invalid-argument', 'Invalid vocabulary autocomplete request');
+    const started = Date.now();
+    const call: VocabularyAICall = { uid: request.auth?.uid ?? null, intent: vocabularyAIIntent(request.data) };
     try {
-      const guidance = await readVocabularyAIGuidance(functionsDb);
-      const result = await autocompleteVocabularyWord(parsed.data, guidance.rules);
-      if (result.cost) console.log(`[autocompleteWord] ${result.model} cost $${result.cost.totalCost.toFixed(4)}`);
+      await requireAdmin(request.auth);
+      const parsed = AIAutocompleteRequestSchema.safeParse(request.data);
+      if (!parsed.success) throw new HttpsError('invalid-argument', 'Invalid vocabulary autocomplete request');
+      call.word = parsed.data.word;
+      const result = await completeVocabularyWord(parsed.data);
+      logVocabularyAICall(call, started, {
+        outcome: result.success ? 'success' : 'model-error',
+        errorCode: result.errorCode,
+        model: result.model,
+        cost: result.cost?.totalCost,
+        inputTokens: result.cost?.tokens.promptTokens,
+        outputTokens: result.cost?.tokens.completionTokens,
+      });
       return result;
     } catch (error) {
-      if (error instanceof HttpsError) throw error;
-      if (error instanceof VocabularyAIGuidanceError) {
-        throw new HttpsError('failed-precondition', 'Saved AI guidance is invalid. Ask an administrator to review it.');
-      }
-      console.error('[autocompleteWord] callable failed', error);
-      throw new HttpsError('internal', 'Vocabulary autocomplete could not be completed.');
+      logVocabularyAICall(call, started, { outcome: error instanceof HttpsError ? error.code : 'internal' });
+      throw error;
     }
   }
 );
+
+async function completeVocabularyWord(request: z.infer<typeof AIAutocompleteRequestSchema>) {
+  try {
+    const guidance = await readVocabularyAIGuidance(functionsDb);
+    return await autocompleteVocabularyWord(request, guidance.rules);
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    if (error instanceof VocabularyAIGuidanceError) {
+      throw new HttpsError('failed-precondition', 'Saved AI guidance is invalid. Ask an administrator to review it.');
+    }
+    console.error('[autocompleteWord] callable failed', error);
+    throw new HttpsError('internal', 'Vocabulary autocomplete could not be completed.');
+  }
+}
+
+interface VocabularyAICall {
+  uid: string | null;
+  intent: 'fill' | 'message';
+  word?: string;
+}
+
+/** A conversation turn carries a message; anything else asks to fill the word. Read before validation. */
+function vocabularyAIIntent(data: unknown): VocabularyAICall['intent'] {
+  return data && typeof data === 'object' && 'conversation' in data && data.conversation ? 'message' : 'fill';
+}
+
+/**
+ * One line per call the handler sees, rejected and failed ones included, so usage, cost and latency
+ * can be read from Cloud Logging (`jsonPayload.event="vocabulary_ai_call"`). Firebase turns away
+ * malformed requests and bad tokens before the handler runs, so whether a callable still gets any
+ * traffic at all is a question for the Cloud Run request logs. The line never holds the admin's
+ * message, the draft or the answer. Writing it is best effort: a logging failure never costs the
+ * admin an answer.
+ */
+function logVocabularyAICall(
+  call: VocabularyAICall,
+  started: number,
+  result: {
+    outcome: string;
+    errorCode?: string;
+    model?: string;
+    cost?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+  }
+) {
+  try {
+    console.log(
+      JSON.stringify({
+        severity: result.outcome === 'success' ? 'INFO' : 'WARNING',
+        message: `autocompleteWord ${call.intent} ${result.outcome}`,
+        event: 'vocabulary_ai_call',
+        ...call,
+        ...result,
+        latencyMs: Date.now() - started,
+      })
+    );
+  } catch {
+    // Nothing to do: the call itself went as reported to the admin.
+  }
+}
 
 export const resolveRootWordFn = onCall(
   {
