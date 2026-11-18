@@ -22,7 +22,7 @@ LATIN SPELLING AND CELL CONTENT:
 - Use Latin letters and macrons in Latin forms, without breves, stress accents or commentary. Pronunciation notation is a separate field, not a copy of the lemma's macrons.
 - Use one preferred standard form per inflection cell, represented as an array containing that form.
 - Omit predictable alternatives such as -ēre for -ērunt, -re for passive -ris, accusative plural -īs for -ēs, and syncopated perfects. Keep an additional form only for a genuine word-specific lexical alternative that a general rule cannot supply; put each retained form in a separate array element, without slashes or parentheses.
-- Use the masculine singular or plural, as appropriate, for compound verb forms (e.g., amātus est, amātī sunt); do not list their feminine and neuter variants in the same cell.
+- For finite compound verb forms use the masculine nominative singular or plural, as appropriate (e.g., amātus est, amātī sunt); do not list their feminine and neuter variants in the same cell. In a compound infinitive the masculine accusative can appear with esse (amātum esse). Keep an existing accusative citation form.
 - Respect each field's schema type. The scalar alternate_form field is not an inflection-cell array.
 
 DICTIONARY FORMS AND ABBREVIATIONS:
