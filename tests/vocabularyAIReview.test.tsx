@@ -72,7 +72,7 @@ const reply = (data: Record<string, unknown>, said: Partial<VocabularyAIReply> =
 });
 const assistant = () => screen.getByRole('region', { name: 'AI assistant' });
 const dismiss = () => fireEvent.click(screen.getByRole('button', { name: 'Dismiss the AI assistant' }));
-const tab = () => screen.queryByRole('button', { name: /^Show the AI assistant/ });
+const tab = () => screen.queryByRole('button', { name: /^Ask AI/ });
 /** The page's store around the editor, keyed by word like the vocabulary page. */
 const OnPage = ({
   word,
@@ -662,7 +662,7 @@ it('can be asked anything when it has no questions, and answers without proposin
   mockCallable.mockResolvedValue(reply({}, { message: 'Because rosa, rosae is first declension.' }));
   render(<WordEditPanel word={word} onSave={async () => true} updating={false} />);
   expect(questionCard('Etymology')).toBeNull();
-  expect(composer()).toHaveAttribute('placeholder', 'Tell the AI what to fix or explain in rosa…');
+  expect(composer()).toHaveAttribute('placeholder', 'Ask AI about rosa…');
 
   fireEvent.change(composer(), { target: { value: 'Why first declension?' } });
   fireEvent.keyDown(composer(), { key: 'Enter', shiftKey: true });
@@ -681,7 +681,7 @@ it('comes back up when autocomplete finishes, says all good when the AI is sure,
   expect(screen.queryByRole('region', { name: 'AI assistant' })).toBeNull();
   expect(tab()).not.toBeNull();
 
-  fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+  fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
   const report = await screen.findByText(
     'All good! No questions from me about rosa. I filled Pronunciation. If anything looks off, tell me below.'
   );
@@ -706,7 +706,7 @@ it('says all good when there was nothing left to fill', async () => {
   // The server keeps a filled value (`mergeValue`), so it sends the translation back as it was.
   mockCallable.mockResolvedValueOnce(answer({ translation: 'rose' }));
   render(<WordEditPanel word={word} onSave={async () => true} updating={false} />);
-  fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+  fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
   expect(
     await within(assistant()).findByText(
       'All good! No questions from me about rosa, and there was nothing left to fill. If anything looks off, tell me below.'
@@ -718,7 +718,7 @@ it('dismisses to a tab that counts open questions, stays dismissed from word to 
   const first = render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
   dismiss();
   expect(screen.queryByRole('region', { name: 'AI assistant' })).toBeNull();
-  expect(tab()).toHaveAccessibleName('Show the AI assistant (1 question)');
+  expect(tab()).toHaveAccessibleName('Ask AI (1 question)');
 
   first.unmount();
   render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
@@ -733,8 +733,12 @@ it('keeps what was typed when dismissed, and each word keeps its own conversatio
   const view = render(<OnPage word={cloneNoun()} />);
   fireEvent.change(composer(), { target: { value: 'Half a thought' } });
   dismiss();
+  // The closed bar still offers AI Generate, and Ask AI shows the unsent message.
+  expect(screen.getByRole('button', { name: 'AI Generate' })).toBeEnabled();
+  expect(tab()).toHaveTextContent('Half a thought');
   fireEvent.click(tab()!);
   expect(composer()).toHaveValue('Half a thought');
+  expect(composer()).toHaveFocus();
 
   mockCallable.mockResolvedValueOnce(reply({}, { message: 'It came through Greek.' }));
   say('Where is rosa from?');
@@ -977,7 +981,7 @@ it('adds new questions from autocomplete without replacing open ones, filling on
     )
   );
   render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
-  fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+  fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
   await waitFor(() => expect(screen.getByLabelText('Pronunciation')).toHaveValue('new sound'));
 
   expect(
@@ -987,7 +991,7 @@ it('adds new questions from autocomplete without replacing open ones, filling on
   // Autocomplete filled the field it asks about; only the admin's own edit counts as a change.
   expect(within(questionCard('Pronunciation')!).queryByText(/You changed/)).toBeNull();
   expect(within(questionCard('Etymology')!).getByText(question.question)).toBeInTheDocument();
-  expect(within(assistant()).getByText('2 questions')).toBeInTheDocument();
+  expect(within(assistant()).getByText(/I'm not sure about 2 things in rosa\./)).toBeInTheDocument();
   const payload = await saveWord(onSave);
   expect(payload.translation).toBe('rose');
   expect(payload.ai_review.uncertainties).toEqual([question, pronunciation]);
@@ -998,12 +1002,12 @@ describe('when the admin keeps working while autocomplete runs', () => {
     const finish = pending();
     const onSave = jest.fn(async () => true);
     render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
-    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
     fireEvent.click(within(questionCard('Etymology')!).getByRole('button', { name: 'Keep as is' }));
     await finish(answer({ pronunciation: 'ˈro.sa' }));
 
     expect(screen.getByLabelText('Pronunciation')).toHaveValue('ˈro.sa');
-    expect(screen.getByRole('button', { name: 'AI Autocomplete' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'AI Generate' })).toBeEnabled();
     const payload = await saveWord(onSave);
     expect(payload.pronunciation).toBe('ˈro.sa');
     expect(payload.ai_review.uncertainties).toEqual([]);
@@ -1013,7 +1017,7 @@ describe('when the admin keeps working while autocomplete runs', () => {
     const finish = pending();
     const onSave = jest.fn(async () => true);
     render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
-    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
     fireEvent.change(screen.getByLabelText('Pronunciation'), { target: { value: 'mine' } });
     await finish(
       answer(
@@ -1062,7 +1066,7 @@ describe('when the admin keeps working while autocomplete runs', () => {
     render(<WordEditPanel word={adjective} onSave={onSave} updating={false} />);
     // What the callable returns once the server has merged its answer into this draft.
     mockCallable.mockResolvedValueOnce(answer({ dictionary_forms: completed }));
-    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
     await within(assistant()).findByText(/I filled Dictionary forms/);
 
     expect((await saveWord(onSave)).dictionary_forms).toEqual(completed);
@@ -1085,7 +1089,7 @@ describe('when the admin keeps working while autocomplete runs', () => {
     mockCallable.mockResolvedValueOnce(answer({ person: '1st', declension_table: firstPerson }));
     const onSave = jest.fn(async () => true);
     render(<WordEditPanel word={ego} onSave={onSave} updating={false} />);
-    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
 
     expect(await within(assistant()).findByText(/I filled Person and Declension table/)).toBeInTheDocument();
     expect(screen.getByText('nōs')).toBeInTheDocument();
@@ -1114,7 +1118,7 @@ describe('when the admin keeps working while autocomplete runs', () => {
     firstPerson.nominative = { singular: ['ego'], plural: ['nōs'] };
     const finish = pending();
     render(<WordEditPanel word={ego} onSave={async () => true} updating={false} />);
-    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
     fireEvent.doubleClick(screen.getByText('egoform'));
     fireEvent.change(screen.getByPlaceholderText('Enter value...'), { target: { value: 'edited meanwhile' } });
     fireEvent.keyDown(screen.getByPlaceholderText('Enter value...'), { key: 'Enter' });
@@ -1133,7 +1137,7 @@ describe('when the admin keeps working while autocomplete runs', () => {
   it('applies nothing when the admin renamed the word meanwhile, and says so', async () => {
     const finish = pending();
     render(<WordEditPanel word={cloneNoun()} onSave={async () => true} updating={false} />);
-    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
     fireEvent.change(screen.getByLabelText('Word'), { target: { value: 'via' } });
     await finish(answer({ pronunciation: 'ˈro.sa', alternate_form: 'rhoda' }));
 
@@ -1148,7 +1152,7 @@ describe('when the admin keeps working while autocomplete runs', () => {
     const finish = pending();
     const onSave = jest.fn(async () => true);
     render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
-    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
     fireEvent.doubleClick(screen.getByText('rosam'));
     const input = screen.getByPlaceholderText('Enter value...');
     fireEvent.change(input, { target: { value: '' } });
@@ -1183,7 +1187,7 @@ describe('when the admin keeps working while autocomplete runs', () => {
     render(
       <WordEditPanel word={{ ...cloneNoun(), declension_table: empty } as never} onSave={onSave} updating={false} />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
     // An empty cell shows a dash; the accusative singular is the fourth row's first.
     fireEvent.doubleClick(screen.getAllByText('—')[6]);
     const input = screen.getByPlaceholderText('Enter value...');
@@ -1214,7 +1218,7 @@ describe('when the admin keeps working while autocomplete runs', () => {
     const finish = pending();
     const onSave = jest.fn(async () => true);
     render(<WordEditPanel word={ego} onSave={onSave} updating={false} />);
-    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
     // The select scrolls its options into view, which jsdom does not implement.
     Element.prototype.scrollIntoView = jest.fn();
     const person = screen.getAllByRole('combobox').find(box => box.textContent?.includes('1st'))!;
@@ -1239,7 +1243,7 @@ it('discards an autocomplete result that arrives after switching words', async (
   const finish = pending();
   const onSave = jest.fn(async () => true);
   const view = render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
-  fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+  fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
   view.rerender(
     <WordEditPanel word={{ ...cloneNoun(), id: 'new-word', word: 'silva' }} onSave={onSave} updating={false} />
   );

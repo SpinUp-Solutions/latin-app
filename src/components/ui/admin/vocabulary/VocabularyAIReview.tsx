@@ -18,6 +18,7 @@ import {
   CircleHelp,
   Lightbulb,
   Loader2,
+  MessageCircle,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -172,9 +173,9 @@ function ChangeView({ field, current, proposed }: { field: AICompletableField; c
         {/* Every cell, scrolling: Accept replaces the whole table, so each change must be reviewable. */}
         <ul
           aria-label={`Changed cells in ${aiFieldLabel(field)}`}
-          className="max-h-48 overflow-auto rounded border border-gray-200 text-xs">
+          className="max-h-48 overflow-auto rounded-xl bg-white text-xs">
           {cells.map(path => (
-            <li key={path} className="flex flex-wrap justify-between gap-x-3 px-2 py-1 odd:bg-gray-50">
+            <li key={path} className="flex flex-wrap justify-between gap-x-3 px-2.5 py-1 even:bg-gray-50/70">
               <span className="text-gray-600">{path.split('.').join(' · ')}</span>
               <span>
                 <span className="text-gray-500 line-through">{formatValue(valueAt(current, path))}</span>
@@ -200,7 +201,7 @@ function AIAvatar() {
   return (
     <span
       aria-hidden
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-roman-red/10 text-roman-red">
       <Sparkles className="h-3.5 w-3.5" />
     </span>
   );
@@ -208,9 +209,9 @@ function AIAvatar() {
 
 function AIBubble({ children, label = 'AI' }: { children: ReactNode; label?: string }) {
   return (
-    <li className="flex items-start gap-2">
+    <li className="flex items-start gap-3">
       <AIAvatar />
-      <div className="min-w-0 flex-1 space-y-2 rounded-2xl rounded-tl-sm bg-violet-50/70 px-3 py-2 text-sm text-gray-900">
+      <div className="min-w-0 flex-1 space-y-2.5 pt-1 text-sm leading-relaxed text-gray-900">
         <span className="sr-only">{label}: </span>
         {children}
       </div>
@@ -243,10 +244,10 @@ function QuestionCard({
       role="group"
       aria-label={`AI question about ${label}`}
       id={questionAnchor(context.anchorPrefix, field)}
-      className="scroll-mt-4 space-y-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+      className="scroll-mt-4 space-y-2 rounded-2xl bg-gray-50 p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 text-xs font-semibold text-amber-900">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-[11px]">
+        <span className="flex items-center gap-2 text-xs font-semibold text-roman-red">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-roman-red text-[11px] text-white">
             {number}
           </span>
           {INLINE_FIELDS.has(field) ? (
@@ -266,7 +267,7 @@ function QuestionCard({
             type="button"
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-xs"
+            className="h-7 rounded-full px-3 text-xs text-gray-600 hover:bg-white"
             disabled={context.disabled}
             onClick={onKeep}>
             Keep as is
@@ -274,9 +275,14 @@ function QuestionCard({
         )}
       </div>
       {changed && (
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs text-gray-800 ring-1 ring-amber-200">
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-1.5 text-xs text-gray-800">
           <span>You changed {label} since the AI asked.</span>
-          <Button type="button" size="sm" className="h-7 px-3 text-xs" disabled={context.disabled} onClick={onDone}>
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 rounded-full bg-roman-red px-3 text-xs text-white hover:bg-roman-red/90"
+            disabled={context.disabled}
+            onClick={onDone}>
             Done
           </Button>
         </div>
@@ -296,7 +302,7 @@ function QuestionCard({
               type="button"
               disabled={context.disabled}
               onClick={() => onPick(option)}
-              className="rounded-full border border-amber-300 bg-white px-3 py-1 text-left text-xs text-gray-800 shadow-sm transition-colors hover:border-violet-400 hover:bg-violet-50 disabled:opacity-50">
+              className="rounded-full bg-white px-3 py-1 text-left text-xs text-gray-800 shadow-sm transition-colors hover:bg-roman-red hover:text-white disabled:opacity-50">
               {option}
             </button>
           ))}
@@ -320,8 +326,8 @@ function RuleSuggestion({
   const proposal = turn.proposal!;
   const savedRuleId = turn.rule.status === 'saved' ? turn.rule.id : null;
   return (
-    <div className="flex gap-2 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700">
-      <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
+    <div className="flex gap-2 rounded-2xl bg-roman-red/5 px-3 py-2.5 text-xs text-gray-700">
+      <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-roman-red" aria-hidden />
       <div className="min-w-0 flex-1 space-y-1.5">
         <p>
           <span className="font-medium">
@@ -350,7 +356,12 @@ function RuleSuggestion({
         )}
         {context.learnedRules &&
           (turn.rule.status === 'offered' || turn.rule.status === 'failed' || turn.rule.status === 'undone') && (
-            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={onSaveRule}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 rounded-full bg-white text-xs text-roman-red shadow-sm hover:bg-roman-red hover:text-white"
+              onClick={onSaveRule}>
               {turn.rule.status === 'failed' ? 'Try again' : 'Save as rule for all words'}
             </Button>
           )}
@@ -367,7 +378,7 @@ function ChangeList({ turn }: { turn: AITurn }) {
   const stale = staleFields(proposal, context.draft);
   if (proposal.changes.length === 0) return null;
   return (
-    <ul aria-label="Proposed changes" className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+    <ul aria-label="Proposed changes" className="divide-y divide-white rounded-2xl bg-gray-50">
       {proposal.changes.map(change => (
         <li key={change.field} className="grid gap-1 px-3 py-2 sm:grid-cols-[8rem_1fr] sm:gap-3">
           <span className="text-xs font-medium text-gray-600">{aiFieldLabel(change.field)}</span>
@@ -397,7 +408,7 @@ function NoteList({ title, notes }: { title: string; notes: string[] }) {
   if (notes.length === 0) return null;
   return (
     <div className="flex gap-2 text-xs text-gray-700">
-      <BookmarkCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
+      <BookmarkCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-roman-red" aria-hidden />
       <div>
         <p className="font-medium">{title}</p>
         <ul className="list-disc pl-4">
@@ -462,7 +473,7 @@ function DecisionReceipt({ turn }: { turn: AITurn }) {
           type="button"
           aria-expanded={showDetails}
           onClick={() => setShowDetails(!showDetails)}
-          className="shrink-0 rounded px-1.5 text-gray-600 underline-offset-2 hover:underline">
+          className="shrink-0 rounded-full px-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900">
           {showDetails ? 'Hide details' : 'Details'}
         </button>
       </div>
@@ -548,11 +559,22 @@ function ProposalView({
       )}
       <div className="flex flex-wrap gap-2 pt-1">
         {!renamed && (
-          <Button type="button" size="sm" onClick={onAccept} disabled={busy}>
+          <Button
+            type="button"
+            size="sm"
+            className="rounded-full bg-roman-red px-4 text-white hover:bg-roman-red/90"
+            onClick={onAccept}
+            disabled={busy}>
             {acceptLabel}
           </Button>
         )}
-        <Button type="button" size="sm" variant="ghost" onClick={onDiscard} disabled={busy}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="rounded-full px-4 text-gray-600"
+          onClick={onDiscard}
+          disabled={busy}>
           Discard
         </Button>
       </div>
@@ -565,9 +587,9 @@ function MemoryList({ word }: { word: string }) {
   const notes = context.review.guidance;
   if (notes.length === 0) return null;
   return (
-    <div className="space-y-1.5 border-t border-gray-100 px-4 py-3">
+    <div className="mx-4 mb-4 space-y-1.5 rounded-2xl bg-gray-50 px-3.5 py-3">
       <p className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
-        <BookmarkCheck className="h-3.5 w-3.5 text-violet-600" aria-hidden />
+        <BookmarkCheck className="h-3.5 w-3.5 text-roman-red" aria-hidden />
         What the AI remembers about {word}
       </p>
       <ul aria-label={`What the AI remembers about ${word}`} className="space-y-1">
@@ -587,7 +609,7 @@ function MemoryList({ word }: { word: string }) {
               onClick={() => context.removeNote(note.id)}
               disabled={context.disabled}
               aria-label={`Forget: ${note.instruction}`}
-              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50">
+              className="rounded-full p-0.5 text-gray-400 hover:bg-white hover:text-gray-800 disabled:opacity-50">
               <X className="h-3.5 w-3.5" />
             </button>
           </li>
@@ -597,25 +619,24 @@ function MemoryList({ word }: { word: string }) {
   );
 }
 
-/** Slides the dock and its tab in and out quickly; people who ask for less motion get none. */
-const SLIDE =
-  'transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none';
+/** The conversation rises into place when it opens; people who ask for less motion get none. */
+const SLIDE_IN = 'animate-in fade-in slide-in-from-bottom-2 duration-200 motion-reduce:animate-none';
 
 /**
- * The AI assistant, floating at the bottom of the word editor like a chat
- * input. Above the input: what the AI is unsure about, as questions with
- * suggested answers, and the conversation in which the admin answers them or
- * asks for any other fix. The AI answers in words and lists the changes it
+ * The AI bar at the bottom of the word editor: AI Generate fills the empty
+ * fields, and Ask AI opens a chat above the bar. In the chat: what the AI is
+ * unsure about, as questions with suggested answers, and the conversation in
+ * which the admin answers them or asks for any other fix. The AI answers in words and lists the changes it
  * proposes; nothing reaches the draft until the admin accepts it. Facts the
  * admin states are remembered on the word, and a principle that applies to
  * every word becomes a rule for all words.
  *
- * The down arrow dismisses it to a small tab, keeping what was typed. Each
+ * The down arrow closes the chat back to the Ask AI button, keeping what was typed. Each
  * word's conversation lives in the page's store, so it survives switching
  * words, and a reply still running for another word can be stopped or let
  * finish.
  */
-export function AIAssistantDock() {
+export function AIAssistantDock({ generate }: { generate?: ReactNode }) {
   const context = useContext(AIReviewContext);
   const composer = useRef<HTMLTextAreaElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
@@ -633,12 +654,15 @@ export function AIAssistantDock() {
     return () => showChat(null);
   }, [chatKey]);
 
-  // Like any chat, it follows the newest message, unless the admin has scrolled up to read.
+  // Like any chat, it follows the newest message, unless the admin has scrolled up to read. A chat that
+  // opens again starts at the newest message.
   const following = useRef(true);
+  const isOpen = context?.assistant.open ?? false;
   useEffect(() => {
+    if (!isOpen) following.current = true;
     const element = sheet.current;
     if (element && following.current) element.scrollTop = element.scrollHeight;
-  }, [turnCount, waiting]);
+  }, [turnCount, waiting, isOpen]);
 
   if (!context || !chat) return null;
 
@@ -790,217 +814,212 @@ export function AIAssistantDock() {
       ? `I'm not sure about ${questions.length === 1 ? 'one thing' : `${questions.length} things`} in ${word}. Pick a suggested answer, or reply in your own words.`
       : null;
 
+  const sheetVisible = hasSheet || Boolean(elsewhere);
+  const reopen = () => {
+    // The composer appears with the open chat, so it can take focus only once that has rendered.
+    flushSync(() => assistant.setOpen(true));
+    composer.current?.focus({ preventScroll: true });
+  };
+
   return (
-    <>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-4">
-        <section
-          aria-label="AI assistant"
-          aria-hidden={open ? undefined : true}
-          inert={!open}
-          className={cn(
-            'flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl border bg-white shadow-[0_16px_40px_-12px_rgba(15,23,42,0.35)]',
-            SLIDE,
-            questions.length > 0 ? 'border-amber-300' : 'border-violet-200',
-            open ? 'pointer-events-auto' : 'translate-y-[calc(100%+1rem)] opacity-0'
-          )}>
-          <header className="flex items-center gap-2 border-b border-gray-100 py-1.5 pl-3 pr-1.5">
-            <AIAvatar />
-            <h3 className="flex-1 text-sm font-semibold text-gray-900">AI assistant</h3>
-            {questions.length > 0 && (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
-                {plural(questions.length, 'question')}
-              </span>
+    <div className="relative z-20 flex-shrink-0 bg-white px-4 pb-4 pt-2">
+      {/* The fields fade out under the bar instead of meeting a hard line. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-full h-6 bg-gradient-to-t from-white to-transparent"
+      />
+      {/* One element whether open or not, so the AI Generate button keeps its run through either. The open
+      chat takes room from the fields above instead of covering them. */}
+      <div
+        role={open ? 'region' : undefined}
+        aria-label={open ? 'AI assistant' : undefined}
+        className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+        {open && sheetVisible && (
+          <div
+            className={cn(
+              'flex max-h-[min(50vh,30rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.3)]',
+              SLIDE_IN
+            )}>
+            {elsewhere && (
+              <div
+                role="status"
+                className="mx-3 mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-roman-red/5 px-3 py-1.5 text-xs text-roman-red">
+                <span className="flex flex-1 items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  Still answering about {elsewhere.word}…
+                </span>
+                <button
+                  type="button"
+                  className="font-medium underline-offset-2 hover:underline"
+                  aria-label={`Stop waiting for the answer about ${elsewhere.word}`}
+                  title={STOP_WAITING_HINT}
+                  onClick={() => assistant.stop(elsewhere.key)}>
+                  Stop waiting
+                </button>
+                <button
+                  type="button"
+                  className="font-medium underline-offset-2 hover:underline"
+                  aria-label={`Keep going with the answer about ${elsewhere.word}`}
+                  onClick={() => assistant.keepGoing(elsewhere.key)}>
+                  Keep going
+                </button>
+              </div>
             )}
-            <button
-              type="button"
-              aria-label="Dismiss the AI assistant"
-              title="Dismiss (what you typed is kept)"
-              onClick={() => assistant.setOpen(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900">
-              <ChevronDown className="h-5 w-5" aria-hidden />
-            </button>
-          </header>
-
-          {elsewhere && (
-            <div
-              role="status"
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-violet-100 bg-violet-50 px-3 py-1.5 text-xs text-violet-900">
-              <span className="flex flex-1 items-center gap-1.5">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                Still answering about {elsewhere.word}…
-              </span>
-              <button
-                type="button"
-                className="font-medium underline-offset-2 hover:underline"
-                aria-label={`Stop waiting for the answer about ${elsewhere.word}`}
-                title={STOP_WAITING_HINT}
-                onClick={() => assistant.stop(elsewhere.key)}>
-                Stop waiting
-              </button>
-              <button
-                type="button"
-                className="font-medium underline-offset-2 hover:underline"
-                aria-label={`Keep going with the answer about ${elsewhere.word}`}
-                onClick={() => assistant.keepGoing(elsewhere.key)}>
-                Keep going
-              </button>
-            </div>
-          )}
-
-          {hasSheet && (
-            <div
-              ref={sheet}
-              onScroll={event => {
-                const element = event.currentTarget;
-                following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
-              }}
-              className="max-h-[min(55vh,30rem)] overflow-y-auto overscroll-contain">
-              <ol aria-label="Conversation with the AI" aria-live="polite" className="space-y-3 px-4 py-3">
-                {summary && (
-                  <AIBubble>
-                    <p>{summary}</p>
-                  </AIBubble>
-                )}
-                {questions.length > 0 && (
-                  <li className="space-y-2 pl-9">
-                    {questions.map((question, index) => (
-                      <QuestionCard
-                        key={question.field}
-                        number={index + 1}
-                        question={question}
-                        changed={changedByHand(question.field)}
-                        onPick={answer => pick(question.field, answer)}
-                        onKeep={() => keep(question)}
-                        onDone={() => done(question)}
-                      />
-                    ))}
-                    <p className="px-1 text-[11px] text-gray-500">Unanswered questions stay open.</p>
-                  </li>
-                )}
-                {turns.map(turn => {
-                  if (turn.from === 'event') {
-                    return (
-                      <li key={turn.id} className="pl-9 text-xs text-gray-500">
-                        {turn.text}
-                      </li>
-                    );
-                  }
-                  if (turn.from === 'admin') {
-                    return (
-                      <li key={turn.id} className="flex justify-end">
-                        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-gray-100 px-3 py-2 text-sm text-gray-900">
-                          <span className="sr-only">You: </span>
-                          {turn.text}
-                        </p>
-                      </li>
-                    );
-                  }
-                  return (
-                    <AIBubble key={turn.id}>
-                      <p className="whitespace-pre-wrap">{turn.text}</p>
-                      {turn.proposal && (
-                        <ProposalView
-                          turn={turn}
-                          busy={busy}
-                          onAccept={() => void accept(turn)}
-                          onDiscard={() => update(turn.id, () => ({ status: 'discarded' }))}
-                          onSaveRule={() => void saveRule(turn)}
-                          onUndoRule={id => void undoRule(turn.id, id)}
-                        />
-                      )}
-                    </AIBubble>
-                  );
-                })}
-                {pending && (
-                  <AIBubble>
-                    <p className="flex items-center gap-2 text-gray-600">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                      <span className="flex-1">Thinking…</span>
-                      <button
-                        type="button"
-                        className="rounded px-1.5 text-xs font-medium text-gray-700 underline-offset-2 hover:underline"
-                        title={STOP_WAITING_HINT}
-                        onClick={() => assistant.stop(key)}>
-                        Stop waiting
-                      </button>
-                    </p>
-                  </AIBubble>
-                )}
-              </ol>
-              <MemoryList word={word} />
-            </div>
-          )}
-
-          <div className={cn('px-3 py-2.5', hasSheet && 'border-t border-gray-100 bg-gray-50/70')}>
-            <div className="flex items-end gap-2 rounded-xl border border-gray-200 bg-white py-1.5 pl-3 pr-1.5 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">
-              <Textarea
-                ref={composer}
-                id={composerId(context.anchorPrefix)}
-                aria-label="Message to the AI"
-                rows={Math.min(6, Math.max(1, message.split('\n').length))}
-                value={message}
-                maxLength={ADMIN_NOTE_MAX}
-                disabled={disabled}
-                placeholder={
-                  questions.length > 0
-                    ? 'Answer the AI, or tell it what else to fix…'
-                    : `Tell the AI what to fix or explain in ${word}…`
-                }
-                onChange={event => {
-                  const next = event.target.value;
-                  setMessage(() => next);
+            {hasSheet && (
+              <div
+                ref={sheet}
+                onScroll={event => {
+                  const element = event.currentTarget;
+                  following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
                 }}
-                onKeyDown={onComposerKeyDown}
-                className="min-h-0 resize-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-              <Button
-                type="button"
-                size="icon"
-                className="h-8 w-8 shrink-0 rounded-lg"
-                aria-label="Send to the AI"
-                disabled={busy || !message.trim()}
-                onClick={send}>
-                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-              </Button>
-            </div>
-            {message && (
-              <p className="mt-1 px-1 text-[11px] text-gray-500">
-                Enter to send, Shift+Enter for a new line. You’ll see every change before it reaches the word.
-              </p>
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <ol aria-label="Conversation with the AI" aria-live="polite" className="space-y-5 px-5 py-4">
+                  {summary && (
+                    <AIBubble>
+                      <p>{summary}</p>
+                    </AIBubble>
+                  )}
+                  {questions.length > 0 && (
+                    <li className="space-y-2 pl-10">
+                      {questions.map((question, index) => (
+                        <QuestionCard
+                          key={question.field}
+                          number={index + 1}
+                          question={question}
+                          changed={changedByHand(question.field)}
+                          onPick={answer => pick(question.field, answer)}
+                          onKeep={() => keep(question)}
+                          onDone={() => done(question)}
+                        />
+                      ))}
+                      <p className="px-1 text-[11px] text-gray-400">Unanswered questions stay open.</p>
+                    </li>
+                  )}
+                  {turns.map(turn => {
+                    if (turn.from === 'event') {
+                      return (
+                        <li key={turn.id} className="pl-10 text-xs text-gray-400">
+                          {turn.text}
+                        </li>
+                      );
+                    }
+                    if (turn.from === 'admin') {
+                      return (
+                        <li key={turn.id} className="flex justify-end">
+                          <p className="max-w-[80%] whitespace-pre-wrap rounded-3xl bg-gray-100 px-4 py-2 text-sm text-gray-900">
+                            <span className="sr-only">You: </span>
+                            {turn.text}
+                          </p>
+                        </li>
+                      );
+                    }
+                    return (
+                      <AIBubble key={turn.id}>
+                        <p className="whitespace-pre-wrap">{turn.text}</p>
+                        {turn.proposal && (
+                          <ProposalView
+                            turn={turn}
+                            busy={busy}
+                            onAccept={() => void accept(turn)}
+                            onDiscard={() => update(turn.id, () => ({ status: 'discarded' }))}
+                            onSaveRule={() => void saveRule(turn)}
+                            onUndoRule={id => void undoRule(turn.id, id)}
+                          />
+                        )}
+                      </AIBubble>
+                    );
+                  })}
+                  {pending && (
+                    <AIBubble>
+                      <p className="flex items-center gap-2 text-gray-500">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-roman-red" aria-hidden />
+                        <span className="flex-1">Thinking…</span>
+                        <button
+                          type="button"
+                          className="rounded-full px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                          title={STOP_WAITING_HINT}
+                          onClick={() => assistant.stop(key)}>
+                          Stop waiting
+                        </button>
+                      </p>
+                    </AIBubble>
+                  )}
+                </ol>
+                <MemoryList word={word} />
+              </div>
             )}
           </div>
-        </section>
-      </div>
-
-      <button
-        type="button"
-        aria-label={
-          questions.length > 0
-            ? `Show the AI assistant (${plural(questions.length, 'question')})`
-            : 'Show the AI assistant'
-        }
-        aria-hidden={open ? true : undefined}
-        inert={open}
-        onClick={() => {
-          assistant.setOpen(true);
-          composer.current?.focus({ preventScroll: true });
-        }}
-        className={cn(
-          'absolute bottom-4 right-4 z-20 inline-flex items-center gap-1.5 rounded-full border bg-white py-1.5 pl-2.5 pr-2 text-sm font-medium shadow-lg hover:bg-violet-50',
-          SLIDE,
-          questions.length > 0 ? 'border-amber-300 text-amber-900' : 'border-violet-200 text-violet-800',
-          open ? 'pointer-events-none translate-y-3 scale-90 opacity-0' : 'translate-y-0 scale-100 opacity-100'
-        )}>
-        <Sparkles className="h-4 w-4" aria-hidden />
-        AI
-        {questions.length > 0 && (
-          <span className="rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900">
-            {questions.length}
-          </span>
         )}
-        <ChevronUp className="h-4 w-4" aria-hidden />
-      </button>
-    </>
+        <div className="flex items-end gap-2">
+          {generate}
+          {open ? (
+            <>
+              <div className="flex min-w-0 flex-1 items-end gap-2 rounded-3xl bg-gray-100 py-1.5 pl-4 pr-1.5 transition-[background-color,box-shadow] focus-within:bg-white focus-within:shadow-[0_0_0_2px_rgba(139,38,53,0.3)]">
+                <Textarea
+                  ref={composer}
+                  id={composerId(context.anchorPrefix)}
+                  aria-label="Message to the AI"
+                  rows={Math.min(6, Math.max(1, message.split('\n').length))}
+                  value={message}
+                  maxLength={ADMIN_NOTE_MAX}
+                  disabled={disabled}
+                  placeholder={
+                    questions.length > 0 ? 'Answer the AI, or ask for another fix…' : `Ask AI about ${word}…`
+                  }
+                  onChange={event => {
+                    const next = event.target.value;
+                    setMessage(() => next);
+                  }}
+                  onKeyDown={onComposerKeyDown}
+                  className="min-h-0 resize-none border-0 bg-transparent px-0 py-1.5 shadow-none placeholder:text-gray-400 focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 rounded-full bg-roman-red text-white hover:bg-roman-red/90 disabled:bg-gray-300 disabled:opacity-100"
+                  aria-label="Send to the AI"
+                  title="Send (Enter). Shift+Enter for a new line. You see every change before it reaches the word."
+                  disabled={busy || !message.trim()}
+                  onClick={send}>
+                  {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+                </Button>
+              </div>
+              <button
+                type="button"
+                aria-label="Dismiss the AI assistant"
+                title="Close the chat (what you typed is kept)"
+                onClick={() => assistant.setOpen(false)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900">
+                <ChevronDown className="h-5 w-5" aria-hidden />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              aria-label={questions.length > 0 ? `Ask AI (${plural(questions.length, 'question')})` : 'Ask AI'}
+              onClick={reopen}
+              className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-gray-100 px-4 text-sm text-gray-500 transition-colors hover:bg-gray-200/70">
+              {pending ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-roman-red" aria-hidden />
+              ) : (
+                <MessageCircle className="h-4 w-4 shrink-0 text-roman-red" aria-hidden />
+              )}
+              <span className="shrink-0 font-medium text-gray-900">Ask AI</span>
+              {/* What was typed before closing the chat is still there. */}
+              <span className="min-w-0 flex-1 truncate text-left">
+                {message.trim() ? message.trim().split('\n')[0] : `about ${word}`}
+              </span>
+              {questions.length > 0 && (
+                <span className="shrink-0 rounded-full bg-roman-red px-2 py-0.5 text-xs font-semibold text-white">
+                  {questions.length}
+                </span>
+              )}
+              <ChevronUp className="h-4 w-4 shrink-0" aria-hidden />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1017,7 +1036,7 @@ export function AIFieldReview({ field, children }: { field: string; children?: R
   return (
     <div
       id={fieldAnchor(anchorPrefix, field)}
-      className={cn('scroll-mt-4', asked && 'relative rounded-lg ring-2 ring-amber-300 ring-offset-4')}>
+      className={cn('scroll-mt-4', asked && 'relative rounded-lg ring-2 ring-roman-red/25 ring-offset-4')}>
       {asked && (
         <button
           type="button"
@@ -1031,7 +1050,7 @@ export function AIFieldReview({ field, children }: { field: string; children?: R
             );
           }}
           aria-label={`AI question about ${aiFieldLabel(field)}`}
-          className="absolute -top-3 right-2 z-[1] inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 shadow-sm hover:bg-amber-100">
+          className="absolute -top-3 right-2 z-[1] inline-flex items-center gap-1 rounded-full bg-roman-red px-2.5 py-0.5 text-[11px] font-medium text-white shadow-sm hover:bg-roman-red/90">
           <CircleHelp className="h-3 w-3" aria-hidden />
           AI question
         </button>

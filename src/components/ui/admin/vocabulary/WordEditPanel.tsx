@@ -16,7 +16,6 @@ import { changedTableCells } from '@/src/utils/vocabulary/word-diff';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
-import { cn } from '@/src/lib/utils';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue } from '@/src/utils/vocabUtils';
@@ -661,17 +660,6 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   {actions}
-                  {allowAIAutocomplete && (
-                    <AIAutocompleteButton
-                      key={word.id}
-                      wordId={word.id}
-                      word={watchedWord || word.word}
-                      partOfSpeech={word.part_of_speech}
-                      existingData={aiSnapshot}
-                      onAutocomplete={handleAIAutocomplete}
-                      disabled={updating || isSubmitting || !!editingCell}
-                    />
-                  )}
                   {next && (
                     <Button
                       type="button"
@@ -716,13 +704,11 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
               )}
             </div>
 
-            {/* The AI assistant floats over the bottom of this area, outside the scroller. */}
             <div className="relative flex min-h-0 flex-1 flex-col">
               {/* `relative` keeps the hidden native inputs Radix renders for form controls inside this scroller;
               without it they are positioned against the page and make the whole document scrollable. */}
               <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
-                {/* Room below the last field, so it can always scroll above the assistant's input. */}
-                <div className={cn('space-y-6', aiReview && 'pb-28')}>
+                <div className="space-y-6 pb-4">
                   <BaseWordForm />
                   {renderPosForm()}
 
@@ -758,8 +744,21 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
                   )}
                 </div>
               </div>
-              <AIAssistantDock />
             </div>
+            {/* The AI bar sits under the fields; its chat opens above it and takes room from them. */}
+            <AIAssistantDock
+              generate={
+                <AIAutocompleteButton
+                  key={word.id}
+                  wordId={word.id}
+                  word={watchedWord || word.word}
+                  partOfSpeech={word.part_of_speech}
+                  existingData={aiSnapshot}
+                  onAutocomplete={handleAIAutocomplete}
+                  disabled={updating || isSubmitting || !!editingCell}
+                />
+              }
+            />
           </form>
         </AIFilledFieldsContext.Provider>
       </AIReviewContext.Provider>

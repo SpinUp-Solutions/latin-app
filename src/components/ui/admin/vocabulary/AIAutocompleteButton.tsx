@@ -106,93 +106,94 @@ ${errorDetails.details.stack ? `\nStack Trace:\n${errorDetails.details.stack}` :
     handleAutocomplete();
   };
 
+  const lastCost = cost
+    ? `Last run: $${cost.totalCost.toFixed(4)} (${cost.tokens.totalTokens.toLocaleString()} tokens)`
+    : undefined;
+
   return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleAutocomplete}
-          disabled={disabled || isLoading || !word}
-          className="gap-2">
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              AI Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              AI Autocomplete
-            </>
-          )}
-        </Button>
-        {errorDetails && !isLoading && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <XCircle className="h-4 w-4 text-red-600" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-96 max-h-80 overflow-y-auto bg-white">
-              <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <h4 className="font-medium text-sm text-red-600">Error Details</h4>
-                  <span className="text-xs text-gray-500">{new Date(errorDetails.timestamp).toLocaleTimeString()}</span>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-xs font-medium text-gray-500">Error Message:</p>
-                    <p className="text-sm text-gray-900 mt-1">{errorDetails.message}</p>
-                  </div>
-                  {errorDetails.requestData && (
-                    <div>
-                      <p className="text-xs font-medium text-gray-500">Request:</p>
-                      <p className="text-xs text-gray-700 mt-1">
-                        Word: {errorDetails.requestData.word} ({errorDetails.requestData.part_of_speech})
-                      </p>
-                    </div>
-                  )}
-                  {errorDetails.details && (
-                    <div>
-                      <p className="text-xs font-medium text-gray-500">Technical Details:</p>
-                      <div className="text-xs text-gray-700 mt-1 space-y-1">
-                        {errorDetails.details.type && <p>Type: {errorDetails.details.type}</p>}
-                        {errorDetails.details.details && (
-                          <p className="whitespace-pre-wrap break-words">{errorDetails.details.details}</p>
-                        )}
-                        {errorDetails.details.stack && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs font-medium text-gray-500">Stack Trace</summary>
-                            <pre className="text-xs mt-1 overflow-x-auto bg-gray-50 p-2 rounded">
-                              {errorDetails.details.stack}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2 pt-2 border-t">
-                  <Button type="button" variant="outline" size="sm" onClick={handleCopyError} className="flex-1 gap-2">
-                    <Copy className="h-3 w-3" />
-                    Copy Details
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={handleRetry} className="flex-1 gap-2">
-                    <RotateCcw className="h-3 w-3" />
-                    Retry
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+    <div className="flex shrink-0 items-center gap-1">
+      <Button
+        type="button"
+        onClick={handleAutocomplete}
+        disabled={disabled || isLoading || !word}
+        title={lastCost ?? 'Fill in the empty fields with AI'}
+        className="h-11 gap-2 rounded-full bg-roman-red px-4 text-white shadow-sm hover:bg-roman-red/90 disabled:opacity-60">
+        {isLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Generating…
+          </>
+        ) : (
+          <>
+            <Sparkles className="h-4 w-4" aria-hidden />
+            AI Generate
+          </>
         )}
-      </div>
-      {cost && !isLoading && (
-        <span className="text-xs text-gray-500">
-          ${cost.totalCost.toFixed(4)} ({cost.tokens.totalTokens.toLocaleString()} tokens)
-        </span>
+      </Button>
+      {errorDetails && !isLoading && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Show why AI Generate failed"
+              className="h-9 w-9 rounded-full text-roman-red hover:bg-roman-red/10">
+              <XCircle className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-96 max-h-80 overflow-y-auto bg-white">
+            <div className="space-y-3">
+              <div className="flex items-start justify-between">
+                <h4 className="font-medium text-sm text-red-600">Error Details</h4>
+                <span className="text-xs text-gray-500">{new Date(errorDetails.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs font-medium text-gray-500">Error Message:</p>
+                  <p className="text-sm text-gray-900 mt-1">{errorDetails.message}</p>
+                </div>
+                {errorDetails.requestData && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Request:</p>
+                    <p className="text-xs text-gray-700 mt-1">
+                      Word: {errorDetails.requestData.word} ({errorDetails.requestData.part_of_speech})
+                    </p>
+                  </div>
+                )}
+                {errorDetails.details && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Technical Details:</p>
+                    <div className="text-xs text-gray-700 mt-1 space-y-1">
+                      {errorDetails.details.type && <p>Type: {errorDetails.details.type}</p>}
+                      {errorDetails.details.details && (
+                        <p className="whitespace-pre-wrap break-words">{errorDetails.details.details}</p>
+                      )}
+                      {errorDetails.details.stack && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs font-medium text-gray-500">Stack Trace</summary>
+                          <pre className="text-xs mt-1 overflow-x-auto bg-gray-50 p-2 rounded">
+                            {errorDetails.details.stack}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2 pt-2 border-t">
+                <Button type="button" variant="outline" size="sm" onClick={handleCopyError} className="flex-1 gap-2">
+                  <Copy className="h-3 w-3" />
+                  Copy Details
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={handleRetry} className="flex-1 gap-2">
+                  <RotateCcw className="h-3 w-3" />
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       )}
     </div>
   );

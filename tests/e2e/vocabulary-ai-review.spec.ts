@@ -245,12 +245,12 @@ test.describe('Vocabulary AI assistant', () => {
     const assistant = page.getByRole('region', { name: 'AI assistant' });
     const composer = assistant.getByLabel('Message to the AI');
     // Dismissed to its tab, the assistant comes back by itself when autocomplete finishes.
-    const tab = page.getByRole('button', { name: /^Show the AI assistant/ });
+    const tab = page.getByRole('button', { name: /^Ask AI/ });
     await assistant.getByRole('button', { name: 'Dismiss the AI assistant' }).click();
     await expect(tab).toBeVisible();
     await expect(page.getByRole('region', { name: 'AI assistant' })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('0-dismissed.png'), animations: 'disabled' });
-    await page.getByRole('button', { name: 'AI Autocomplete' }).click();
+    await page.getByRole('button', { name: 'AI Generate' }).click();
     await expect(assistant).toContainText('All good! No questions from me about rosa. I filled Pronunciation.');
     await expect(composer).toBeVisible();
     await expect(tab).toHaveCount(0);
