@@ -156,48 +156,24 @@ const findNullPaths = (value: unknown, path = ''): string[] => {
   return [];
 };
 
-/** Empty as the server's merge counts it: nothing, '', or an object (a word form) with only empty values. */
-const isEmptyItem = (value: unknown): boolean =>
-  value === null ||
-  value === undefined ||
-  value === '' ||
-  (typeof value === 'object' && !Array.isArray(value) && Object.values(value).every(isEmptyItem));
-
-const isWordFormItem = (value: unknown) =>
-  !!value && typeof value === 'object' && ('full_form' in value || 'shortened_form' in value);
-
-const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown => {
-  if (aiGenerated === null || aiGenerated === undefined) {
-    return existing;
-  }
-
-  if (existing === null || existing === undefined) {
-    return aiGenerated;
-  }
-
-  if (Array.isArray(aiGenerated)) {
-    // The server's rules for a list (`mergeValue`), so the browser keeps what the server completed: an
-    // empty list, or one of empty items such as a blank principal-part row, takes the answer whole; a list
-    // of word forms of the same length is completed form by form (a missing shortened form); any other
-    // list with content stays as it is.
-    if (!Array.isArray(existing) || existing.length === 0 || existing.every(isEmptyItem)) return aiGenerated;
-    if (existing.length === aiGenerated.length && existing.every(isWordFormItem)) {
-      return existing.map((item, index) => deepMergeNullValues(item, aiGenerated[index]));
+/**
+ * What of autocomplete's table still applies once the run is over. The server has already merged its answer
+ * into the table it was sent (`mergeValue`: which cells may be filled, which nulls mean "no such form").
+ * The browser only reconciles: a cell still as it was sent takes the server's value; a cell the admin
+ * changed meanwhile keeps the admin's value, a deliberate clear included.
+ */
+export function reconcileTable(submitted: unknown, current: unknown, returned: unknown): unknown {
+  const isBranch = (value: unknown): value is TableData =>
+    !!value && typeof value === 'object' && !Array.isArray(value);
+  if (isBranch(returned) && isBranch(current)) {
+    const reconciled: TableData = { ...current };
+    for (const [key, value] of Object.entries(returned)) {
+      reconciled[key] = reconcileTable(isBranch(submitted) ? submitted[key] : undefined, current[key], value);
     }
-    return existing;
+    return reconciled;
   }
-
-  if (typeof aiGenerated === 'object' && typeof existing === 'object') {
-    const existingRecord = existing as TableData;
-    const merged = { ...existingRecord };
-    for (const [key, value] of Object.entries(aiGenerated as TableData)) {
-      merged[key] = deepMergeNullValues(existingRecord[key], value);
-    }
-    return merged;
-  }
-
-  return existing === '' ? aiGenerated : existing;
-};
+  return snapshotValue(current) === snapshotValue(submitted) ? returned : current;
+}
 
 const WordEditor: React.FC<WordEditPanelProps> = ({
   word,
@@ -335,7 +311,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       snapshotValue(askedData[editableTable.field]) !== snapshotValue(table)
     ) {
       const answered = (field: 'person' | 'pronoun_type') =>
-        edited.has(field) ? current[field] : deepMergeNullValues(current[field], (aiData as TableData)[field]);
+        edited.has(field) ? current[field] : ((aiData as TableData)[field] ?? current[field]);
       if (
         pronounShape({ pronoun_type: answered('pronoun_type'), person: answered('person') }) !== pronounShape(current)
       ) {
@@ -359,9 +335,11 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         edited.has(key)
       )
         return;
-      const merged = deepMergeNullValues(current[key], value);
-      if (JSON.stringify(merged) !== JSON.stringify(current[key])) {
-        form.setValue(key as keyof VocabularyFormValues, merged as never, { shouldValidate: false, shouldDirty: true });
+      // The server merged its answer into the draft it was sent, and this field is unchanged since, so the
+      // server's value is the answer: it keeps what was there and completes what was missing.
+      if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) return;
+      if (snapshotValue(value) !== snapshotValue(current[key])) {
+        form.setValue(key as keyof VocabularyFormValues, value as never, { shouldValidate: false, shouldDirty: true });
         const field = AICompletableFieldSchema.safeParse(key);
         if (field.success) filled.push(field.data);
       }
@@ -396,28 +374,17 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       setPrevPronounSchema(newShape);
       aiTable = undefined;
     }
-    if (editableTable && aiTable) {
-      // A cell the admin emptied while the AI ran stays empty: the AI's value there is the one they removed.
-      const emptyWhenAsked = new Set(findNullPaths(askedData[editableTable.field]));
-      const emptied = findNullPaths(table).filter(path => !emptyWhenAsked.has(path));
-      if (emptied.length > 0) {
-        const withoutEmptied = cloneTableData(aiTable);
-        for (const path of emptied) setNestedValue(withoutEmptied, path, null);
-        aiTable = withoutEmptied;
-      }
-    }
-    if (editableTable && aiTable) {
+    const reconciledTable =
+      editableTable && aiTable ? cloneTableData(reconcileTable(askedData[editableTable.field], table, aiTable)) : null;
+    if (editableTable && reconciledTable) {
       const missingBefore = findNullPaths(table);
-      const missingAfter = new Set(findNullPaths(deepMergeNullValues(table, aiTable)));
+      const missingAfter = new Set(findNullPaths(reconciledTable));
       for (const path of missingBefore) {
         fieldStatus.set(`${editableTable.field}.${path}`, missingAfter.has(path) ? 'missing' : 'filled');
       }
       const tableField = AICompletableFieldSchema.safeParse(editableTable.field);
       if (tableField.success && missingBefore.some(path => !missingAfter.has(path))) filled.push(tableField.data);
-      setTable(previous => {
-        const mergedTable = deepMergeNullValues(previous, aiTable);
-        return cloneTableData(mergedTable);
-      });
+      setTable(reconciledTable);
     }
 
     setAiFieldStatus(fieldStatus);
@@ -428,9 +395,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     const basis = Object.fromEntries(
       uncertainties.map(item => [
         item.field,
-        editableTable && aiTable && item.field === editableTable.field
-          ? deepMergeNullValues(table, aiTable)
-          : after[item.field],
+        editableTable && reconciledTable && item.field === editableTable.field ? reconciledTable : after[item.field],
       ])
     );
     const report = autocompleteMessage({ filled, questions: uncertainties.length, kept }, watchedWord || word.word);

@@ -703,7 +703,8 @@ it('comes back up when autocomplete finishes, says all good when the AI is sure,
 it('says all good when there was nothing left to fill', async () => {
   const word = cloneNoun();
   delete word.ai_review;
-  mockCallable.mockResolvedValueOnce(answer({ translation: 'a different rose' }));
+  // The server keeps a filled value (`mergeValue`), so it sends the translation back as it was.
+  mockCallable.mockResolvedValueOnce(answer({ translation: 'rose' }));
   render(<WordEditPanel word={word} onSave={async () => true} updating={false} />);
   fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
   expect(
@@ -965,7 +966,8 @@ it('adds new questions from autocomplete without replacing open ones, filling on
   };
   mockCallable.mockResolvedValue(
     answer(
-      { translation: 'replacement', pronunciation: 'new sound' },
+      // The server fills only what was empty: the translation comes back as it was.
+      { translation: 'rose', pronunciation: 'new sound' },
       {
         uncertainties: [
           { field: 'etymology', question: 'A rewritten question?', explanation: 'Must not replace the open one.' },
@@ -1164,6 +1166,30 @@ describe('when the admin keeps working while autocomplete runs', () => {
     const payload = await saveWord(onSave);
     expect(payload.declension_table.accusative).toEqual(row(null, ['rosās']));
     expect(payload.declension_table.locative).toEqual(row(['rosae'], null));
+  });
+
+  it('keeps a table cell the admin changed meanwhile, and takes the server for the cells left as sent', async () => {
+    const finish = pending();
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    fireEvent.doubleClick(screen.getByText('rosam'));
+    const input = screen.getByPlaceholderText('Enter value...');
+    fireEvent.change(input, { target: { value: 'typed meanwhile' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await finish(
+      answer({
+        declension_table: {
+          ...(noun as { declension_table: object }).declension_table,
+          locative: row(['rosae'], ['rosīs']),
+        },
+      })
+    );
+
+    const payload = await saveWord(onSave);
+    expect(payload.declension_table.accusative).toEqual(row(['typed meanwhile'], ['rosās']));
+    expect(payload.declension_table.locative).toEqual(row(['rosae'], ['rosīs']));
+    expect(payload.declension_table.nominative).toEqual(row(['rosa'], ['rosae']));
   });
 });
 
