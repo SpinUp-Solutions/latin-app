@@ -64,7 +64,8 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
       : {}),
     word: word.word,
     translation: word.translation,
-    definitions: [...word.definitions],
+    // Older and minimal documents can lack definitions; the editor starts them with none rather than crashing.
+    definitions: Array.isArray(word.definitions) ? [...word.definitions] : [],
     etymology: word.etymology ?? '',
     pronunciation: word.pronunciation ?? '',
     type: word.type,
