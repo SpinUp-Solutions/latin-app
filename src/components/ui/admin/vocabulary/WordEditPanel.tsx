@@ -322,7 +322,13 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
         });
       }
     }
-    const uncertainties = allUncertainties.filter(item => !edited.has(item.field));
+    // The admin changed the pronoun's type or person while the AI ran, so the table is no longer the shape
+    // the AI was given: its table, and its questions about that table, are left out.
+    const shapeChangedMeanwhile =
+      word?.part_of_speech === 'pronoun' && pronounShape(askedData) !== pronounShape(current);
+    const uncertainties = allUncertainties.filter(
+      item => !edited.has(item.field) && !(shapeChangedMeanwhile && item.field === editableTable?.field)
+    );
     const filled: AICompletableField[] = [];
     Object.entries(aiData).forEach(([key, value]) => {
       if (
@@ -351,10 +357,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       }
     }
 
-    // A table of another shape is left out: with its person (above), or because the admin changed the
-    // pronoun's type or person while the AI ran, so the table is no longer the shape the AI was given.
-    const shapeChangedMeanwhile =
-      word?.part_of_speech === 'pronoun' && pronounShape(askedData) !== pronounShape(current);
+    // A table of another shape is left out: with its person, or because the shape changed meanwhile (above).
     let aiTable =
       !shapeLeftOut && !shapeChangedMeanwhile && editableTable && (aiData as TableData)[editableTable.field];
     // A pronoun whose type or person this answer filled in may now use a table of another shape (first and

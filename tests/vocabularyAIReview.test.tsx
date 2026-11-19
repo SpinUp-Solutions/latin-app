@@ -1220,10 +1220,17 @@ describe('when the admin keeps working while autocomplete runs', () => {
     const person = screen.getAllByRole('combobox').find(box => box.textContent?.includes('1st'))!;
     fireEvent.click(person);
     fireEvent.click(await screen.findByRole('option', { name: /3rd/ }));
-    await finish(answer({ declension_table: firstPerson }));
+    await finish(
+      answer(
+        { declension_table: firstPerson },
+        { uncertainties: [{ field: 'declension_table', question: 'Is nōs right?', explanation: 'Check it.' }] }
+      )
+    );
 
     const saved = await saveWord(onSave);
     expect(saved.person).toBe('3rd');
+    // Its question was about the first-person table, which is gone.
+    expect(saved.ai_review.uncertainties).toEqual([]);
     expect(Object.keys(saved.declension_table.nominative).sort()).toEqual(['feminine', 'masculine', 'neuter']);
   });
 });
