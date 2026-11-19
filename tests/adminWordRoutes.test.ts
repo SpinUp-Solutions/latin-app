@@ -150,6 +150,56 @@ beforeEach(() => {
   mockDb = new FakeFirestore();
 });
 
+describe('word AI review persistence', () => {
+  const review = {
+    uncertainties: [{ field: 'translation', explanation: 'Check the contextual sense.' }],
+    guidance: [{ id: 'sense', instruction: 'Prefer the conjunction sense.' }],
+  };
+  const save = async (updates: Data) =>
+    (await updateWord(
+      request('http://localhost/api/admin/words', { wordId: 'word-1', updates })
+    )) as unknown as RouteResponse<{ updatedData: Data }>;
+
+  it('saves parsed review metadata, returns it, and preserves it on a legacy partial edit', async () => {
+    mockDb.seed(WORDS, 'word-1', { ...word, legacy_note: 'kept' });
+    const response = await save({
+      ai_review: {
+        ...review,
+        guidance: [{ id: 'sense', instruction: '  Prefer the conjunction sense.  ' }],
+      },
+      review_answer: 'A generation-only answer',
+      uncertainties: review.uncertainties,
+      data: { translation: 'must not be written' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.updatedData).toMatchObject({ ai_review: review, legacy_note: 'kept', translation: 'and' });
+    expect(response.body.updatedData).not.toHaveProperty('review_answer');
+    expect(mockDb.docs.get(WORDS)!.get('word-1')).not.toHaveProperty('uncertainties');
+    expect(mockDb.docs.get(WORDS)!.get('word-1')).not.toHaveProperty('data');
+
+    expect((await save({ translation: 'and also' })).body.updatedData.ai_review).toEqual(review);
+    expect(mockDb.docs.get(WORDS)!.get('word-1')).toMatchObject({ ai_review: review, legacy_note: 'kept' });
+  });
+
+  it('clears review metadata only through an explicit empty review', async () => {
+    mockDb.seed(WORDS, 'word-1', { ...word, ai_review: review });
+    const empty = { uncertainties: [], guidance: [] };
+    expect((await save({ ai_review: empty })).status).toBe(200);
+    expect(mockDb.docs.get(WORDS)!.get('word-1')!.ai_review).toEqual(empty);
+  });
+
+  it.each([null, 'invalid', { uncertainties: [], guidance: [], review_answer: 'not persisted metadata' }])(
+    'rejects invalid review metadata without writing: %p',
+    async ai_review => {
+      mockDb.seed(WORDS, 'word-1', { ...word, ai_review: review });
+      expect((await save({ ai_review })).status).toBe(400);
+      expect(mockDb.docs.get(WORDS)!.get('word-1')).toEqual({ ...word, ai_review: review });
+      expect(mockDb.writesPerTransaction).toEqual([0]);
+    }
+  );
+});
+
 it('rejects a word deletion during production content sync before issuing a challenge or writing', async () => {
   seedWordInPools('word-1', 1);
   mockDb.seed('content_sync_locks', 'prod-content-to-dev', { ownerId: 'sync-1' });

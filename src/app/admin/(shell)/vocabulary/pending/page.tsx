@@ -12,7 +12,10 @@ import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
-import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { WordEditPanel, type SaveAndNext } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { AIAssistantProvider } from '@/src/components/ui/admin/vocabulary/aiAssistantStore';
+import { VocabularyAIRulesDialog } from '@/src/components/ui/admin/vocabulary/VocabularyAIRulesDialog';
+import { useLearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
 import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
@@ -43,6 +46,7 @@ const statusIcon = {
 
 /** AI-generated drafts of words that do not exist yet. */
 function NewWordRequestsReview() {
+  const learnedRules = useLearnedAIRules();
   const [status, setStatus] = useState<VocabularyWordRequestStatus>('pending');
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
@@ -55,6 +59,9 @@ function NewWordRequestsReview() {
   const [updateRequest, { isLoading: updating }] = useUpdateVocabularyWordRequestMutation();
   const [approveRequest, { isLoading: approving }] = useApproveVocabularyWordRequestMutation();
   const [dismissRequest, { isLoading: dismissing }] = useDismissVocabularyWordRequestMutation();
+  // Approve creates the word from the saved draft, so unsaved edits (an accepted AI answer included) would
+  // be left out of it. It waits until they are saved.
+  const [draftDirty, setDraftDirty] = useState(false);
   const requestErrorMessage = requestError
     ? getApiErrorMessage(requestError, 'Could not load vocabulary requests')
     : null;
@@ -63,6 +70,16 @@ function NewWordRequestsReview() {
   const editorWord: VocabularyWordWithId | null = selectedRequest
     ? ({ id: selectedRequest.id, ...selectedRequest.draftWord } as VocabularyWordWithId)
     : null;
+
+  // "Save and next" saves this draft and opens the next request in the list.
+  const selectedIndex = selectedRequest ? requests.findIndex(request => request.id === selectedRequest.id) : -1;
+  const nextRequest = selectedIndex >= 0 ? requests[selectedIndex + 1] : undefined;
+  const next: SaveAndNext | undefined =
+    selectedIndex < 0
+      ? undefined
+      : nextRequest
+        ? { word: nextRequest.draftWord.word, open: () => setSelectedRequestId(nextRequest.id) }
+        : { unavailable: 'This is the last request in the list.' };
 
   const handleSaveDraft = async (updates: Partial<VocabularyWord>) => {
     if (!selectedRequest) return false;
@@ -82,7 +99,7 @@ function NewWordRequestsReview() {
   };
 
   const handleApprove = async () => {
-    if (!selectedRequest) return;
+    if (!selectedRequest || draftDirty) return;
 
     try {
       const result = await approveRequest(selectedRequest.id).unwrap();
@@ -173,12 +190,18 @@ function NewWordRequestsReview() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <VocabularyAIRulesDialog />
             {selectedRequest.status === 'pending' && (
               <>
                 <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>
                   {dismissing ? 'Dismissing...' : 'Dismiss'}
                 </Button>
-                <Button onClick={handleApprove} disabled={approving || dismissing || updating}>
+                <Button
+                  onClick={handleApprove}
+                  disabled={approving || dismissing || updating || draftDirty}
+                  title={
+                    draftDirty ? 'Save the draft first: Approve creates the word from the saved draft.' : undefined
+                  }>
                   {approving ? 'Approving...' : 'Approve'}
                 </Button>
               </>
@@ -187,7 +210,14 @@ function NewWordRequestsReview() {
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-hidden">
-        <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} />
+        <WordEditPanel
+          word={editorWord}
+          onSave={handleSaveDraft}
+          updating={updating}
+          learnedRules={learnedRules}
+          next={next}
+          onDirtyChange={setDraftDirty}
+        />
       </div>
     </VocabularyReviewLayout>
   );
@@ -233,7 +263,9 @@ function PendingVocabularyPage() {
       </header>
 
       {tab === 'new' ? (
-        <NewWordRequestsReview />
+        <AIAssistantProvider>
+          <NewWordRequestsReview />
+        </AIAssistantProvider>
       ) : (
         <WordUpdateReview requestNavigation={navigationGuard.requestNavigation} onDirtyChange={setProposalDirty} />
       )}

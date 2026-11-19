@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VocabularyAIOutputReviewShape } from '../ai-review';
 import { VerbSchema } from '../schemas';
 
 const VerbStructuredOutputBaseSchema = VerbSchema.pick({
@@ -13,6 +14,6 @@ const VerbStructuredOutputBaseSchema = VerbSchema.pick({
   is_deponent: true,
 });
 
-export const VerbStructuredOutputSchema = VerbStructuredOutputBaseSchema.strict();
+export const VerbStructuredOutputSchema = VerbStructuredOutputBaseSchema.extend(VocabularyAIOutputReviewShape).strict();
 
 export type VerbStructuredOutput = z.infer<typeof VerbStructuredOutputSchema>;

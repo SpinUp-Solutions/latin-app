@@ -1,5 +1,6 @@
 /** @jest-environment node */
 import { autocompleteVocabularyWord, runVocabularyAutocomplete } from '@/shared/openai/autocomplete';
+import { nounOutput, verbOutput } from './helpers/vocabularyAutocompleteFixtures';
 import { openai } from '@/shared/openai/client';
 
 jest.mock('@/shared/openai/client', () => {
@@ -26,7 +27,7 @@ describe('vocabulary autocomplete profiles', () => {
   beforeEach(() => create.mockReset());
 
   it('runs the admin editor on GPT-6.1 Terra at medium effort', async () => {
-    create.mockResolvedValue(completed('gpt-6.1-terra', JSON.stringify({ translation: 'king' })) as never);
+    create.mockResolvedValue(completed('gpt-6.1-terra', JSON.stringify(nounOutput())) as never);
 
     const result = await autocompleteVocabularyWord({ word: 'rēx', part_of_speech: 'noun' });
 
@@ -41,7 +42,7 @@ describe('vocabulary autocomplete profiles', () => {
   });
 
   it('still runs the baseline on GPT-5.4 Mini at low effort for evaluations', async () => {
-    create.mockResolvedValue(completed('gpt-5.4-mini', JSON.stringify({ translation: 'king' })) as never);
+    create.mockResolvedValue(completed('gpt-5.4-mini', JSON.stringify(nounOutput())) as never);
 
     const result = await runVocabularyAutocomplete({ word: 'rēx', part_of_speech: 'noun' }, 'baseline');
 
@@ -55,7 +56,7 @@ describe('vocabulary autocomplete profiles', () => {
   });
 
   it('runs the candidate on GPT-6.1 Terra at medium effort and prices it', async () => {
-    create.mockResolvedValue(completed('gpt-6.1-terra', JSON.stringify({ translation: 'to carry' })) as never);
+    create.mockResolvedValue(completed('gpt-6.1-terra', JSON.stringify(verbOutput())) as never);
 
     const result = await runVocabularyAutocomplete({ word: 'ferō', part_of_speech: 'verb' }, 'candidate', {
       timeout: 1_000,

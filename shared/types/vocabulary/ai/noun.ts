@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VocabularyAIOutputReviewShape } from '../ai-review';
 import { NounSchema } from '../schemas/noun';
 
 const NounStructuredOutputBaseSchema = NounSchema.pick({
@@ -15,6 +16,7 @@ const NounStructuredOutputBaseSchema = NounSchema.pick({
 });
 
 export const NounStructuredOutputSchema = NounStructuredOutputBaseSchema.extend({
+  ...VocabularyAIOutputReviewShape,
   etymology: NounSchema.shape.etymology.nullable(),
   pronunciation: NounSchema.shape.pronunciation.nullable(),
   alternate_form: NounSchema.shape.alternate_form.nullable(),

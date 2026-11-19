@@ -2,9 +2,10 @@ import { fireEvent, render, screen, waitFor, act } from '@testing-library/react'
 import React from 'react';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 
-let mockAutocomplete: ((data: unknown, status?: unknown, id?: string) => void) | null = null;
+type OnAutocomplete = (data: unknown, status: unknown, id: string, uncertainties: unknown[], asked: unknown) => void;
+let mockAutocomplete: OnAutocomplete | null = null;
 jest.mock('@/src/components/ui/admin/vocabulary/AIAutocompleteButton', () => ({
-  AIAutocompleteButton: (props: { onAutocomplete: (data: unknown, status?: unknown, id?: string) => void }) => {
+  AIAutocompleteButton: (props: { onAutocomplete: OnAutocomplete }) => {
     mockAutocomplete = props.onAutocomplete;
     return null;
   },
@@ -52,10 +53,17 @@ it('saves manual cell edits and AI-filled table cells with the word', async () =
   expect(screen.getByText('rosam, rosamm')).toBeTruthy();
 
   act(() => {
+    // The draft the AI was given: the cell edit came before the run.
+    const asked = {
+      ...noun,
+      declension_table: { ...noun.declension_table, accusative: row(['rosam', 'rosamm'], ['rosās']) },
+    };
     mockAutocomplete!(
       { declension_table: { locative: { singular: ['rosae'], plural: ['rosīs'] } } },
       { translation: 'filled' },
-      'w1'
+      'w1',
+      [],
+      asked
     );
   });
   fireEvent.click(screen.getByText('Apply'));

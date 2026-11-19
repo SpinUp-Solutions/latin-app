@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VocabularyAIOutputReviewShape } from '../ai-review';
 import { BasePronounSchema } from '../schemas/pronoun';
 
 const PronounStructuredOutputBaseSchema = BasePronounSchema.pick({
@@ -13,6 +14,7 @@ const PronounStructuredOutputBaseSchema = BasePronounSchema.pick({
 });
 
 export const PronounStructuredOutputSchema = PronounStructuredOutputBaseSchema.extend({
+  ...VocabularyAIOutputReviewShape,
   etymology: BasePronounSchema.shape.etymology.nullable(),
   pronunciation: BasePronounSchema.shape.pronunciation.nullable(),
   alternate_form: BasePronounSchema.shape.alternate_form.nullable(),

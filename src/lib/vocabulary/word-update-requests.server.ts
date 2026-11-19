@@ -64,6 +64,14 @@ const withoutUndefined = (value: Plain): Plain =>
 const authoredWord = (data: Plain): Plain =>
   Object.fromEntries(Object.entries(toJson(data) as Plain).filter(([key]) => !key.startsWith('_')));
 
+// Older proposal clients do not know this admin metadata. Omission preserves it;
+// an explicit review with empty arrays clears it. Other optional fields retain
+// the existing replacement semantics.
+const preserveAiReview = (proposed: Plain, previous: Plain): Plain =>
+  proposed.ai_review === undefined && previous.ai_review !== undefined
+    ? { ...proposed, ai_review: previous.ai_review }
+    : proposed;
+
 /** The fields the word schema knows for a part of speech; anything else on a live word is kept as it is. */
 const schemaFields = (partOfSpeech: unknown): Set<string> => {
   const schema = VocabularyWordSchema.options.find(option => option.shape.part_of_speech.value === partOfSpeech);
@@ -99,7 +107,7 @@ function validateProposal(proposed: Plain, live: Plain): { proposedWord: Vocabul
   }
   const now = new Date().toISOString();
   const result = VocabularyWordSchema.safeParse({
-    ...proposed,
+    ...preserveAiReview(proposed, live),
     sort_key: typeof proposed.word === 'string' ? stripMacrons(proposed.word) : proposed.word,
     random_index: typeof live.random_index === 'number' ? live.random_index : Math.random(),
     createdAt: typeof live.createdAt === 'string' ? live.createdAt : now,
@@ -304,11 +312,16 @@ export async function getWordUpdateRequestDetail(
   const request = serializeRequest(requestSnapshot);
   const wordSnapshot = await words(db).doc(request.wordId).get();
   if (!wordSnapshot.exists) return { request, liveWord: null, liveFingerprint: null };
+  const liveAuthored = authoredWord(wordSnapshot.data() as Plain);
+  // Show the same retained metadata that approval will write for legacy proposals.
+  if (request.status === 'pending') {
+    request.proposedWord = preserveAiReview(request.proposedWord, liveAuthored) as VocabularyWord;
+  }
   return {
     request,
     liveWord: {
       id: wordSnapshot.id,
-      ...authoredWord(wordSnapshot.data() as Plain),
+      ...liveAuthored,
     } as VocabularyWordUpdateRequestDetail['liveWord'],
     liveFingerprint: firestoreVersionFingerprint(wordSnapshot.updateTime),
   };
@@ -329,7 +342,10 @@ export async function saveWordUpdateProposal(db: Firestore, actorUid: string, id
     if (stored.version !== parsed.version) throw requestChanged();
     const live = readLiveWord(await transaction.get(words(db).doc(stored.wordId)));
 
-    const { proposedWord, changes } = validateProposal(parsed.proposedWord, live.authored);
+    const { proposedWord, changes } = validateProposal(
+      preserveAiReview(parsed.proposedWord, stored.proposedWord),
+      live.authored
+    );
     const updates = {
       proposedWord,
       summary: summaryOf(proposedWord, changes),
