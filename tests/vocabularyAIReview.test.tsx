@@ -1168,28 +1168,63 @@ describe('when the admin keeps working while autocomplete runs', () => {
     expect(payload.declension_table.locative).toEqual(row(['rosae'], null));
   });
 
-  it('keeps a table cell the admin changed meanwhile, and takes the server for the cells left as sent', async () => {
+  it('keeps a table cell the admin typed meanwhile, and fills the cells left as sent', async () => {
+    const empty = {
+      nominative: row(null, null),
+      genitive: row(null, null),
+      dative: row(null, null),
+      accusative: row(null, null),
+      ablative: row(null, null),
+      vocative: row(null, null),
+      locative: row(null, null),
+    };
     const finish = pending();
     const onSave = jest.fn(async () => true);
-    render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
+    render(
+      <WordEditPanel word={{ ...cloneNoun(), declension_table: empty } as never} onSave={onSave} updating={false} />
+    );
     fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
-    fireEvent.doubleClick(screen.getByText('rosam'));
+    // An empty cell shows a dash; the accusative singular is the fourth row's first.
+    fireEvent.doubleClick(screen.getAllByText('—')[6]);
     const input = screen.getByPlaceholderText('Enter value...');
     fireEvent.change(input, { target: { value: 'typed meanwhile' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    await finish(
-      answer({
-        declension_table: {
-          ...(noun as { declension_table: object }).declension_table,
-          locative: row(['rosae'], ['rosīs']),
-        },
-      })
-    );
+    // An empty table is filled whole by the server: what it sends back for every cell.
+    await finish(answer({ declension_table: { ...(noun as { declension_table: object }).declension_table } }));
 
     const payload = await saveWord(onSave);
     expect(payload.declension_table.accusative).toEqual(row(['typed meanwhile'], ['rosās']));
-    expect(payload.declension_table.locative).toEqual(row(['rosae'], ['rosīs']));
     expect(payload.declension_table.nominative).toEqual(row(['rosa'], ['rosae']));
+    expect(payload.declension_table.locative).toEqual(row(null, null));
+  });
+
+  it('leaves out a table of another shape when the admin changed the person meanwhile', async () => {
+    const ego = {
+      ...cloneNoun(),
+      id: 'ego',
+      word: 'ego',
+      part_of_speech: 'pronoun',
+      pronoun_type: 'personal',
+      person: '1st',
+      declension_table: buildEmptyFromSchema(getPronounTableSchema('personal', '1st')),
+      ai_review: { uncertainties: [], guidance: [] },
+    } as unknown as VocabularyWordWithId;
+    const firstPerson = buildEmptyFromSchema(getPronounTableSchema('personal', '1st')) as Record<string, unknown>;
+    firstPerson.nominative = { singular: ['ego'], plural: ['nōs'] };
+    const finish = pending();
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={ego} onSave={onSave} updating={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'AI Autocomplete' }));
+    // The select scrolls its options into view, which jsdom does not implement.
+    Element.prototype.scrollIntoView = jest.fn();
+    const person = screen.getAllByRole('combobox').find(box => box.textContent?.includes('1st'))!;
+    fireEvent.click(person);
+    fireEvent.click(await screen.findByRole('option', { name: /3rd/ }));
+    await finish(answer({ declension_table: firstPerson }));
+
+    const saved = await saveWord(onSave);
+    expect(saved.person).toBe('3rd');
+    expect(Object.keys(saved.declension_table.nominative).sort()).toEqual(['feminine', 'masculine', 'neuter']);
   });
 });
 

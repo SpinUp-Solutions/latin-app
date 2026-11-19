@@ -263,13 +263,13 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     aiData: Partial<VocabularyWord>,
     apiFieldStatus: Record<string, 'filled' | 'missing'> | undefined,
     requestWordId: string,
-    allUncertainties: VocabularyAIUncertainty[] = [],
-    asked?: Partial<VocabularyWord>
+    allUncertainties: VocabularyAIUncertainty[],
+    asked: Partial<VocabularyWord>
   ) => {
     // Ignore a response that arrives after the admin switched to another word.
     if (requestWordId !== word?.id) return;
     // Or after renaming this one: an answer about rosa must not fill in via.
-    if (asked && headwordOf(asked) !== headwordOf(form.getValues() as Partial<VocabularyWord>)) {
+    if (headwordOf(asked) !== headwordOf(form.getValues() as Partial<VocabularyWord>)) {
       toast.info('Autocomplete answer not applied', {
         description: `It was about ${headwordOf(asked) || 'the word as it was'}, and you renamed the word since. Run it again.`,
       });
@@ -279,10 +279,8 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
     const fieldStatus = new Map<string, 'filled' | 'missing'>(Object.entries(apiFieldStatus || {}));
 
     const current = form.getValues() as unknown as TableData;
-    // Without the draft it was given, the answer is taken as being about the draft as it is now.
-    const askedData = asked
-      ? (asked as unknown as TableData)
-      : { ...current, ...(editableTable ? { [editableTable.field]: table } : {}) };
+    // The draft the AI was given: what is unchanged since takes the server's answer.
+    const askedData = asked as unknown as TableData;
     // The admin kept working while the AI ran. A field they changed meanwhile keeps their value, and the
     // AI's answer and question about it are left out: they were about a value that is no longer there.
     const edited = new Set<string>(
@@ -353,8 +351,12 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
       }
     }
 
-    // A table of the other shape, left out with its person (above).
-    let aiTable = !shapeLeftOut && editableTable && (aiData as TableData)[editableTable.field];
+    // A table of another shape is left out: with its person (above), or because the admin changed the
+    // pronoun's type or person while the AI ran, so the table is no longer the shape the AI was given.
+    const shapeChangedMeanwhile =
+      word?.part_of_speech === 'pronoun' && pronounShape(askedData) !== pronounShape(current);
+    let aiTable =
+      !shapeLeftOut && !shapeChangedMeanwhile && editableTable && (aiData as TableData)[editableTable.field];
     // A pronoun whose type or person this answer filled in may now use a table of another shape (first and
     // second person have no genders). The AI's table is then taken whole: merged into the old shape it
     // would fit neither, and the shape change would replace it with an empty table right after. The old
