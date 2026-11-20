@@ -6,8 +6,13 @@ import { AI_REVIEW_ITEM_LIMIT } from '@/shared/types/vocabulary/ai-review';
 const mockSave = jest.fn();
 const mockRefetch = jest.fn();
 let mockSettings: VocabularyAIGuidanceSettings;
+let mockLoading = false;
 jest.mock('@/src/store/api/vocabularyAIGuidanceApi', () => ({
-  useGetVocabularyAIGuidanceQuery: () => ({ data: mockSettings, refetch: mockRefetch, isLoading: false }),
+  useGetVocabularyAIGuidanceQuery: () => ({
+    data: mockLoading ? undefined : mockSettings,
+    refetch: mockRefetch,
+    isLoading: mockLoading,
+  }),
   useSaveVocabularyAIGuidanceMutation: () => [mockSave, { isLoading: false }],
 }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn() } }));
@@ -17,6 +22,7 @@ const save = () => fireEvent.click(screen.getByRole('button', { name: 'Save rule
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockLoading = false;
   let uuid = 0;
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => `added-${++uuid}` });
   mockSettings = {
@@ -97,6 +103,15 @@ it('shows where the AI learned each rule and keeps that source when the rule is 
       rules: [{ id: 'learned', instruction: 'Give locatives only for towns.', learnedFrom }],
     })
   );
+});
+
+it('shows the shape of the rules while they load, with nothing to edit or save yet', () => {
+  mockLoading = true;
+  render(<VocabularyAIRulesDialog />);
+  open();
+  expect(screen.getByRole('status', { name: 'Loading rules' })).toBeInTheDocument();
+  expect(screen.queryByLabelText('Rule 1')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Save rules' })).toBeNull();
 });
 
 it('explains where rules come from when there are none', () => {

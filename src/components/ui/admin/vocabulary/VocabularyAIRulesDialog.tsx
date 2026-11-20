@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/src/components/ui/dialog';
 import { Textarea } from '@/src/components/ui/textarea';
+import { Skeleton } from '@/src/components/ui/skeleton';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import {
   useGetVocabularyAIGuidanceQuery,
@@ -22,6 +23,32 @@ import {
 } from '@/src/store/api/vocabularyAIGuidanceApi';
 
 const shorten = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+
+/** The editor's shape while the rules load: a few rules, then the box for adding one. */
+function RulesSkeleton() {
+  return (
+    <div role="status" aria-label="Loading rules" className="space-y-4">
+      <ol className="space-y-3" aria-hidden>
+        {['w-1/2', 'w-2/5', 'w-1/3'].map(caption => (
+          <li key={caption} className="space-y-1">
+            <div className="flex items-start gap-2">
+              <Skeleton className="h-[60px] flex-1" />
+              <Skeleton className="h-9 w-9 shrink-0" />
+            </div>
+            <Skeleton className={`h-3 ${caption}`} />
+          </li>
+        ))}
+      </ol>
+      <div className="space-y-2 rounded-md border border-dashed border-gray-300 p-3" aria-hidden>
+        <Skeleton className="h-4 w-32" />
+        <div className="flex items-start gap-2">
+          <Skeleton className="h-[60px] flex-1" />
+          <Skeleton className="h-9 w-20 shrink-0" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Loaded fresh each time the dialog opens; additions, edits and removals are
@@ -35,7 +62,7 @@ function RulesEditor({ onClose }: { onClose: () => void }) {
   const [addedIds, setAddedIds] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  if (query.isLoading) return <p className="text-sm text-gray-600">Loading rules…</p>;
+  if (query.isLoading) return <RulesSkeleton />;
   if (!query.data) {
     return (
       <p role="alert" className="text-sm text-red-700">
