@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/pop
 import { useEffect, useRef, useState } from 'react';
 import type { VocabularyAIUncertainty } from '@/shared/types/vocabulary/ai-review';
 import { copyDraft } from './aiAssistantStore';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 
 interface AIAutocompleteButtonProps {
   wordId: string;
@@ -25,6 +26,10 @@ interface AIAutocompleteButtonProps {
     asked: Partial<VocabularyWord>
   ) => void;
   disabled?: boolean;
+  /** Said on the button while it is disabled. */
+  disabledReason?: string;
+  /** Asked before a run starts, such as when the word is already in the vocabulary. */
+  confirmBeforeRun?: { title: string; description: string };
 }
 
 export function AIAutocompleteButton({
@@ -34,8 +39,11 @@ export function AIAutocompleteButton({
   existingData,
   onAutocomplete,
   disabled = false,
+  disabledReason,
+  confirmBeforeRun,
 }: AIAutocompleteButtonProps) {
   const [errorDetails, setErrorDetails] = useState<ErrorInfo | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const { requestAutocomplete, isLoading, cost } = useFirebaseAutocomplete({
     onError: (error, errorInfo) => {
@@ -112,11 +120,20 @@ ${errorDetails.details.stack ? `\nStack Trace:\n${errorDetails.details.stack}` :
 
   return (
     <div className="flex shrink-0 items-center gap-1">
+      <ConfirmationDialog
+        isOpen={confirming && !!confirmBeforeRun}
+        onClose={() => setConfirming(false)}
+        onConfirm={() => void handleAutocomplete()}
+        title={confirmBeforeRun?.title ?? ''}
+        description={confirmBeforeRun?.description ?? ''}
+        confirmText="Generate anyway"
+        cancelText="Cancel"
+      />
       <Button
         type="button"
-        onClick={handleAutocomplete}
+        onClick={() => (confirmBeforeRun ? setConfirming(true) : void handleAutocomplete())}
         disabled={disabled || isLoading || !word}
-        title={lastCost ?? 'Fill in the empty fields with AI'}
+        title={(disabled && disabledReason) || lastCost || 'Fill in the empty fields with AI'}
         className="h-11 gap-2 rounded-full bg-roman-red px-4 text-white shadow-sm hover:bg-roman-red/90 disabled:opacity-60">
         {isLoading ? (
           <>

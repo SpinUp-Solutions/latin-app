@@ -33,6 +33,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
 import { fetchVocabularyBackup } from '@/src/services/vocabularyBackupService';
+import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
+import { useExistingHeadword } from '@/src/components/ui/admin/vocabulary/ExistingHeadword';
 
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
 const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
@@ -42,6 +44,18 @@ function wordIdFromHash(): string | null {
   if (typeof window === 'undefined') return null;
   const { hash } = window.location;
   return hash.startsWith('#word-') ? hash.substring(6) || null : null;
+}
+
+type NewWord = Omit<VocabularyWord, 'createdAt' | 'updatedAt'>;
+
+/** The words a create was refused for, when the headword is already in the vocabulary. */
+function existingWordsOf(error: unknown): VocabularyWordWithId[] | null {
+  const { status, data } = (error ?? {}) as { status?: unknown; data?: { code?: unknown; existingWords?: unknown } };
+  if (status !== 409 || data?.code !== 'WORD_ALREADY_EXISTS' || !Array.isArray(data.existingWords)) return null;
+  return data.existingWords.flatMap(word => {
+    const parsed = VocabularyWordWithIdSchema.safeParse(word);
+    return parsed.success ? [parsed.data as VocabularyWordWithId] : [];
+  });
 }
 
 function omitUndefinedFields<T extends object>(updates: T): Partial<T> {
@@ -68,6 +82,11 @@ function AdminVocabularyPage() {
     pools: { id: string; name: string }[];
     confirmationToken: string;
   } | null>(null);
+  /** A new word whose headword is already in the vocabulary, waiting for the admin to confirm it. */
+  const [duplicate, setDuplicate] = useState<{ wordData: NewWord; existing: VocabularyWordWithId[] } | null>(null);
+  // A new word's headword, checked against the vocabulary as it is typed, before any AI run.
+  const [newHeadword, setNewHeadword] = useState('');
+  const existingHeadword = useExistingHeadword(newHeadword, isPlaceholderWord(creatingWord));
   const searchPending = filters.search !== debouncedSearch;
   const queryArgs = {
     wordType: filters.wordType,
@@ -167,31 +186,47 @@ function AdminVocabularyPage() {
     }
   };
 
-  const handleSaveWord = async (updates: Partial<VocabularyWord>) => {
-    if (isPlaceholderWord(creatingWord)) {
-      try {
-        const cleanedUpdates = omitUndefinedFields(updates);
-        const { createdAt, updatedAt, ...wordData } = cleanedUpdates as VocabularyWord & {
-          createdAt?: VocabularyWord['createdAt'];
-          updatedAt?: VocabularyWord['updatedAt'];
-        };
-        void createdAt;
-        void updatedAt;
-
-        const created = await createWord({
-          wordData: wordData as Omit<VocabularyWord, 'createdAt' | 'updatedAt'>,
-        }).unwrap();
-
-        toast.success('Word created successfully');
-        setCreatingWord(null);
-        setSelectedWordId(created.id);
-        return true;
-      } catch (error) {
-        console.error('Create word error:', error);
-        const message = error instanceof Error ? error.message : 'Error creating word';
-        toast.error(message);
+  /** Creates the new word. A headword already in the vocabulary is refused until the admin confirms it. */
+  const handleCreateWord = async (wordData: NewWord, allowDuplicate = false) => {
+    try {
+      const created = await createWord({ wordData, allowDuplicate }).unwrap();
+      toast.success('Word created successfully');
+      setCreatingWord(null);
+      setSelectedWordId(created.id);
+      return true;
+    } catch (error) {
+      const existing = existingWordsOf(error);
+      if (existing) {
+        setDuplicate({ wordData, existing });
         return false;
       }
+      console.error('Create word error:', error);
+      const message = error instanceof Error ? error.message : 'Error creating word';
+      toast.error(message);
+      return false;
+    }
+  };
+
+  const handleOpenExisting = (word: VocabularyWordWithId) => {
+    setDuplicate(null);
+    switchEditor(() => {
+      // A word the filters leave out of the list is still opened.
+      setKeptWord(word);
+      setCreatingWord(null);
+      setSelectedWordId(word.id);
+    });
+  };
+
+  const handleSaveWord = async (updates: Partial<VocabularyWord>) => {
+    if (isPlaceholderWord(creatingWord)) {
+      const cleanedUpdates = omitUndefinedFields(updates);
+      const { createdAt, updatedAt, ...wordData } = cleanedUpdates as VocabularyWord & {
+        createdAt?: VocabularyWord['createdAt'];
+        updatedAt?: VocabularyWord['updatedAt'];
+      };
+      void createdAt;
+      void updatedAt;
+      return handleCreateWord(wordData as NewWord);
     }
 
     return handleUpdateWord(updates);
@@ -377,6 +412,9 @@ function AdminVocabularyPage() {
               learnedRules={learnedRules}
               onDirtyChange={setEditorDirty}
               next={next}
+              onHeadwordChange={setNewHeadword}
+              existingHeadword={isPlaceholderWord(creatingWord) ? existingHeadword : undefined}
+              onOpenWord={handleOpenExisting}
             />
           </div>
         </main>
@@ -395,6 +433,40 @@ function AdminVocabularyPage() {
           cancelText="Keep editing"
           confirmVariant="destructive"
         />
+
+        <ConfirmationDialog
+          isOpen={duplicate !== null}
+          onClose={() => setDuplicate(null)}
+          onConfirm={() => {
+            if (duplicate) void handleCreateWord(duplicate.wordData, true);
+          }}
+          title="This word is already in the vocabulary"
+          description={`"${duplicate?.wordData.word.trim() ?? ''}" is already in the vocabulary. Open it to edit it, or create this one anyway if it is a different word with the same spelling (like cum the preposition and cum the conjunction).`}
+          confirmText="Create anyway"
+          cancelText="Keep editing">
+          {duplicate && duplicate.existing.length > 0 && (
+            <ul aria-label="Words already in the vocabulary" className="space-y-2">
+              {duplicate.existing.map(word => (
+                <li key={word.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                  <span className="min-w-0 truncate text-sm">
+                    <span className="font-serif font-semibold">{word.word}</span>
+                    <span className="text-roman-stone">
+                      {' '}
+                      · {word.part_of_speech} · {word.translation}
+                    </span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Open ${word.word} (${word.part_of_speech})`}
+                    onClick={() => handleOpenExisting(word)}>
+                    Open
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ConfirmationDialog>
 
         <ConfirmationDialog
           isOpen={!!poolWarning}

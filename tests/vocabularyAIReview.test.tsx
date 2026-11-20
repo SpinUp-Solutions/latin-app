@@ -1518,3 +1518,44 @@ describe('Save and next', () => {
     expect(screen.queryByRole('button', { name: /and next/ })).toBeNull();
   });
 });
+
+describe('a new word whose headword is already in the vocabulary', () => {
+  const existing = { ...silva(), id: 'rosa-existing', word: 'rosa', translation: 'rose' };
+  const renderNew = (existingHeadword: { words: VocabularyWordWithId[]; checking: boolean }, onOpenWord = jest.fn()) =>
+    render(
+      <WordEditPanel
+        word={{ ...cloneNoun(), id: 'NEW-noun' }}
+        onSave={async () => true}
+        updating={false}
+        existingHeadword={existingHeadword}
+        onOpenWord={onOpenWord}
+      />
+    );
+
+  it('names the existing word above the fields and opens it', () => {
+    const onOpenWord = jest.fn();
+    renderNew({ words: [existing], checking: false }, onOpenWord);
+    expect(screen.getByRole('alert')).toHaveTextContent('“rosa” is already in the vocabulary');
+    fireEvent.click(screen.getByRole('button', { name: 'Open rosa (noun)' }));
+    expect(onOpenWord).toHaveBeenCalledWith(existing);
+  });
+
+  it('asks before AI Generate runs, and spends nothing when the admin cancels', async () => {
+    renderNew({ words: [existing], checking: false });
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('already in the vocabulary as rosa (noun)');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(mockCallable).not.toHaveBeenCalled();
+
+    mockCallable.mockResolvedValueOnce(answer({ pronunciation: 'ˈro.sa' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate anyway' }));
+    await waitFor(() => expect(mockCallable).toHaveBeenCalledTimes(1));
+  });
+
+  it('holds AI Generate until the headword has been checked', () => {
+    renderNew({ words: [], checking: true });
+    expect(screen.getByRole('button', { name: 'AI Generate' })).toBeDisabled();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

@@ -10,6 +10,7 @@ import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { routeErrorResponse } from '@/src/lib/route-error-response';
+import { findWordsWithHeadword, WordAlreadyExistsError } from '@/src/lib/vocabulary/duplicate-words.server';
 
 const COUNTED_PARTS_OF_SPEECH = [
   'noun',
@@ -45,6 +46,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     if (searchParams.get('countsOnly') === 'true') {
       return NextResponse.json({ success: true, data: { wordTypeCounts: await getWordTypeCounts() } });
+    }
+
+    // The words a new headword would duplicate, matched without macrons or capitals.
+    const headword = searchParams.get('headword');
+    if (headword !== null) {
+      return NextResponse.json({ success: true, data: { words: await findWordsWithHeadword(adminDb, headword) } });
     }
 
     const wordType = searchParams.get('wordType');
@@ -118,7 +125,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Older clients still send the collection name; the server alone decides where words live.
-    const { collection: _ignoredCollection, ...wordPayload } = body as Record<string, unknown>;
+    const { collection: _ignoredCollection, allowDuplicate, ...wordPayload } = body as Record<string, unknown>;
 
     const now = new Date();
     const validationResult = VocabularyWordSchema.safeParse({
@@ -146,6 +153,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const docRef = adminDb.collection(VOCABULARY_WORDS_COLLECTION).doc();
     await runVocabularyContentMutation(adminDb, async transaction => {
+      // The admin confirms a homograph by sending the word again with `allowDuplicate`.
+      if (allowDuplicate !== true) {
+        const existingWords = await findWordsWithHeadword(adminDb, firestorePayload.word, transaction);
+        if (existingWords.length > 0) throw new WordAlreadyExistsError(firestorePayload.word, existingWords);
+      }
       const applyContentRevision = await prepareVocabularyContentRevisionBump(transaction, adminDb);
       applyContentRevision();
       transaction.create(docRef, firestorePayload);

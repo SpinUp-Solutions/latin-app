@@ -33,6 +33,7 @@ import {
   VocabularyFormValues,
 } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
+import { ExistingHeadwordNotice } from './ExistingHeadword';
 import {
   AIFieldReview,
   AIReviewContext,
@@ -71,7 +72,18 @@ interface WordEditPanelProps {
    * out hides it.
    */
   next?: SaveAndNext;
+  /** Told the headword as it is typed, so the page can check a new word against the vocabulary. */
+  onHeadwordChange?: (headword: string) => void;
+  /**
+   * The words already in the vocabulary under a new word's headword, and whether that is still being
+   * checked. AI Generate waits for the check and asks before running on a duplicate.
+   */
+  existingHeadword?: { words: VocabularyWordWithId[]; checking: boolean };
+  /** Opens a word already in the vocabulary that a new word's headword duplicates. */
+  onOpenWord?: (word: VocabularyWordWithId) => void;
 }
+
+const NO_EXISTING_HEADWORD = { words: [], checking: false };
 
 export type SaveAndNext = { word: string; open: () => void } | { unavailable: string };
 
@@ -184,6 +196,9 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   learnedRules,
   onDirtyChange,
   next,
+  onHeadwordChange,
+  existingHeadword = NO_EXISTING_HEADWORD,
+  onOpenWord,
 }) => {
   const form = useForm<VocabularyFormValues>({
     resolver: zodResolver(VocabularyFormSchema) as Resolver<VocabularyFormValues>,
@@ -583,6 +598,12 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   const anchorPrefix = useId();
   const watchedValues = form.watch();
   const watchedWord = watchedValues.word;
+  // The page checks a new word against the vocabulary as its headword is typed, before the AI or the admin
+  // spends time on the rest.
+  const reportHeadword = useEffectEvent((headword: string) => onHeadwordChange?.(headword));
+  useEffect(() => {
+    reportHeadword(watchedWord ?? '');
+  }, [watchedWord]);
   const aiSnapshot = {
     ...word,
     ...watchedValues,
@@ -709,6 +730,11 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
               without it they are positioned against the page and make the whole document scrollable. */}
               <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
                 <div className="space-y-6 pb-4">
+                  <ExistingHeadwordNotice
+                    headword={watchedWord ?? ''}
+                    words={existingHeadword.words}
+                    onOpen={onOpenWord}
+                  />
                   <BaseWordForm />
                   {renderPosForm()}
 
@@ -755,7 +781,24 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
                   partOfSpeech={word.part_of_speech}
                   existingData={aiSnapshot}
                   onAutocomplete={handleAIAutocomplete}
-                  disabled={updating || isSubmitting || !!editingCell}
+                  disabled={updating || isSubmitting || !!editingCell || existingHeadword.checking}
+                  disabledReason={
+                    existingHeadword.checking
+                      ? `Checking whether ${watchedWord.trim()} is already in the vocabulary…`
+                      : undefined
+                  }
+                  confirmBeforeRun={
+                    existingHeadword.words.length > 0
+                      ? {
+                          title: 'This word is already in the vocabulary',
+                          description: `"${watchedWord.trim()}" is already in the vocabulary as ${existingHeadword.words
+                            .map(existing => `${existing.word} (${existing.part_of_speech})`)
+                            .join(
+                              ', '
+                            )}. Run AI Generate anyway? Only do this for a different word with the same spelling.`,
+                        }
+                      : undefined
+                  }
                 />
               }
             />
