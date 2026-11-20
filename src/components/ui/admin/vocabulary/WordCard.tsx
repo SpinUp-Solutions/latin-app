@@ -127,21 +127,26 @@ export const WordCard: React.FC<WordCardProps> = ({
         }}>
         {/* Main header row */}
         <div className="flex items-center justify-between px-4 py-3 gap-3">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+          {/* The headword is never cut off: in a narrow list the translation moves to a line of its own. */}
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
             <button
               onClick={e => {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
                 onSelect(word);
               }}
-              className="flex items-center gap-2 hover:text-roman-red transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+              className="flex min-w-0 items-center gap-2 text-left hover:text-roman-red transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
               aria-expanded={isExpanded}
               aria-label={`${isExpanded ? 'Collapse' : 'Expand'} details for ${word.word}`}>
-              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              <span className="font-serif font-semibold text-roman-red text-lg">{word.word}</span>
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4 shrink-0" />
+              ) : (
+                <ChevronRight className="h-4 w-4 shrink-0" />
+              )}
+              <span className="break-words font-serif font-semibold text-roman-red text-lg">{word.word}</span>
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="shrink-0 border-border bg-roman-parchment text-foreground">
                 {word.part_of_speech}
               </Badge>
@@ -165,7 +170,7 @@ export const WordCard: React.FC<WordCardProps> = ({
               )}
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="min-w-[8rem] flex-1">
               <p className="text-gray-700 truncate font-medium" title={word.translation}>
                 {word.translation}
               </p>

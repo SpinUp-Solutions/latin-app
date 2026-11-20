@@ -373,7 +373,7 @@ function AdminVocabularyPage() {
           </div>
         </header>
 
-        <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,40%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[40%_60%] lg:grid-rows-none">
+        <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(18rem,40%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[minmax(22rem,30%)_minmax(0,1fr)] lg:grid-rows-none">
           <div className="flex min-h-0 flex-col overflow-hidden border-b border-gray-200 bg-roman-marble lg:border-b-0 lg:border-r">
             <div className="p-4">
               <VocabularyFiltersComponent
