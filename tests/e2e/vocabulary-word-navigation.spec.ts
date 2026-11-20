@@ -79,7 +79,7 @@ test.describe('Moving between vocabulary words', () => {
     await translation.fill('a dark forest');
 
     // A search that leaves silva out of the list does not close it.
-    await page.getByPlaceholder('Search words...').fill('rosa');
+    await page.getByRole('textbox', { name: 'Search words' }).fill('rosa');
     await expect(page.getByRole('button', { name: /details for silva/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /details for rosa/ }).first()).toBeVisible();
     await expect(heading(page, 'silva')).toBeVisible();
