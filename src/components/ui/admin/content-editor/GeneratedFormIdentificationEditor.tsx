@@ -25,11 +25,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import { GeneratedVocabularyFilters } from './GeneratedVocabularyFilters';
 import { GeneratedPoolSourceFields } from './GeneratedPoolSourceFields';
 import { GeneratedUniqueWordCountField } from './GeneratedUniqueWordCountField';
-import {
-  DEFAULT_POS_FILTERS,
-  getAppliedUniqueWordCount,
-  getWordSourceUpdate,
-} from '@/src/utils/exercises/generatorConfigDefaults';
+import { getAppliedUniqueWordCount, getWordSourceUpdate } from '@/src/utils/exercises/generatorConfigDefaults';
 import { GeneratedExerciseSummary } from './GeneratedExerciseSummary';
 import { GeneratedPreviewPanel } from './GeneratedPreviewPanel';
 
@@ -59,10 +55,6 @@ const GeneratedFormIdentificationEditorView: React.FC<{
     });
   };
 
-  const handleResetFilters = () => {
-    editor.handleGlobalFiltersChange({ partOfSpeech: 'all', ...DEFAULT_POS_FILTERS });
-  };
-
   const filtersContent = (
     <GeneratedVocabularyFilters
       derivedFilters={editor.derivedFilters}
@@ -70,7 +62,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
       limitMode="combined"
       onCountChange={count => editor.updateConfig({ count })}
       onFiltersChange={editor.handleGlobalFiltersChange}
-      onReset={handleResetFilters}
+      onReset={editor.handleResetFilters}
       onApply={() => editor.setIsPreviewOpen(true)}
       isLoading={editor.isPreviewFetching}
     />
