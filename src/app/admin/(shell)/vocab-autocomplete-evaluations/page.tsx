@@ -386,7 +386,7 @@ function FormsComparison({ cells }: { cells: [VocabularyEvaluationCell, Vocabula
         onValueChange={setQuery}
         placeholder="Search forms, e.g. subj perf pl, abl sg or amaver"
         label={`Search ${first.word} forms`}
-        inputClassName="h-9 text-sm"
+        size="sm"
       />
       {searching ? (
         <>
