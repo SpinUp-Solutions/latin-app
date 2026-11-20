@@ -44,3 +44,15 @@ export const WORD_FIELD_ROWS: Record<string, readonly (readonly WordFieldName[])
 
 export const wordFieldLabel = (name: string) =>
   name in WORD_FIELDS ? WORD_FIELDS[name as WordFieldName].label : name.replace(/_/g, ' ');
+
+/** Fields the AI can report on that the form does not list, such as the inflection tables. */
+const AI_ONLY_FIELD_LABELS: Record<string, string> = {
+  declension_table: 'Declension table',
+  conjugation_table: 'Conjugation table',
+  degrees_table: 'Degrees table',
+  dictionary_forms: 'Dictionary forms',
+};
+
+/** Short label for an AI review of a field. */
+export const aiFieldLabel = (name: string) =>
+  AI_ONLY_FIELD_LABELS[name] ?? wordFieldLabel(name).replace(/ \(optional\)$/, '');

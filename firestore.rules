@@ -131,6 +131,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Global prompt guidance is approved and validated through the admin server.
+    // Direct clients must never read or mutate this configuration or its children.
+    match /vocabularyAIGuidance/{document=**} {
+      allow read, write: if false;
+    }
+
     match /deleted_vocabulary_pools/{document=**} {
       allow read, write: if false;
     }
@@ -201,6 +207,7 @@ service cloud.firestore {
         && collection != 'vocabulary_words_v4'
         && collection != 'vocabulary_word_requests'
         && collection != 'vocabulary_word_update_requests'
+        && collection != 'vocabularyAIGuidance'
         && collection != 'deleted_vocabulary_pools'
         && collection != 'vocabulary_pool_archives'
         && collection != 'vocabulary_pool_deletion_challenges'

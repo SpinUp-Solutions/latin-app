@@ -33,17 +33,16 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Only pending requests can be approved' }, { status: 409 });
     }
 
-    const validated = buildValidatedWordForApproval(requestData.draftWord);
-    if (!validated.success) {
-      return NextResponse.json({ success: false, error: validated.error }, { status: 400 });
-    }
-
     const wordRef = wordCollection().doc();
     await runVocabularyContentMutation(adminDb, async transaction => {
       const currentRequest = await transaction.get(docRef);
       if (!currentRequest.exists || currentRequest.data()?.status !== 'pending') {
         throw new RequestError(409, 'VOCABULARY_REQUEST_NOT_PENDING', 'Only pending requests can be approved');
       }
+      // Validate the same draft this transaction approves, including any review
+      // metadata saved after the initial request was read.
+      const validated = buildValidatedWordForApproval(currentRequest.data()!.draftWord);
+      if (!validated.success) throw new RequestError(400, 'INVALID_WORD_DATA', validated.error);
       transaction.create(wordRef, validated.data.firestorePayload);
       transaction.update(docRef, {
         status: 'approved',

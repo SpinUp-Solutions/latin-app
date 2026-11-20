@@ -375,6 +375,68 @@ it('keeps valid updates available when another stored summary is malformed', asy
 });
 
 describe('approving a word update', () => {
+  const review = {
+    uncertainties: [{ field: 'translation', explanation: 'Check the contextual sense.' }],
+    guidance: [{ id: 'sense', instruction: 'Keep the figurative sense.' }],
+  };
+
+  it('preserves saved review metadata omitted by a legacy proposal and shows it before approval', async () => {
+    const { body } = await stage();
+    // A proposal staged before AI review existed lacks the field entirely.
+    mockDb.seed(WORDS, 'ardor', { ...liveWord, ai_review: review, legacy_note: 'kept' });
+    const loaded = (await detail(body.id)).body;
+    expect(loaded.request.proposedWord).toMatchObject({ ai_review: review });
+    expect(loaded.liveWord).toMatchObject({ ai_review: review });
+
+    expect((await approve(body.id)).status).toBe(200);
+    expect(mockDb.read(WORDS, 'ardor')).toMatchObject({ ai_review: review, legacy_note: 'kept' });
+  });
+
+  it('round-trips new review metadata through proposal staging and approval without generation envelope fields', async () => {
+    const { body, status } = await stage({
+      proposedWord: { ...proposal, ai_review: review, review_answer: 'Transient', uncertainties: review.uncertainties },
+    });
+    expect(status).toBe(201);
+    const loaded = (await detail(body.id)).body.request.proposedWord;
+    expect(loaded).toMatchObject({ ai_review: review });
+    expect(loaded).not.toHaveProperty('review_answer');
+    expect(loaded).not.toHaveProperty('uncertainties');
+    expect((await approve(body.id)).status).toBe(200);
+    expect(mockDb.read(WORDS, 'ardor')).toMatchObject({ ai_review: review });
+    expect(mockDb.read(WORDS, 'ardor')).not.toHaveProperty('review_answer');
+  });
+
+  it('preserves pending review metadata when an older proposal editor omits it', async () => {
+    const { body } = await stage({ proposedWord: { ...proposal, ai_review: review } });
+    const current = (await detail(body.id)).body.request;
+    const response = (await saveProposal(
+      request(`http://localhost/x/${body.id}`, {
+        proposedWord: { ...proposal, translation: 'heat' },
+        version: current.version,
+      }),
+      params(body.id)
+    )) as unknown as Response<VocabularyWordUpdateRequestDetail>;
+    expect(response.status).toBe(200);
+    expect(response.body.request.proposedWord).toMatchObject({ ai_review: review });
+  });
+
+  it('honors explicit review clearing in a proposal', async () => {
+    mockDb.seed(WORDS, 'ardor', { ...liveWord, ai_review: review });
+    const empty = { uncertainties: [], guidance: [] };
+    const { body } = await stage({ proposedWord: { ...proposal, ai_review: empty } });
+    expect((await detail(body.id)).body.request.proposedWord).toMatchObject({ ai_review: empty });
+    expect((await approve(body.id)).status).toBe(200);
+    expect(mockDb.read(WORDS, 'ardor')).toMatchObject({ ai_review: empty });
+  });
+
+  it.each([null, 'invalid', { uncertainties: [], guidance: [], review_answer: 'not review metadata' }])(
+    'rejects invalid proposal review metadata without staging: %p',
+    async ai_review => {
+      expect((await stage({ proposedWord: { ...proposal, ai_review } })).status).toBe(400);
+      expect(mockDb.read(WORDS, 'ardor')).toEqual(liveWord);
+    }
+  );
+
   it('writes the proposal and keeps the creation time, random index and pool bookkeeping', async () => {
     const { body } = await stage({ proposedWord: { ...proposal, etymology: null } });
 

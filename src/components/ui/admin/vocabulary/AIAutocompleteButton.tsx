@@ -4,22 +4,32 @@ import { Button } from '@/src/components/ui/button';
 import { useFirebaseAutocomplete, ErrorInfo } from '@/src/hooks/useFirebaseAutocomplete';
 import { VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
-import { Loader2, Sparkles, XCircle, Copy, RotateCcw, Info } from 'lucide-react';
+import { Loader2, Sparkles, XCircle, Copy, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { VocabularyAIUncertainty } from '@/shared/types/vocabulary/ai-review';
+import { copyDraft } from './aiAssistantStore';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 
 interface AIAutocompleteButtonProps {
   wordId: string;
   word: string;
   partOfSpeech: PartOfSpeech;
   existingData?: Partial<VocabularyWord>;
+  /** `asked` is the draft the AI was given, so edits made while it worked can be told apart. */
   onAutocomplete: (
     data: Partial<VocabularyWord>,
-    fieldStatus?: Record<string, 'filled' | 'missing'>,
-    wordId?: string
+    fieldStatus: Record<string, 'filled' | 'missing'> | undefined,
+    wordId: string,
+    uncertainties: VocabularyAIUncertainty[],
+    asked: Partial<VocabularyWord>
   ) => void;
   disabled?: boolean;
+  /** Said on the button while it is disabled. */
+  disabledReason?: string;
+  /** Asked before a run starts, such as when the word is already in the vocabulary. */
+  confirmBeforeRun?: { title: string; description: string };
 }
 
 export function AIAutocompleteButton({
@@ -29,28 +39,25 @@ export function AIAutocompleteButton({
   existingData,
   onAutocomplete,
   disabled = false,
+  disabledReason,
+  confirmBeforeRun,
 }: AIAutocompleteButtonProps) {
   const [errorDetails, setErrorDetails] = useState<ErrorInfo | null>(null);
-  const [notesContent, setNotesContent] = useState<string | null>(null);
-  const [notesTimestamp, setNotesTimestamp] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  const { autocomplete, isLoading, cost } = useFirebaseAutocomplete({
-    onSuccess: (data, costInfo, fieldStatus, notes) => {
-      onAutocomplete(data, fieldStatus, wordId);
-      setErrorDetails(null);
-      setNotesContent(notes || null);
-      setNotesTimestamp(notes ? new Date().toISOString() : null);
-      const costMessage = costInfo
-        ? `Cost: $${costInfo.totalCost.toFixed(4)} (${costInfo.tokens.totalTokens.toLocaleString()} tokens)`
-        : '';
-      toast.success('AI Autocomplete Successful', {
-        description: `Form fields have been populated. Review and apply changes. ${costMessage}`,
-      });
-    },
+  const { requestAutocomplete, isLoading, cost } = useFirebaseAutocomplete({
     onError: (error, errorInfo) => {
       setErrorDetails(errorInfo || null);
       toast.error('AI Autocomplete Failed', { description: error });
     },
+  });
+
+  // A run can take minutes and the admin keeps working meanwhile, so the answer goes to the editor as it
+  // is when the run finishes, which then leaves alone what the admin changed. Switching words unmounts
+  // this button, and the hook then ignores the answer.
+  const latestOnAutocomplete = useRef(onAutocomplete);
+  useEffect(() => {
+    latestOnAutocomplete.current = onAutocomplete;
   });
 
   const handleAutocomplete = async () => {
@@ -58,16 +65,22 @@ export function AIAutocompleteButton({
       toast.error('Missing Information', { description: 'Word and part of speech are required for AI autocomplete.' });
       return;
     }
-
     setErrorDetails(null);
-    setNotesContent(null);
-    setNotesTimestamp(null);
-    await autocomplete({
+    const asked = copyDraft(existingData ?? {});
+    const result = await requestAutocomplete({
       word,
       part_of_speech: partOfSpeech,
-      existingData,
+      existingData: asked,
       overwriteExisting: false,
     });
+    if (!result?.data) return;
+    const uncertainties = result.uncertainties ?? [];
+    latestOnAutocomplete.current(result.data, result.fieldStatus, wordId, uncertainties, asked);
+    const costMessage = result.cost
+      ? `Cost: $${result.cost.totalCost.toFixed(4)} (${result.cost.tokens.totalTokens.toLocaleString()} tokens)`
+      : '';
+    // The assistant opens with what the AI filled and anything it asks, so the toast only adds the cost.
+    toast.success('AI autocomplete finished', costMessage ? { description: costMessage } : undefined);
   };
 
   const handleCopyError = () => {
@@ -101,115 +114,103 @@ ${errorDetails.details.stack ? `\nStack Trace:\n${errorDetails.details.stack}` :
     handleAutocomplete();
   };
 
+  const lastCost = cost
+    ? `Last run: $${cost.totalCost.toFixed(4)} (${cost.tokens.totalTokens.toLocaleString()} tokens)`
+    : undefined;
+
   return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleAutocomplete}
-          disabled={disabled || isLoading || !word}
-          className="gap-2">
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              AI Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              AI Autocomplete
-            </>
-          )}
-        </Button>
-        {errorDetails && !isLoading && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <XCircle className="h-4 w-4 text-red-600" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-96 max-h-80 overflow-y-auto bg-white">
-              <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <h4 className="font-medium text-sm text-red-600">Error Details</h4>
-                  <span className="text-xs text-gray-500">{new Date(errorDetails.timestamp).toLocaleTimeString()}</span>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-xs font-medium text-gray-500">Error Message:</p>
-                    <p className="text-sm text-gray-900 mt-1">{errorDetails.message}</p>
-                  </div>
-                  {errorDetails.requestData && (
-                    <div>
-                      <p className="text-xs font-medium text-gray-500">Request:</p>
-                      <p className="text-xs text-gray-700 mt-1">
-                        Word: {errorDetails.requestData.word} ({errorDetails.requestData.part_of_speech})
-                      </p>
-                    </div>
-                  )}
-                  {errorDetails.details && (
-                    <div>
-                      <p className="text-xs font-medium text-gray-500">Technical Details:</p>
-                      <div className="text-xs text-gray-700 mt-1 space-y-1">
-                        {errorDetails.details.type && <p>Type: {errorDetails.details.type}</p>}
-                        {errorDetails.details.details && (
-                          <p className="whitespace-pre-wrap break-words">{errorDetails.details.details}</p>
-                        )}
-                        {errorDetails.details.stack && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs font-medium text-gray-500">Stack Trace</summary>
-                            <pre className="text-xs mt-1 overflow-x-auto bg-gray-50 p-2 rounded">
-                              {errorDetails.details.stack}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2 pt-2 border-t">
-                  <Button type="button" variant="outline" size="sm" onClick={handleCopyError} className="flex-1 gap-2">
-                    <Copy className="h-3 w-3" />
-                    Copy Details
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={handleRetry} className="flex-1 gap-2">
-                    <RotateCcw className="h-3 w-3" />
-                    Retry
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+    <div className="flex shrink-0 items-center gap-1">
+      <ConfirmationDialog
+        isOpen={confirming && !!confirmBeforeRun}
+        onClose={() => setConfirming(false)}
+        onConfirm={() => void handleAutocomplete()}
+        title={confirmBeforeRun?.title ?? ''}
+        description={confirmBeforeRun?.description ?? ''}
+        confirmText="Generate anyway"
+        cancelText="Cancel"
+      />
+      <Button
+        type="button"
+        onClick={() => (confirmBeforeRun ? setConfirming(true) : void handleAutocomplete())}
+        disabled={disabled || isLoading || !word}
+        title={(disabled && disabledReason) || lastCost || 'Fill in the empty fields with AI'}
+        className="h-11 gap-2 rounded-full bg-roman-red px-4 text-white shadow-sm hover:bg-roman-red/90 disabled:opacity-60">
+        {isLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Generating…
+          </>
+        ) : (
+          <>
+            <Sparkles className="h-4 w-4" aria-hidden />
+            AI Generate
+          </>
         )}
-        {notesContent && !isLoading && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <Info className="h-4 w-4 text-blue-600" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-96 max-h-80 overflow-y-auto bg-white">
-              <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <h4 className="font-medium text-sm text-blue-600">AI Notes</h4>
-                  <span className="text-xs text-gray-500">
-                    {notesTimestamp ? new Date(notesTimestamp).toLocaleTimeString() : ''}
-                  </span>
-                </div>
+      </Button>
+      {errorDetails && !isLoading && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Show why AI Generate failed"
+              className="h-9 w-9 rounded-full text-roman-red hover:bg-roman-red/10">
+              <XCircle className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-96 max-h-80 overflow-y-auto bg-white">
+            <div className="space-y-3">
+              <div className="flex items-start justify-between">
+                <h4 className="font-medium text-sm text-red-600">Error Details</h4>
+                <span className="text-xs text-gray-500">{new Date(errorDetails.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <div className="space-y-2">
                 <div>
-                  <p className="text-sm text-gray-900 whitespace-pre-wrap">{notesContent}</p>
+                  <p className="text-xs font-medium text-gray-500">Error Message:</p>
+                  <p className="text-sm text-gray-900 mt-1">{errorDetails.message}</p>
                 </div>
+                {errorDetails.requestData && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Request:</p>
+                    <p className="text-xs text-gray-700 mt-1">
+                      Word: {errorDetails.requestData.word} ({errorDetails.requestData.part_of_speech})
+                    </p>
+                  </div>
+                )}
+                {errorDetails.details && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Technical Details:</p>
+                    <div className="text-xs text-gray-700 mt-1 space-y-1">
+                      {errorDetails.details.type && <p>Type: {errorDetails.details.type}</p>}
+                      {errorDetails.details.details && (
+                        <p className="whitespace-pre-wrap break-words">{errorDetails.details.details}</p>
+                      )}
+                      {errorDetails.details.stack && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs font-medium text-gray-500">Stack Trace</summary>
+                          <pre className="text-xs mt-1 overflow-x-auto bg-gray-50 p-2 rounded">
+                            {errorDetails.details.stack}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-            </PopoverContent>
-          </Popover>
-        )}
-      </div>
-      {cost && !isLoading && (
-        <span className="text-xs text-gray-500">
-          ${cost.totalCost.toFixed(4)} ({cost.tokens.totalTokens.toLocaleString()} tokens)
-        </span>
+              <div className="flex gap-2 pt-2 border-t">
+                <Button type="button" variant="outline" size="sm" onClick={handleCopyError} className="flex-1 gap-2">
+                  <Copy className="h-3 w-3" />
+                  Copy Details
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={handleRetry} className="flex-1 gap-2">
+                  <RotateCcw className="h-3 w-3" />
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       )}
     </div>
   );

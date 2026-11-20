@@ -149,12 +149,19 @@ export const vocabularyApi = appApi.injectEndpoints({
       ],
     }),
 
-    createWord: builder.mutation<VocabularyWordWithId, { wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'> }>({
-      query: ({ wordData }) => {
+    createWord: builder.mutation<
+      VocabularyWordWithId,
+      {
+        wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'>;
+        /** Create it even though the headword is already in the vocabulary (a homograph). */
+        allowDuplicate?: boolean;
+      }
+    >({
+      query: ({ wordData, allowDuplicate }) => {
         return {
           url: '/admin/words',
           method: 'POST',
-          body: wordData,
+          body: allowDuplicate ? { ...wordData, allowDuplicate: true } : wordData,
         };
       },
       transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => {
@@ -172,6 +179,18 @@ export const vocabularyApi = appApi.injectEndpoints({
         { type: 'WordList', id: 'LIST' },
         { type: 'WordCounts', id: 'COUNTS' },
       ],
+    }),
+
+    /** Words already stored under this headword, ignoring macrons and capitals. */
+    findWordsByHeadword: builder.query<{ words: VocabularyWordWithId[] }, string>({
+      query: headword => `/admin/words?${new URLSearchParams({ headword })}`,
+      transformResponse: (response: { success: boolean; data: { words: unknown[] } }) => ({
+        words: response.data.words.flatMap(word => {
+          const parsed = VocabularyWordWithIdSchema.safeParse(word);
+          return parsed.success ? [parsed.data as VocabularyWordWithId] : [];
+        }),
+      }),
+      providesTags: [{ type: 'WordList', id: 'LIST' }],
     }),
 
     searchWords: builder.query<VocabularySearchResult[], { search: string; limit?: number }>({
@@ -208,6 +227,7 @@ export const {
   useGetWordTypeCountsQuery,
   useUpdateWordMutation,
   useCreateWordMutation,
+  useFindWordsByHeadwordQuery,
   useSearchWordsQuery,
   useLazySearchWordsQuery,
   useDeleteWordMutation,

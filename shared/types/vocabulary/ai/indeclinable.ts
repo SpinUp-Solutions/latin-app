@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { VocabularyAIOutputReviewShape } from '../ai-review';
+import { PrepositionCaseSchema } from '../schemas/enums';
 import { AdverbSchema, PrepositionSchema, ConjunctionSchema, InterjectionSchema } from '../schemas/indeclinable-words';
 
 type IndeclinableSchema = z.ZodObject<{
@@ -19,6 +21,7 @@ function buildIndeclinableSchema(schema: IndeclinableSchema) {
       alternate_form: true,
     })
     .extend({
+      ...VocabularyAIOutputReviewShape,
       etymology: schema.shape.etymology.nullable(),
       pronunciation: schema.shape.pronunciation.nullable(),
       alternate_form: schema.shape.alternate_form.nullable(),
@@ -26,7 +29,9 @@ function buildIndeclinableSchema(schema: IndeclinableSchema) {
     .strict();
 }
 export const AdverbStructuredOutputSchema = buildIndeclinableSchema(AdverbSchema);
-export const PrepositionStructuredOutputSchema = buildIndeclinableSchema(PrepositionSchema);
+export const PrepositionStructuredOutputSchema = buildIndeclinableSchema(PrepositionSchema).extend({
+  case: PrepositionCaseSchema.nullable(),
+});
 export const ConjunctionStructuredOutputSchema = buildIndeclinableSchema(ConjunctionSchema);
 export const InterjectionStructuredOutputSchema = buildIndeclinableSchema(InterjectionSchema);
 export type AdverbStructuredOutput = z.infer<typeof AdverbStructuredOutputSchema>;

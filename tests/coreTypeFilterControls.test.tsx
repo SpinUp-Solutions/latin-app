@@ -30,15 +30,51 @@ describe('core / non-core filter controls', () => {
       />
     );
     const { rerender } = render(viewer(null));
+    const toggle = screen.getByRole('button', { name: /^Filters/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(toggle);
     expect(screen.getByRole('button', { name: /Reset Filters/ })).toBeDisabled();
 
-    await choose('Non-Core only');
+    await userEvent.click(screen.getByRole('button', { name: 'Non-Core' }));
     expect(onFiltersChange).toHaveBeenLastCalledWith({ coreType: 'non-core' });
 
     rerender(viewer('non-core'));
+    expect(screen.getByRole('button', { name: 'Non-Core' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /Reset Filters/ })).toBeEnabled();
-    await userEvent.click(screen.getByTitle('Remove filter'));
+
+    // Folded away, the filter in force stays visible as a chip that removes it.
+    await userEvent.click(screen.getByRole('button', { name: /^Filters \(1 active\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove filter: Non-Core only' }));
     expect(onFiltersChange).toHaveBeenLastCalledWith({ coreType: null });
+  });
+
+  it('searches from the bar and clears the search in one click', async () => {
+    const onFiltersChange = jest.fn();
+    const { rerender } = render(
+      <VocabularyFiltersComponent
+        filters={{ wordType: 'all', coreType: null, search: '' }}
+        wordTypeCounts={{ noun: 12 }}
+        countsLoading={false}
+        onFiltersChange={onFiltersChange}
+        onSearch={jest.fn()}
+        onReset={jest.fn()}
+      />
+    );
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search words' }), 'a');
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ search: 'a' });
+
+    rerender(
+      <VocabularyFiltersComponent
+        filters={{ wordType: 'all', coreType: null, search: 'amo' }}
+        wordTypeCounts={{ noun: 12 }}
+        countsLoading={false}
+        onFiltersChange={onFiltersChange}
+        onSearch={jest.fn()}
+        onReset={jest.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ search: '' });
   });
 
   it('restricts a generated exercise for either word source', async () => {

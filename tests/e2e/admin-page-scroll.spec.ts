@@ -29,7 +29,7 @@ test.describe('Admin forms stay inside their scroll panel', () => {
     await expect(page.getByRole('button', { name: 'Apply' })).toBeVisible();
     expect(await pageOverflow(page)).toBe(0);
 
-    await page.getByText('Search Words').hover();
+    await page.getByRole('textbox', { name: 'Search words' }).hover();
     await page.mouse.wheel(0, 400);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   });

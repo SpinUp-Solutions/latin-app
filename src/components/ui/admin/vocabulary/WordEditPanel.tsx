@@ -1,4 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import {
+  addOpenUncertainties,
+  AI_REVIEW_ITEM_LIMIT,
+  AICompletableFieldSchema,
+  EMPTY_AI_REVIEW,
+  type AICompletableField,
+  type VocabularyAINote,
+  type VocabularyAIMemory,
+  type VocabularyAIReview,
+  type VocabularyAIUncertainty,
+} from '@/shared/types/vocabulary/ai-review';
+import type { LearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
+import { changedTableCells } from '@/src/utils/vocabulary/word-diff';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
@@ -9,6 +23,7 @@ import { SchemaTable } from './tables/SchemaTable';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 import type { PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { BookOpen } from 'lucide-react';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import {
   BaseWordForm,
   NounForm,
@@ -19,6 +34,17 @@ import {
   VocabularyFormValues,
 } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
+import { ExistingHeadwordNotice } from './ExistingHeadword';
+import {
+  AIFieldReview,
+  AIReviewContext,
+  AIAssistantDock,
+  autocompleteMessage,
+  type AcceptedAIReply,
+  type AIReviewContextValue,
+} from './VocabularyAIReview';
+import { headwordOf, snapshotValue, useAIAssistant } from './aiAssistantStore';
+import { aiFieldLabel } from './wordFields';
 import { getEditableTable, getPronounTableSchema, getPronounTableTitle } from './wordTables';
 import {
   toFormDefaultValues,
@@ -37,9 +63,31 @@ interface WordEditPanelProps {
   /** Buttons shown before the save button. */
   actions?: React.ReactNode;
   allowAIAutocomplete?: boolean;
+  /** Saves the rules for all words that the AI learns from the admin's answers. */
+  learnedRules?: LearnedAIRules;
   /** Told whether the word has edits that have not been saved; false again when the panel goes away. */
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * The word after this one in the page's list, for "Save and next" on Ctrl/⌘+Enter: it saves, then
+   * opens that word only if the save succeeded. A reason instead means there is no next word.
+   */
+  next?: SaveAndNext;
+  /** Starts the editor again from the saved word, for "Dismiss". Given by `WordEditPanel`. */
+  onDiscard?: () => void;
+  /** Told the headword as it is typed, so the page can check a new word against the vocabulary. */
+  onHeadwordChange?: (headword: string) => void;
+  /**
+   * The words already in the vocabulary under a new word's headword, and whether that is still being
+   * checked. AI Generate waits for the check and asks before running on a duplicate.
+   */
+  existingHeadword?: { words: VocabularyWordWithId[]; checking: boolean };
+  /** Opens a word already in the vocabulary that a new word's headword duplicates. */
+  onOpenWord?: (word: VocabularyWordWithId) => void;
 }
+
+const NO_EXISTING_HEADWORD = { words: [], checking: false };
+
+export type SaveAndNext = { word: string; open: () => void } | { unavailable: string };
 
 type TableData = Record<string, unknown>;
 
@@ -110,64 +158,50 @@ const tableFromWord = (word: VocabularyWordWithId | null): TableData => {
   return table ? cloneTableData((word as unknown as TableData)[table.field]) : {};
 };
 
-const findNullPaths = (obj: unknown, path = ''): string[] => {
-  if (obj === null || obj === undefined) {
-    return [path];
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.length === 0 || obj.every(item => item === null || item === undefined) ? [path] : [];
-  }
-
-  if (typeof obj === 'object') {
-    return Object.entries(obj as TableData).flatMap(([key, value]) =>
-      findNullPaths(value, path ? `${path}.${key}` : key)
+const findNullPaths = (value: unknown, path = ''): string[] => {
+  if (value === null || value === undefined) return [path];
+  if (Array.isArray(value)) return value.length === 0 || value.every(item => item == null) ? [path] : [];
+  if (typeof value === 'object') {
+    return Object.entries(value as TableData).flatMap(([key, child]) =>
+      findNullPaths(child, path ? `${path}.${key}` : key)
     );
   }
-
   return [];
 };
 
-const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown => {
-  if (aiGenerated === null || aiGenerated === undefined) {
-    return existing;
-  }
-
-  if (existing === null || existing === undefined) {
-    return aiGenerated;
-  }
-
-  if (Array.isArray(aiGenerated)) {
-    if (
-      !Array.isArray(existing) ||
-      existing.length === 0 ||
-      existing.every(item => item === null || item === undefined || item === '')
-    ) {
-      return aiGenerated;
+/**
+ * What of autocomplete's table still applies once the run is over. The server has already merged its answer
+ * into the table it was sent (`mergeValue`: which cells may be filled, which nulls mean "no such form").
+ * The browser only reconciles: a cell still as it was sent takes the server's value; a cell the admin
+ * changed meanwhile keeps the admin's value, a deliberate clear included.
+ */
+export function reconcileTable(submitted: unknown, current: unknown, returned: unknown): unknown {
+  const isBranch = (value: unknown): value is TableData =>
+    !!value && typeof value === 'object' && !Array.isArray(value);
+  if (isBranch(returned) && isBranch(current)) {
+    const reconciled: TableData = { ...current };
+    for (const [key, value] of Object.entries(returned)) {
+      reconciled[key] = reconcileTable(isBranch(submitted) ? submitted[key] : undefined, current[key], value);
     }
-    return existing;
+    return reconciled;
   }
+  return snapshotValue(current) === snapshotValue(submitted) ? returned : current;
+}
 
-  if (typeof aiGenerated === 'object' && typeof existing === 'object') {
-    const existingRecord = existing as TableData;
-    const merged = { ...existingRecord };
-    for (const [key, value] of Object.entries(aiGenerated as TableData)) {
-      merged[key] = deepMergeNullValues(existingRecord[key], value);
-    }
-    return merged;
-  }
-
-  return existing === '' ? aiGenerated : existing;
-};
-
-export const WordEditPanel: React.FC<WordEditPanelProps> = ({
+const WordEditor: React.FC<WordEditPanelProps> = ({
   word,
   onSave,
   updating,
   saveLabel = 'Apply',
   actions,
   allowAIAutocomplete = true,
+  learnedRules,
   onDirtyChange,
+  next,
+  onDiscard,
+  onHeadwordChange,
+  existingHeadword = NO_EXISTING_HEADWORD,
+  onOpenWord,
 }) => {
   const form = useForm<VocabularyFormValues>({
     resolver: zodResolver(VocabularyFormSchema) as Resolver<VocabularyFormValues>,
@@ -176,26 +210,28 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
   });
 
   const [table, setTable] = useState<TableData>(() => tableFromWord(word));
+  // The table as it is now, for a save that finishes after more edits.
+  const latestTable = useRef(table);
+  useEffect(() => {
+    latestTable.current = table;
+  });
+  const [savedTable, setSavedTable] = useState(() => JSON.stringify(tableFromWord(word)));
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  // The cell being edited as it is now, for a save that finishes while one is open.
+  const latestEditingCell = useRef(editingCell);
+  useEffect(() => {
+    latestEditingCell.current = editingCell;
+  });
   const [editingCellValue, setEditingCellValue] = useState('');
   const [tableExpanded, setTableExpanded] = useState(true);
   const [aiFieldStatus, setAiFieldStatus] = useState<Map<string, 'filled' | 'missing'>>(new Map());
+  const assistant = useAIAssistant();
+  const chatKey = word?.id ?? 'no-word';
   const [tableErrors, setTableErrors] = useState<string[]>([]);
+  const [confirmingDismiss, setConfirmingDismiss] = useState(false);
   const [prevPronounSchema, setPrevPronounSchema] = useState<ReturnType<typeof getPronounTableSchema> | null>(null);
 
   const editableTable = getEditableTable(word);
-
-  useEffect(() => {
-    form.reset(word ? toFormDefaultValues(word) : EMPTY_FORM_VALUES, { keepDefaultValues: false });
-    setTable(tableFromWord(word));
-    if (word) setTableExpanded(true);
-    setEditingCell(null);
-    setEditingCellValue('');
-    setTableErrors([]);
-    setAiFieldStatus(new Map());
-    setPrevPronounSchema(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [word?.id]);
 
   const pronounType = form.watch('pronoun_type') as PronounType | null;
   const pronounPerson = form.watch('person') as PronounPerson | null;
@@ -243,82 +279,340 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
 
   const handleAIAutocomplete = (
     aiData: Partial<VocabularyWord>,
-    apiFieldStatus?: Record<string, 'filled' | 'missing'>,
-    requestWordId?: string
+    apiFieldStatus: Record<string, 'filled' | 'missing'> | undefined,
+    requestWordId: string,
+    allUncertainties: VocabularyAIUncertainty[],
+    asked: Partial<VocabularyWord>
   ) => {
     // Ignore a response that arrives after the admin switched to another word.
-    if (requestWordId && requestWordId !== word?.id) return;
+    if (requestWordId !== word?.id) return;
+    // Or after renaming this one: an answer about rosa must not fill in via.
+    if (headwordOf(asked) !== headwordOf(form.getValues() as Partial<VocabularyWord>)) {
+      toast.info('Autocomplete answer not applied', {
+        description: `It was about ${headwordOf(asked) || 'the word as it was'}, and you renamed the word since. Run it again.`,
+      });
+      return;
+    }
 
     const fieldStatus = new Map<string, 'filled' | 'missing'>(Object.entries(apiFieldStatus || {}));
 
+    const current = form.getValues() as unknown as TableData;
+    // The draft the AI was given: what is unchanged since takes the server's answer.
+    const askedData = asked as unknown as TableData;
+    // The admin kept working while the AI ran. A field they changed meanwhile keeps their value, and the
+    // AI's answer and question about it are left out: they were about a value that is no longer there.
+    const edited = new Set<string>(
+      AICompletableFieldSchema.options.filter(
+        field =>
+          field !== editableTable?.field &&
+          field in current &&
+          snapshotValue(askedData[field]) !== snapshotValue(current[field])
+      )
+    );
+    const kept = AICompletableFieldSchema.options.filter(
+      field =>
+        edited.has(field) &&
+        field in aiData &&
+        snapshotValue((aiData as TableData)[field]) !== snapshotValue(askedData[field])
+    );
+    // A pronoun's type and person decide its table's shape, so they go with the table, as on Accept: if the
+    // admin edited the table while the AI ran and the answer's type or person would change that shape, all
+    // three are left out. Applying them would replace the edited table with one of another shape.
+    const pronounShape = (values: TableData) =>
+      getPronounTableSchema(values.pronoun_type as PronounType | null, values.person as PronounPerson | null);
+    let shapeLeftOut = false;
+    if (
+      word?.part_of_speech === 'pronoun' &&
+      editableTable &&
+      snapshotValue(askedData[editableTable.field]) !== snapshotValue(table)
+    ) {
+      const answered = (field: 'person' | 'pronoun_type') =>
+        edited.has(field) ? current[field] : ((aiData as TableData)[field] ?? current[field]);
+      if (
+        pronounShape({ pronoun_type: answered('pronoun_type'), person: answered('person') }) !== pronounShape(current)
+      ) {
+        edited.add('person');
+        edited.add('pronoun_type');
+        shapeLeftOut = true;
+        toast.info('Autocomplete left the person and the table as they are', {
+          description:
+            'You edited the table while it ran, and the person it found would change the table to another shape.',
+        });
+      }
+    }
+    // The admin changed the pronoun's type or person while the AI ran, so the table is no longer the shape
+    // the AI was given: its table, and its questions about that table, are left out.
+    const shapeChangedMeanwhile =
+      word?.part_of_speech === 'pronoun' && pronounShape(askedData) !== pronounShape(current);
+    const uncertainties = allUncertainties.filter(
+      item => !edited.has(item.field) && !(shapeChangedMeanwhile && item.field === editableTable?.field)
+    );
+    const filled: AICompletableField[] = [];
     Object.entries(aiData).forEach(([key, value]) => {
-      if (key === 'part_of_speech') return;
-      if (value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0)) {
+      if (
+        key === 'part_of_speech' ||
+        key === 'ai_review' ||
+        key === editableTable?.field ||
+        !(key in current) ||
+        edited.has(key)
+      )
+        return;
+      // The server merged its answer into the draft it was sent, and this field is unchanged since, so the
+      // server's value is the answer: it keeps what was there and completes what was missing.
+      if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) return;
+      if (snapshotValue(value) !== snapshotValue(current[key])) {
         form.setValue(key as keyof VocabularyFormValues, value as never, { shouldValidate: false, shouldDirty: true });
+        const field = AICompletableFieldSchema.safeParse(key);
+        if (field.success) filled.push(field.data);
       }
     });
-
-    const aiTable = editableTable && (aiData as TableData)[editableTable.field];
-    if (editableTable && aiTable) {
-      const nullPathsBefore = findNullPaths(table);
-      const mergedTable = deepMergeNullValues(table, aiTable);
-      const nullPathsAfter = findNullPaths(mergedTable);
-      setTable(cloneTableData(mergedTable));
-
-      const nullPathsBeforeSet = new Set(nullPathsBefore);
-      const nullPathsAfterSet = new Set(nullPathsAfter);
-      for (const path of nullPathsBefore) {
-        if (!nullPathsAfterSet.has(path)) fieldStatus.set(`${editableTable.field}.${path}`, 'filled');
-      }
-      for (const path of nullPathsAfter) {
-        if (nullPathsBeforeSet.has(path)) fieldStatus.set(`${editableTable.field}.${path}`, 'missing');
+    if (uncertainties.length > 0) {
+      // New doubts join the open ones; only the admin closes a doubt.
+      const review = form.getValues('ai_review') ?? EMPTY_AI_REVIEW;
+      const merged = addOpenUncertainties(review.uncertainties, uncertainties);
+      if (merged.length !== review.uncertainties.length) {
+        form.setValue('ai_review', { ...review, uncertainties: merged }, { shouldDirty: true });
       }
     }
 
+    // A table of another shape is left out: with its person, or because the shape changed meanwhile (above).
+    let aiTable =
+      !shapeLeftOut && !shapeChangedMeanwhile && editableTable && (aiData as TableData)[editableTable.field];
+    // A pronoun whose type or person this answer filled in may now use a table of another shape (first and
+    // second person have no genders). The AI's table is then taken whole: merged into the old shape it
+    // would fit neither, and the shape change would replace it with an empty table right after. The old
+    // table was not edited during the run (otherwise the shape change is left out above).
+    const newShape =
+      word?.part_of_speech === 'pronoun' &&
+      pronounShape(form.getValues() as unknown as TableData) !== pronounShape(current) &&
+      pronounShape(form.getValues() as unknown as TableData);
+    if (editableTable && aiTable && newShape) {
+      const next = cloneTableData(aiTable);
+      const formsGiven = changedTableCells({}, next);
+      for (const path of findNullPaths(next)) fieldStatus.set(`${editableTable.field}.${path}`, 'missing');
+      for (const path of formsGiven) fieldStatus.set(`${editableTable.field}.${path}`, 'filled');
+      const tableField = AICompletableFieldSchema.safeParse(editableTable.field);
+      if (tableField.success && formsGiven.length > 0) filled.push(tableField.data);
+      setTable(next);
+      setPrevPronounSchema(newShape);
+      aiTable = undefined;
+    }
+    const reconciledTable =
+      editableTable && aiTable ? cloneTableData(reconcileTable(askedData[editableTable.field], table, aiTable)) : null;
+    if (editableTable && reconciledTable) {
+      const missingBefore = findNullPaths(table);
+      const missingAfter = new Set(findNullPaths(reconciledTable));
+      for (const path of missingBefore) {
+        fieldStatus.set(`${editableTable.field}.${path}`, missingAfter.has(path) ? 'missing' : 'filled');
+      }
+      const tableField = AICompletableFieldSchema.safeParse(editableTable.field);
+      if (tableField.success && missingBefore.some(path => !missingAfter.has(path))) filled.push(tableField.data);
+      setTable(reconciledTable);
+    }
+
     setAiFieldStatus(fieldStatus);
+
+    // The assistant comes up to report the run: all good, or what the AI still asks. It remembers
+    // each asked field as autocomplete left it, so only a later edit counts as the admin's own.
+    const after = form.getValues() as unknown as TableData;
+    const basis = Object.fromEntries(
+      uncertainties.map(item => [
+        item.field,
+        editableTable && reconciledTable && item.field === editableTable.field ? reconciledTable : after[item.field],
+      ])
+    );
+    const report = autocompleteMessage({ filled, questions: uncertainties.length, kept }, watchedWord || word.word);
+    const reportId = assistant.newTurnId();
+    assistant.update(chatKey, chat => ({
+      ...chat,
+      basis: { ...chat.basis, ...basis },
+      turns: [
+        ...chat.turns,
+        { id: reportId, from: 'ai', text: report, proposal: null, status: 'answer', rule: { status: 'offered' } },
+      ],
+    }));
+    assistant.setOpen(true);
   };
 
-  const handleSubmit = form.handleSubmit(
-    async values => {
-      if (!word) return;
+  const updateReview = (change: (review: VocabularyAIReview) => VocabularyAIReview) =>
+    form.setValue('ai_review', change(form.getValues('ai_review') ?? EMPTY_AI_REVIEW), {
+      shouldDirty: true,
+      shouldValidate: false,
+    });
 
-      if (editableTable) {
-        const schema =
-          word.part_of_speech === 'pronoun'
-            ? getPronounTableSchema(
-                form.getValues('pronoun_type') as PronounType | null,
-                form.getValues('person') as PronounPerson | null
-              )
-            : editableTable.schema;
-        const result = schema.safeParse(table);
-        if (!result.success) {
-          setTableErrors([result.error.issues[0]?.message ?? 'Invalid table']);
-          return;
+  /** Notes for later AI requests, up to the limit a word can hold, with the admin's message they came from. */
+  const withNotes = (guidance: VocabularyAINote[], notes: VocabularyAIMemory[], source?: string) => {
+    const room = Math.max(0, AI_REVIEW_ITEM_LIMIT - guidance.length);
+    if (notes.length > room) {
+      toast.warning(
+        `This word already holds ${AI_REVIEW_ITEM_LIMIT} notes for the AI, so not everything was remembered.`,
+        {
+          description: 'Remove old notes in the AI assistant to keep new ones.',
+        }
+      );
+    }
+    return [
+      ...guidance,
+      ...notes.slice(0, room).map(({ field, note }) => ({
+        id: crypto.randomUUID(),
+        instruction: note,
+        ...(field ? { field } : {}),
+        ...(source?.trim() ? { source: source.trim() } : {}),
+      })),
+    ];
+  };
+
+  const currentTableSchema = () =>
+    word?.part_of_speech === 'pronoun'
+      ? getPronounTableSchema(
+          form.getValues('pronoun_type') as PronounType | null,
+          form.getValues('person') as PronounPerson | null
+        )
+      : editableTable!.schema;
+
+  /** Puts the values the admin accepted in the draft, closes the questions they settle and keeps the notes. */
+  const handleAcceptReply = ({ changes, closed, notes, source }: AcceptedAIReply) => {
+    // The same room `withNotes` leaves, so the assistant can say which notes were kept.
+    const room = AI_REVIEW_ITEM_LIMIT - (form.getValues('ai_review') ?? EMPTY_AI_REVIEW).guidance.length;
+    const kept = notes.slice(0, Math.max(0, room));
+    const highlighted = new Map(aiFieldStatus);
+    for (const [field, value] of Object.entries(changes)) {
+      if (editableTable?.field === field) {
+        const next = cloneTableData(value === null ? buildEmptyFromSchema(currentTableSchema()) : value);
+        for (const path of changedTableCells(table, next)) highlighted.set(`${field}.${path}`, 'filled');
+        setTable(next);
+      } else {
+        form.setValue(field as keyof VocabularyFormValues, value as never, {
+          shouldDirty: true,
+          shouldValidate: false,
+        });
+        highlighted.set(field, 'filled');
+      }
+    }
+    // A reply that changes a pronoun's type or person together with its table gives a table of the new
+    // shape. Without this the shape change would replace it with an empty one right after.
+    if (word?.part_of_speech === 'pronoun' && editableTable && editableTable.field in changes) {
+      setPrevPronounSchema(
+        getPronounTableSchema(
+          form.getValues('pronoun_type') as PronounType | null,
+          form.getValues('person') as PronounPerson | null
+        )
+      );
+    }
+    setAiFieldStatus(highlighted);
+    if (closed.length > 0 || notes.length > 0) {
+      updateReview(review => ({
+        uncertainties: review.uncertainties.filter(item => !closed.includes(item.field)),
+        guidance: withNotes(review.guidance, notes, source),
+      }));
+    }
+    const fields = Object.keys(changes).map(aiFieldLabel);
+    if (fields.length > 0) toast.success(`Updated ${fields.join(', ')}. Save the word with ${saveLabel} to keep it.`);
+    else if (closed.length > 0 || notes.length > 0)
+      toast.success(`Answer noted. Save the word with ${saveLabel} to keep it.`);
+    return kept;
+  };
+
+  const handleKeep = (field: AICompletableField, note: string) =>
+    updateReview(review => ({
+      uncertainties: review.uncertainties.filter(item => item.field !== field),
+      guidance: withNotes(review.guidance, [{ field, note }]),
+    }));
+
+  const handleRemoveNote = (id: string) =>
+    updateReview(review => ({ ...review, guidance: review.guidance.filter(note => note.id !== id) }));
+
+  /** Saves the word; `after` runs only once the save has succeeded. */
+  const save = (after?: () => void) => async (values: VocabularyFormValues) => {
+    if (!word) return;
+    // A cell being edited is not in the table until committed, so saving now would leave it out.
+    if (editingCell) {
+      toast.info('Finish editing the table cell first', {
+        description: 'Press Enter to keep it or Escape to cancel, then save.',
+      });
+      return;
+    }
+
+    if (editableTable) {
+      const result = currentTableSchema().safeParse(table);
+      if (!result.success) {
+        setTableErrors([result.error.issues[0]?.message ?? 'Invalid table']);
+        return;
+      }
+    }
+
+    setTableErrors([]);
+
+    const updatedWord = applyFormValuesToWord(word, values);
+    if (editableTable) {
+      (updatedWord as unknown as TableData)[editableTable.field] = cloneTableData(table);
+    }
+
+    const { id: _id, ...payload } = updatedWord;
+
+    // The fields stay editable while the save runs. What the admin types meanwhile, or an AI answer
+    // that lands meanwhile, is not in this save, and must not be reset away when it succeeds.
+    const submittedValues = JSON.stringify(form.getValues());
+    const submittedTable = JSON.stringify(latestTable.current);
+    const success = await onSave(payload);
+    if (
+      success &&
+      (JSON.stringify(form.getValues()) !== submittedValues ||
+        JSON.stringify(latestTable.current) !== submittedTable ||
+        latestEditingCell.current !== null)
+    ) {
+      // The saved word becomes the baseline; the newer edits stay, as unsaved changes against it. Each field
+      // that differs from it is marked changed again: an edit typed back to the old value is clean against
+      // the old baseline, yet differs from what was just saved.
+      const baseline = toFormDefaultValues(updatedWord);
+      form.reset(baseline, { keepValues: true });
+      const values = form.getValues() as unknown as Record<string, unknown>;
+      for (const [field, value] of Object.entries(values)) {
+        if (JSON.stringify(value) !== JSON.stringify((baseline as unknown as Record<string, unknown>)[field])) {
+          form.setValue(field as keyof VocabularyFormValues, value as never, { shouldDirty: true });
         }
       }
+      setSavedTable(JSON.stringify(tableFromWord(updatedWord)));
+      toast.info('Saved, without the changes you made while it saved', {
+        description: `Those are still in the draft. Save again with ${saveLabel} to keep them.`,
+      });
+      return;
+    }
+    if (success) {
+      form.reset(toFormDefaultValues(updatedWord));
+      setTable(tableFromWord(updatedWord));
+      setSavedTable(JSON.stringify(tableFromWord(updatedWord)));
+      setEditingCell(null);
+      setEditingCellValue('');
+      setAiFieldStatus(new Map());
+      after?.();
+    }
+  };
+  const handleSubmit = form.handleSubmit(save(), () => setTableErrors([]));
 
-      setTableErrors([]);
+  /**
+   * Saves, then opens the next word. A failed save or a form error keeps this word open with its
+   * draft. Open AI questions do not block it: they stay on the word for later.
+   */
+  const saveAndNext = () => {
+    if (!next || !('open' in next) || updating || form.formState.isSubmitting || editingCell) return;
+    void form.handleSubmit(save(next.open), () => setTableErrors([]))();
+  };
 
-      const updatedWord = applyFormValuesToWord(word, values);
-      if (editableTable) {
-        (updatedWord as unknown as TableData)[editableTable.field] = cloneTableData(table);
-      }
-
-      const { id: _id, ...payload } = updatedWord;
-
-      const success = await onSave(payload);
-      if (success) {
-        form.reset(toFormDefaultValues(updatedWord));
-        setTable(tableFromWord(updatedWord));
-        setEditingCell(null);
-        setEditingCellValue('');
-        setAiFieldStatus(new Map());
-      }
-    },
-    () => setTableErrors([])
-  );
-
-  const watchedWord = form.watch('word');
+  const anchorPrefix = useId();
+  const watchedValues = form.watch();
+  const watchedWord = watchedValues.word;
+  // The page checks a new word against the vocabulary as its headword is typed, before the AI or the admin
+  // spends time on the rest.
+  const reportHeadword = useEffectEvent((headword: string) => onHeadwordChange?.(headword));
+  useEffect(() => {
+    reportHeadword(watchedWord ?? '');
+  }, [watchedWord]);
+  const aiSnapshot = {
+    ...word,
+    ...watchedValues,
+    ...(editableTable ? { [editableTable.field]: table } : {}),
+  } as Partial<VocabularyWord>;
 
   const renderPosForm = () => {
     switch (word?.part_of_speech) {
@@ -339,12 +633,30 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
 
   const isSubmitting = form.formState.isSubmitting;
 
-  const savedTable = useMemo(() => JSON.stringify(tableFromWord(word)), [word]);
-  const dirty = form.formState.isDirty || JSON.stringify(table) !== savedTable;
+  const aiReview: AIReviewContextValue | null = allowAIAutocomplete
+    ? {
+        anchorPrefix,
+        review: watchedValues.ai_review ?? EMPTY_AI_REVIEW,
+        draft: aiSnapshot,
+        disabled: updating || isSubmitting || !!editingCell,
+        acceptReply: handleAcceptReply,
+        saveLabel,
+        keep: handleKeep,
+        removeNote: handleRemoveNote,
+        learnedRules,
+        assistant,
+        chatKey,
+        saved: word ?? {},
+      }
+    : null;
+
+  // A table cell being edited counts too: its text is in the draft only once committed.
+  const dirty = form.formState.isDirty || JSON.stringify(table) !== savedTable || editingCell !== null;
+  const reportDirty = useEffectEvent((value: boolean) => onDirtyChange?.(value));
   useEffect(() => {
-    onDirtyChange?.(dirty);
-    return () => onDirtyChange?.(false);
-  }, [dirty, onDirtyChange]);
+    reportDirty(dirty);
+  }, [dirty]);
+  useEffect(() => () => reportDirty(false), []);
 
   if (!word) {
     return <EmptyState />;
@@ -352,92 +664,176 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({
 
   return (
     <FormProvider {...form}>
-      <AIFilledFieldsContext.Provider value={aiFieldStatus}>
-        <form
-          onSubmit={handleSubmit}
-          className="flex h-full min-h-0 flex-col overflow-hidden bg-white border-l border-gray-200">
-          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-xl font-serif font-semibold text-roman-red truncate">{watchedWord || word.word}</h2>
-                <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {actions}
-                {allowAIAutocomplete && (
-                  <AIAutocompleteButton
-                    wordId={word.id}
-                    word={watchedWord || word.word}
-                    partOfSpeech={word.part_of_speech}
-                    existingData={form.getValues() as Partial<VocabularyWord>}
-                    onAutocomplete={handleAIAutocomplete}
+      <AIReviewContext.Provider value={aiReview}>
+        <AIFilledFieldsContext.Provider value={aiFieldStatus}>
+          <form
+            onSubmit={handleSubmit}
+            onKeyDown={event => {
+              if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey) || event.nativeEvent.isComposing) return;
+              if (!next) return;
+              event.preventDefault();
+              saveAndNext();
+            }}
+            className="flex h-full min-h-0 flex-col overflow-hidden bg-white border-l border-gray-200">
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-xl font-serif font-semibold text-roman-red truncate">
+                    {watchedWord || word.word}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {actions}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!dirty || updating || isSubmitting}
+                    title={dirty ? 'Discard every unsaved entry, typed or filled by AI' : 'Nothing to dismiss'}
+                    onClick={() => setConfirmingDismiss(true)}>
+                    Dismiss
+                  </Button>
+                  <Button
+                    type="submit"
                     disabled={updating || isSubmitting}
-                  />
-                )}
-                <Button type="submit" disabled={updating || isSubmitting}>
-                  {updating || isSubmitting ? 'Saving...' : saveLabel}
-                </Button>
+                    aria-keyshortcuts={next ? 'Control+Enter Meta+Enter' : undefined}
+                    title={
+                      next && 'open' in next
+                        ? `Ctrl+Enter or ⌘+Enter: ${saveLabel.toLowerCase()}, then open ${next.word}`
+                        : undefined
+                    }>
+                    {updating || isSubmitting ? 'Saving...' : saveLabel}
+                  </Button>
+                </div>
               </div>
-            </div>
-            {Object.keys(form.formState.errors).length > 0 && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                <div className="font-semibold mb-1">Validation Errors:</div>
-                <pre className="text-xs overflow-auto">{JSON.stringify(form.formState.errors, null, 2)}</pre>
-              </div>
-            )}
-            {tableErrors.length > 0 && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                <div className="font-semibold mb-1">Table Validation Errors:</div>
-                <ul className="list-disc list-inside space-y-1">
-                  {tableErrors.map((error, index) => (
-                    <li key={index} className="text-xs">
-                      {error}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {/* `relative` keeps the hidden native inputs Radix renders for form controls inside this scroller;
-              without it they are positioned against the page and make the whole document scrollable. */}
-          <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
-            <div className="space-y-6">
-              <BaseWordForm />
-              {renderPosForm()}
-
-              {editableTable && (
-                <SchemaTable
-                  schema={
-                    word.part_of_speech === 'pronoun'
-                      ? getPronounTableSchema(pronounType, pronounPerson)
-                      : editableTable.schema
-                  }
-                  data={table}
-                  tableType={editableTable.tableType}
-                  title={
-                    word.part_of_speech === 'pronoun'
-                      ? getPronounTableTitle(pronounType, pronounPerson)
-                      : editableTable.title
-                  }
-                  color={editableTable.color}
-                  isExpanded={tableExpanded}
-                  onToggle={() => setTableExpanded(expanded => !expanded)}
-                  isEditMode={true}
-                  editingCell={editingCell}
-                  editingCellValue={editingCellValue}
-                  editCallbacks={{
-                    onCellDoubleClick: handleCellDoubleClick,
-                    onCellEditSave: handleCellEditSave,
-                    onCellEditCancel: handleCellEditCancel,
-                    onEditingCellValueChange: setEditingCellValue,
-                  }}
-                />
+              {Object.keys(form.formState.errors).length > 0 && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                  <div className="font-semibold mb-1">Validation Errors:</div>
+                  <pre className="text-xs overflow-auto">{JSON.stringify(form.formState.errors, null, 2)}</pre>
+                </div>
+              )}
+              {tableErrors.length > 0 && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                  <div className="font-semibold mb-1">Table Validation Errors:</div>
+                  <ul className="list-disc list-inside space-y-1">
+                    {tableErrors.map((error, index) => (
+                      <li key={index} className="text-xs">
+                        {error}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
-          </div>
-        </form>
-      </AIFilledFieldsContext.Provider>
+
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              {/* `relative` keeps the hidden native inputs Radix renders for form controls inside this scroller;
+              without it they are positioned against the page and make the whole document scrollable. */}
+              <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+                <div className="space-y-6 pb-4">
+                  <ExistingHeadwordNotice
+                    headword={watchedWord ?? ''}
+                    words={existingHeadword.words}
+                    onOpen={onOpenWord}
+                  />
+                  <BaseWordForm />
+                  {renderPosForm()}
+
+                  {editableTable && (
+                    <AIFieldReview field={editableTable.field}>
+                      <SchemaTable
+                        schema={
+                          word.part_of_speech === 'pronoun'
+                            ? getPronounTableSchema(pronounType, pronounPerson)
+                            : editableTable.schema
+                        }
+                        data={table}
+                        tableType={editableTable.tableType}
+                        title={
+                          word.part_of_speech === 'pronoun'
+                            ? getPronounTableTitle(pronounType, pronounPerson)
+                            : editableTable.title
+                        }
+                        color={editableTable.color}
+                        isExpanded={tableExpanded}
+                        onToggle={() => setTableExpanded(expanded => !expanded)}
+                        isEditMode={true}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        editCallbacks={{
+                          onCellDoubleClick: handleCellDoubleClick,
+                          onCellEditSave: handleCellEditSave,
+                          onCellEditCancel: handleCellEditCancel,
+                          onEditingCellValueChange: setEditingCellValue,
+                        }}
+                      />
+                    </AIFieldReview>
+                  )}
+                </div>
+              </div>
+            </div>
+            {/* The AI bar sits under the fields; its chat opens above it and takes room from them. */}
+            <AIAssistantDock
+              generate={
+                <AIAutocompleteButton
+                  key={word.id}
+                  wordId={word.id}
+                  word={watchedWord || word.word}
+                  partOfSpeech={word.part_of_speech}
+                  existingData={aiSnapshot}
+                  onAutocomplete={handleAIAutocomplete}
+                  disabled={updating || isSubmitting || !!editingCell || existingHeadword.checking}
+                  disabledReason={
+                    existingHeadword.checking
+                      ? `Checking whether ${watchedWord.trim()} is already in the vocabulary…`
+                      : undefined
+                  }
+                  confirmBeforeRun={
+                    existingHeadword.words.length > 0
+                      ? {
+                          title: 'This word is already in the vocabulary',
+                          description: `"${watchedWord.trim()}" is already in the vocabulary as ${existingHeadword.words
+                            .map(existing => `${existing.word} (${existing.part_of_speech})`)
+                            .join(
+                              ', '
+                            )}. Run AI Generate anyway? Only do this for a different word with the same spelling.`,
+                        }
+                      : undefined
+                  }
+                />
+              }
+            />
+            <ConfirmationDialog
+              isOpen={confirmingDismiss}
+              onClose={() => setConfirmingDismiss(false)}
+              onConfirm={() => onDiscard?.()}
+              title="Dismiss unsaved changes?"
+              description={`Everything entered in ${watchedWord || word.word} since it was last saved goes, whether you typed it or AI Generate filled it in. The conversation with the AI is kept.`}
+              confirmText="Dismiss changes"
+              cancelText="Keep editing"
+              confirmVariant="destructive"
+            />
+          </form>
+        </AIFilledFieldsContext.Provider>
+      </AIReviewContext.Provider>
     </FormProvider>
+  );
+};
+
+/** A word switch discards local requests, proposals, and draft state together. */
+/**
+ * Each word gets an editor of its own. "Dismiss" starts a fresh one from the saved word, which drops every
+ * unsaved entry together: typed, filled by AI, a run still in flight, and the fields marked as AI-filled.
+ */
+export const WordEditPanel = (props: WordEditPanelProps) => {
+  const [fresh, setFresh] = useState({ word: props.word?.id, count: 0 });
+  // A different word starts over at zero.
+  const count = fresh.word === props.word?.id ? fresh.count : 0;
+  return (
+    <WordEditor
+      key={`${props.word?.id ?? 'empty'}:${count}`}
+      {...props}
+      onDiscard={() => setFresh({ word: props.word?.id, count: count + 1 })}
+    />
   );
 };

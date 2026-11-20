@@ -67,7 +67,8 @@ const valueAt = (value: unknown, path: string): unknown =>
       value
     );
 
-const humanize = (field: string) => field.replace(/_/g, ' ').replace(/^./, letter => letter.toUpperCase());
+const humanize = (field: string) =>
+  field === 'ai_review' ? 'AI review' : field.replace(/_/g, ' ').replace(/^./, letter => letter.toUpperCase());
 
 const Empty = () => <span className="text-muted-foreground">—</span>;
 

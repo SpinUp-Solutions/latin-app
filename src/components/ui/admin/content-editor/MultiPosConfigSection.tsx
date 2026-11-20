@@ -7,6 +7,11 @@ import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vo
 import type { PosGeneratorConfig } from '@/src/types/exercises/base';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 import { useFormSelectionControls } from '@/src/hooks/useFormSelection';
+import {
+  DEFAULT_POS_FILTERS,
+  formatActiveFilterSummary,
+  getActivePosFilterKeys,
+} from '@/src/utils/exercises/generatorConfigDefaults';
 
 interface MultiPosConfigSectionProps {
   availablePartOfSpeech: PartOfSpeech[];
@@ -56,6 +61,9 @@ export const MultiPosConfigSection: React.FC<MultiPosConfigSectionProps> = ({
     return null;
   }
 
+  const activeFilterKeys = currentConfig?.enabled ? getActivePosFilterKeys(activePOS, currentConfig.filters) : [];
+  const activeFilterSummary = formatActiveFilterSummary(activeFilterKeys, currentConfig?.filters);
+
   return (
     <Card>
       <CardContent className="p-6 space-y-6">
@@ -71,6 +79,9 @@ export const MultiPosConfigSection: React.FC<MultiPosConfigSectionProps> = ({
             {availablePartOfSpeech.map(pos => {
               const isActive = pos === activePOS;
               const wordCount = wordCountsByPOS[pos];
+              const posConfig = posConfigs[pos];
+              const tabActiveFilterKeys = posConfig?.enabled ? getActivePosFilterKeys(pos, posConfig.filters) : [];
+              const tabFilterSummary = formatActiveFilterSummary(tabActiveFilterKeys, posConfig?.filters);
 
               return (
                 <Button
@@ -84,6 +95,14 @@ export const MultiPosConfigSection: React.FC<MultiPosConfigSectionProps> = ({
                   {wordCount !== undefined && (
                     <Badge variant={isActive ? 'secondary' : 'outline'} className="text-xs">
                       {wordCount}
+                    </Badge>
+                  )}
+                  {tabActiveFilterKeys.length > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="border-amber-300 bg-amber-50 text-xs text-amber-800"
+                      title={`Active filters: ${tabFilterSummary}`}>
+                      Filtered
                     </Badge>
                   )}
                 </Button>
@@ -105,6 +124,25 @@ export const MultiPosConfigSection: React.FC<MultiPosConfigSectionProps> = ({
                   {currentConfig?.enabled ? 'Enabled' : 'Enable'}
                 </Button>
               </div>
+
+              {currentConfig?.enabled && activeFilterKeys.length > 0 && (
+                <div
+                  role="status"
+                  className="flex items-center justify-between gap-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <span>
+                    Active filters narrow the words used for this part of speech: <strong>{activeFilterSummary}</strong>
+                    .
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto shrink-0 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                    onClick={() => onUpdatePosConfig(activePOS, { filters: { ...DEFAULT_POS_FILTERS } })}>
+                    Clear filters
+                  </Button>
+                </div>
+              )}
 
               {currentConfig?.enabled && tableType && (
                 <div>

@@ -29,3 +29,6 @@ export const VOCABULARY_EVALUATION_RESULT_CACHE_COLLECTION = 'vocabularyAutocomp
 export const USERS_COLLECTION = 'users';
 export const STUDENT_FEEDBACK_COLLECTION = 'studentFeedback';
 export const STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION = 'activity';
+
+export const VOCABULARY_AI_GUIDANCE_COLLECTION = 'vocabularyAIGuidance';
+export const VOCABULARY_AI_GUIDANCE_DOCUMENT = 'global';
