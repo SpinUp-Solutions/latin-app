@@ -80,12 +80,32 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
 
   const updateConfig = useCallback(
     (configUpdates: Partial<typeof config>) => {
+      const isChangingWordSource =
+        configUpdates.wordSource !== undefined && configUpdates.wordSource !== config.wordSource;
       const nextContent = produce(editingContent, draft => {
-        draft.data.generatorConfig = ensureGeneratorConfig({ ...rawConfig, ...configUpdates });
+        draft.data.generatorConfig = ensureGeneratorConfig({
+          ...rawConfig,
+          ...configUpdates,
+          ...(isChangingWordSource ? { filters: { partOfSpeech: 'all', ...DEFAULT_POS_FILTERS } } : {}),
+        });
+        if (!isChangingWordSource) return;
+        if (!draft.data.paradigmConfigs || Object.keys(draft.data.paradigmConfigs).length === 0) {
+          if (Object.keys(paradigmConfigs).length === 0) return;
+          draft.data.paradigmConfigs = { ...paradigmConfigs };
+        }
+        for (const paradigm of Object.keys(draft.data.paradigmConfigs) as FormParadigm[]) {
+          const paradigmConfig = draft.data.paradigmConfigs[paradigm];
+          if (paradigmConfig) {
+            draft.data.paradigmConfigs[paradigm] = {
+              ...paradigmConfig,
+              filters: { ...DEFAULT_POS_FILTERS },
+            };
+          }
+        }
       });
       updateContent(nextContent);
     },
-    [editingContent, rawConfig, updateContent]
+    [config.wordSource, editingContent, paradigmConfigs, rawConfig, updateContent]
   );
 
   const handleUpdateParadigmConfig = useCallback(
@@ -128,23 +148,59 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
           ...rawConfig,
           filters: { ...config.filters, ...updates },
         });
-        if (!activeParadigm) return;
         if (!draft.data.paradigmConfigs || Object.keys(draft.data.paradigmConfigs).length === 0) {
+          if (Object.keys(paradigmConfigs).length === 0) return;
           draft.data.paradigmConfigs = { ...paradigmConfigs };
         }
-        const activeConfig = draft.data.paradigmConfigs[activeParadigm];
-        if (!activeConfig) return;
-        const relevantFilters = PARADIGM_RELEVANT_FILTERS[activeParadigm];
-        for (const key of Object.keys(updates) as (keyof GeneratorFilters)[]) {
-          if (key !== 'partOfSpeech' && relevantFilters.includes(key)) {
-            activeConfig.filters[key] = updates[key];
+        const updateKeys = (Object.keys(updates) as (keyof GeneratorFilters)[]).filter(
+          (key): key is keyof Omit<GeneratorFilters, 'partOfSpeech'> => key !== 'partOfSpeech'
+        );
+        if (updateKeys.length === 0) return;
+
+        for (const paradigm of Object.keys(draft.data.paradigmConfigs) as FormParadigm[]) {
+          const paradigmConfig = draft.data.paradigmConfigs[paradigm];
+          const relevantFilters = PARADIGM_RELEVANT_FILTERS[paradigm];
+          if (!paradigmConfig || !relevantFilters) continue;
+          const nextFilters = { ...paradigmConfig.filters };
+          let changed = false;
+          for (const key of updateKeys) {
+            if (relevantFilters.includes(key)) {
+              nextFilters[key] = updates[key];
+              changed = true;
+            }
+          }
+          if (changed) {
+            draft.data.paradigmConfigs[paradigm] = { ...paradigmConfig, filters: nextFilters };
           }
         }
       });
       updateContent(nextContent);
     },
-    [editingContent, rawConfig, config.filters, activeParadigm, paradigmConfigs, updateContent]
+    [editingContent, rawConfig, config.filters, paradigmConfigs, updateContent]
   );
+
+  const handleResetFilters = () => {
+    const nextContent = produce(editingContent, draft => {
+      draft.data.generatorConfig = ensureGeneratorConfig({
+        ...rawConfig,
+        filters: { partOfSpeech: 'all', ...DEFAULT_POS_FILTERS },
+      });
+      if (!draft.data.paradigmConfigs || Object.keys(draft.data.paradigmConfigs).length === 0) {
+        if (Object.keys(paradigmConfigs).length === 0) return;
+        draft.data.paradigmConfigs = { ...paradigmConfigs };
+      }
+      for (const paradigm of Object.keys(draft.data.paradigmConfigs) as FormParadigm[]) {
+        const paradigmConfig = draft.data.paradigmConfigs[paradigm];
+        if (paradigmConfig) {
+          draft.data.paradigmConfigs[paradigm] = {
+            ...paradigmConfig,
+            filters: { ...DEFAULT_POS_FILTERS },
+          };
+        }
+      }
+    });
+    updateContent(nextContent);
+  };
 
   useEffect(() => {
     if (paradigmInfo.availableParadigms.length === 0) {
@@ -209,6 +265,7 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
     handleUpdateParadigmConfig,
     handleToggleParadigm,
     handleGlobalFiltersChange,
+    handleResetFilters,
     previewData,
     isPreviewFetching,
     previewError,

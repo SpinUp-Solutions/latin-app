@@ -1,4 +1,9 @@
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import { PARADIGM_RELEVANT_FILTERS } from '@/src/config/paradigmDefinitions';
 import type { GeneratorConfigBase, GeneratorFilters } from '@/src/types/exercises/base';
+import type { FormParadigm } from '@/src/types/exercises/paradigm';
+
+export type PosFilterKey = keyof Omit<GeneratorFilters, 'partOfSpeech'>;
 
 export const DEFAULT_POS_FILTERS: Omit<GeneratorFilters, 'partOfSpeech'> = {
   search: '',
@@ -8,6 +13,67 @@ export const DEFAULT_POS_FILTERS: Omit<GeneratorFilters, 'partOfSpeech'> = {
   adjectiveDeclension: 'all',
   pronounType: 'all',
   pronounPerson: 'all',
+};
+
+const POS_RELEVANT_FILTERS: Readonly<Record<PartOfSpeech, readonly PosFilterKey[]>> = {
+  verb: ['verbConjugation', 'isDeponent', 'search'],
+  noun: ['nounDeclension', 'search'],
+  adjective: ['adjectiveDeclension', 'search'],
+  pronoun: ['pronounType', 'pronounPerson', 'search'],
+  adverb: ['search'],
+  preposition: ['search'],
+  conjunction: ['search'],
+  interjection: ['search'],
+};
+
+const isActivePosFilterValue = (key: PosFilterKey, value: unknown): boolean => {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  if (key === 'search') return true;
+  if (key === 'isDeponent') return value === 'true' || value === 'false';
+  return value !== 'all' && value !== 'both' && value.split(',').some(part => part.trim().length > 0);
+};
+
+export const getActiveParadigmFilterKeys = (
+  paradigm: FormParadigm,
+  filters?: Omit<GeneratorFilters, 'partOfSpeech'>
+): PosFilterKey[] => {
+  if (!filters) return [];
+  return PARADIGM_RELEVANT_FILTERS[paradigm].filter(key => isActivePosFilterValue(key, filters[key]));
+};
+
+export const getActivePosFilterKeys = (
+  partOfSpeech: PartOfSpeech,
+  filters?: Omit<GeneratorFilters, 'partOfSpeech'>
+): PosFilterKey[] => {
+  if (!filters) return [];
+  return POS_RELEVANT_FILTERS[partOfSpeech].filter(key => isActivePosFilterValue(key, filters[key]));
+};
+
+export const formatActiveFilterSummary = (
+  keys: readonly PosFilterKey[],
+  filters?: Omit<GeneratorFilters, 'partOfSpeech'>
+): string => {
+  if (!filters || keys.length === 0) return '';
+  return keys
+    .map(key => {
+      const value = filters[key] ?? '';
+      switch (key) {
+        case 'search':
+          return `Search ("${value}")`;
+        case 'verbConjugation':
+          return `Conjugation (${value})`;
+        case 'isDeponent':
+          return value === 'true' ? 'Deponent Only' : 'Non-Deponent Only';
+        case 'nounDeclension':
+        case 'adjectiveDeclension':
+          return `Declension (${value})`;
+        case 'pronounType':
+          return `Pronoun Type (${value})`;
+        case 'pronounPerson':
+          return `Person (${value})`;
+      }
+    })
+    .join(', ');
 };
 
 export type EnsuredGeneratorConfig = GeneratorConfigBase & {
