@@ -23,6 +23,7 @@ import { SchemaTable } from './tables/SchemaTable';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 import type { PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { BookOpen } from 'lucide-react';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import {
   BaseWordForm,
   NounForm,
@@ -67,11 +68,12 @@ interface WordEditPanelProps {
   /** Told whether the word has edits that have not been saved; false again when the panel goes away. */
   onDirtyChange?: (dirty: boolean) => void;
   /**
-   * The word after this one in the page's list, for "Save and next" (also Ctrl/⌘+Enter): it saves,
-   * then opens that word only if the save succeeded. A reason instead disables the button; leaving it
-   * out hides it.
+   * The word after this one in the page's list, for "Save and next" on Ctrl/⌘+Enter: it saves, then
+   * opens that word only if the save succeeded. A reason instead means there is no next word.
    */
   next?: SaveAndNext;
+  /** Starts the editor again from the saved word, for "Dismiss". Given by `WordEditPanel`. */
+  onDiscard?: () => void;
   /** Told the headword as it is typed, so the page can check a new word against the vocabulary. */
   onHeadwordChange?: (headword: string) => void;
   /**
@@ -196,6 +198,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   learnedRules,
   onDirtyChange,
   next,
+  onDiscard,
   onHeadwordChange,
   existingHeadword = NO_EXISTING_HEADWORD,
   onOpenWord,
@@ -225,6 +228,7 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   const assistant = useAIAssistant();
   const chatKey = word?.id ?? 'no-word';
   const [tableErrors, setTableErrors] = useState<string[]>([]);
+  const [confirmingDismiss, setConfirmingDismiss] = useState(false);
   const [prevPronounSchema, setPrevPronounSchema] = useState<ReturnType<typeof getPronounTableSchema> | null>(null);
 
   const editableTable = getEditableTable(word);
@@ -681,26 +685,23 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   {actions}
-                  {next && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="gap-1.5"
-                      onClick={saveAndNext}
-                      disabled={!('open' in next) || updating || isSubmitting || !!editingCell}
-                      aria-keyshortcuts="Control+Enter Meta+Enter"
-                      title={
-                        'open' in next
-                          ? `${saveLabel}, then open ${next.word} (Ctrl+Enter or ⌘+Enter)`
-                          : next.unavailable
-                      }>
-                      {saveLabel} and next
-                      <kbd className="rounded border border-gray-200 bg-gray-50 px-1 font-sans text-[10px] text-gray-500">
-                        Ctrl ↵
-                      </kbd>
-                    </Button>
-                  )}
-                  <Button type="submit" disabled={updating || isSubmitting}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!dirty || updating || isSubmitting}
+                    title={dirty ? 'Discard every unsaved entry, typed or filled by AI' : 'Nothing to dismiss'}
+                    onClick={() => setConfirmingDismiss(true)}>
+                    Dismiss
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={updating || isSubmitting}
+                    aria-keyshortcuts={next ? 'Control+Enter Meta+Enter' : undefined}
+                    title={
+                      next && 'open' in next
+                        ? `Ctrl+Enter or ⌘+Enter: ${saveLabel.toLowerCase()}, then open ${next.word}`
+                        : undefined
+                    }>
                     {updating || isSubmitting ? 'Saving...' : saveLabel}
                   </Button>
                 </div>
@@ -802,6 +803,16 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
                 />
               }
             />
+            <ConfirmationDialog
+              isOpen={confirmingDismiss}
+              onClose={() => setConfirmingDismiss(false)}
+              onConfirm={() => onDiscard?.()}
+              title="Dismiss unsaved changes?"
+              description={`Everything entered in ${watchedWord || word.word} since it was last saved goes, whether you typed it or AI Generate filled it in. The conversation with the AI is kept.`}
+              confirmText="Dismiss changes"
+              cancelText="Keep editing"
+              confirmVariant="destructive"
+            />
           </form>
         </AIFilledFieldsContext.Provider>
       </AIReviewContext.Provider>
@@ -810,4 +821,19 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
 };
 
 /** A word switch discards local requests, proposals, and draft state together. */
-export const WordEditPanel = (props: WordEditPanelProps) => <WordEditor key={props.word?.id ?? 'empty'} {...props} />;
+/**
+ * Each word gets an editor of its own. "Dismiss" starts a fresh one from the saved word, which drops every
+ * unsaved entry together: typed, filled by AI, a run still in flight, and the fields marked as AI-filled.
+ */
+export const WordEditPanel = (props: WordEditPanelProps) => {
+  const [fresh, setFresh] = useState({ word: props.word?.id, count: 0 });
+  // A different word starts over at zero.
+  const count = fresh.word === props.word?.id ? fresh.count : 0;
+  return (
+    <WordEditor
+      key={`${props.word?.id ?? 'empty'}:${count}`}
+      {...props}
+      onDiscard={() => setFresh({ word: props.word?.id, count: count + 1 })}
+    />
+  );
+};

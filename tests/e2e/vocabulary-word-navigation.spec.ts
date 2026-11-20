@@ -89,9 +89,9 @@ test.describe('Moving between vocabulary words', () => {
   test('Save and next saves the word, then opens the next one in the list', async ({ page }) => {
     await page.getByText('rosa', { exact: true }).click();
     await expect(heading(page, 'rosa')).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Apply and next/ })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toHaveAttribute(
       'title',
-      'Apply, then open silva (Ctrl+Enter or ⌘+Enter)'
+      'Ctrl+Enter or ⌘+Enter: apply, then open silva'
     );
 
     const translation = page.getByLabel('Translation', { exact: true });
@@ -105,10 +105,9 @@ test.describe('Moving between vocabulary words', () => {
       .poll(async () => (await getE2EAdmin().db.collection(VOCABULARY_WORDS_COLLECTION).doc('e2e-rosa').get()).data())
       .toMatchObject({ translation: 'a rose' });
 
-    // silva is the last word in the list.
-    const last = page.getByRole('button', { name: /^Apply and next/ });
-    await expect(last).toBeDisabled();
-    await expect(last).toHaveAttribute('title', 'This is the last word in the list.');
+    // silva is the last word in the list: Ctrl+Enter there stays on it.
+    await page.getByLabel('Translation', { exact: true }).press('Control+Enter');
+    await expect(heading(page, 'silva')).toBeVisible();
   });
 });
 

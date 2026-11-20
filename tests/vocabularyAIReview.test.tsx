@@ -77,12 +77,14 @@ const tab = () => screen.queryByRole('button', { name: /^Ask AI/ });
 const OnPage = ({
   word,
   onSave = async () => true,
+  onDirtyChange,
 }: {
   word: VocabularyWordWithId;
   onSave?: () => Promise<boolean>;
+  onDirtyChange?: (dirty: boolean) => void;
 }) => (
   <AIAssistantProvider>
-    <WordEditPanel key={word.id} word={word} onSave={onSave} updating={false} />
+    <WordEditPanel key={word.id} word={word} onSave={onSave} updating={false} onDirtyChange={onDirtyChange} />
   </AIAssistantProvider>
 );
 const silva = () => ({ ...cloneNoun(), id: 'silva', word: 'silva', ai_review: { uncertainties: [], guidance: [] } });
@@ -1342,17 +1344,21 @@ it('preserves explicit null metadata and adjective dictionary forms through norm
   expect(applyFormValuesToWord(adjective, adjectiveValues)).toMatchObject({ dictionary_forms: null });
 });
 
-describe('Save and next', () => {
+describe('Save and next (Ctrl/⌘+Enter)', () => {
   const silvaNext = () => ({ word: 'silva', open: jest.fn() });
+  const saveAndNext = () => fireEvent.keyDown(screen.getByLabelText('Translation'), { key: 'Enter', ctrlKey: true });
 
   it('saves, then opens the next word, without waiting for open AI questions', async () => {
     const onSave = jest.fn(async (_updates: Partial<VocabularyWordWithId>) => true);
     const next = silvaNext();
     render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} next={next} />);
     fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'a rose' } });
-    const button = screen.getByRole('button', { name: /^Apply and next/ });
-    expect(button).toHaveAttribute('title', 'Apply, then open silva (Ctrl+Enter or ⌘+Enter)');
-    fireEvent.click(button);
+    expect(screen.queryByRole('button', { name: /and next/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Apply$/ })).toHaveAttribute(
+      'title',
+      'Ctrl+Enter or ⌘+Enter: apply, then open silva'
+    );
+    saveAndNext();
 
     await waitFor(() => expect(next.open).toHaveBeenCalledTimes(1));
     const saved = onSave.mock.calls[0][0];
@@ -1373,7 +1379,7 @@ describe('Save and next', () => {
     const next = silvaNext();
     render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} next={next} />);
     fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'a rose' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Apply and next/ }));
+    saveAndNext();
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     fireEvent.change(screen.getByLabelText('Pronunciation'), { target: { value: 'typed while saving' } });
     await act(async () => finishSave(true));
@@ -1425,7 +1431,7 @@ describe('Save and next', () => {
       <WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} onDirtyChange={onDirtyChange} next={next} />
     );
     fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'a rose' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Apply and next/ }));
+    saveAndNext();
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     fireEvent.doubleClick(screen.getByText('rosam'));
     fireEvent.change(screen.getByPlaceholderText('Enter value...'), { target: { value: 'typed in a cell' } });
@@ -1472,13 +1478,13 @@ describe('Save and next', () => {
     const next = silvaNext();
     render(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} next={next} />);
     fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'a rose' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Apply and next/ }));
+    saveAndNext();
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(next.open).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Translation')).toHaveValue('a rose');
 
     fireEvent.change(screen.getByLabelText('Word'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Apply and next/ }));
+    saveAndNext();
     expect(await screen.findByText('Validation Errors:')).toBeInTheDocument();
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(next.open).not.toHaveBeenCalled();
@@ -1498,9 +1504,9 @@ describe('Save and next', () => {
     expect(composer()).toHaveValue('Unsent thought');
   });
 
-  it('is disabled at the end of the list, says why, and is absent where the page has no list', () => {
+  it('does nothing at the end of the list', () => {
     const onSave = jest.fn(async () => true);
-    const view = render(
+    render(
       <WordEditPanel
         word={cloneNoun()}
         onSave={onSave}
@@ -1508,14 +1514,8 @@ describe('Save and next', () => {
         next={{ unavailable: 'This is the last word in the list.' }}
       />
     );
-    const button = screen.getByRole('button', { name: /^Apply and next/ });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'This is the last word in the list.');
-    fireEvent.keyDown(screen.getByLabelText('Translation'), { key: 'Enter', ctrlKey: true });
+    saveAndNext();
     expect(onSave).not.toHaveBeenCalled();
-
-    view.rerender(<WordEditPanel word={cloneNoun()} onSave={onSave} updating={false} />);
-    expect(screen.queryByRole('button', { name: /and next/ })).toBeNull();
   });
 });
 
@@ -1557,5 +1557,36 @@ describe('a new word whose headword is already in the vocabulary', () => {
     renderNew({ words: [], checking: true });
     expect(screen.getByRole('button', { name: 'AI Generate' })).toBeDisabled();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('Dismiss', () => {
+  const dismissButton = () => screen.getByRole('button', { name: 'Dismiss' });
+
+  it('discards typed and AI-filled entries after asking, and keeps the conversation', async () => {
+    const word = cloneNoun();
+    delete word.ai_review;
+    const onDirtyChange = jest.fn();
+    mockCallable.mockResolvedValueOnce(answer({ pronunciation: 'ˈro.sa' }));
+    render(<OnPage word={word} onDirtyChange={onDirtyChange} />);
+    expect(dismissButton()).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'typed by hand' } });
+    fireEvent.click(screen.getByRole('button', { name: 'AI Generate' }));
+    await waitFor(() => expect(screen.getByLabelText('Pronunciation')).toHaveValue('ˈro.sa'));
+    const report = await within(assistant()).findByText(/All good! No questions from me about rosa/);
+
+    // Keep editing leaves everything as it is.
+    fireEvent.click(dismissButton());
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText('Translation')).toHaveValue('typed by hand');
+
+    fireEvent.click(dismissButton());
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss changes' }));
+    expect(screen.getByLabelText('Translation')).toHaveValue('rose');
+    expect(screen.getByLabelText('Pronunciation')).toHaveValue(word.pronunciation ?? '');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(dismissButton()).toBeDisabled();
+    expect(within(assistant()).getByText(report.textContent!)).toBeInTheDocument();
   });
 });
