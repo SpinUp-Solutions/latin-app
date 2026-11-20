@@ -354,7 +354,7 @@ export function WordUpdateReview({
               placeholder="Search word, translation or source"
               label="Search updates"
               disabled={dirty}
-              inputClassName="h-9 text-sm"
+              size="sm"
             />
             {Boolean(data?.invalidCount) && (
               <p role="alert" className="text-xs text-amber-900">

@@ -1,3 +1,4 @@
+import { AdminSearchInput } from '@/src/components/admin/shell';
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
@@ -136,12 +137,13 @@ export const WordFiltersPanel: React.FC<WordFiltersPanelProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="search">Word Search</Label>
-            <Input
+            <AdminSearchInput
               id="search"
-              type="text"
+              size="sm"
+              label="Word Search"
               placeholder="Search by word..."
               value={filters.search}
-              onChange={e => onFiltersChange({ search: e.target.value })}
+              onValueChange={search => onFiltersChange({ search })}
             />
           </div>
 

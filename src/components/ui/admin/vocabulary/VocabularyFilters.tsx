@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useId, useState } from 'react';
-import { ChevronDown, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
+import { AdminSearchInput } from '@/src/components/admin/shell';
 import { Button } from '@/src/components/ui/button';
 import { cn } from '@/src/lib/utils';
 import { VocabularyFilters } from '@/src/types/admin-vocabulary';
@@ -90,50 +91,36 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
 
   return (
     <div className="space-y-2">
-      <form
-        role="search"
-        onSubmit={onSearch}
-        className="flex h-11 items-center gap-2 rounded-full bg-white pl-4 pr-1.5 shadow-sm ring-1 ring-gray-200 transition-shadow focus-within:ring-2 focus-within:ring-roman-red/30">
-        <Search className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />
-        <input
-          type="text"
-          inputMode="search"
-          aria-label="Search words"
+      <form role="search" onSubmit={onSearch}>
+        <AdminSearchInput
+          label="Search words"
           placeholder="Search words…"
           value={filters.search}
-          onChange={event => onFiltersChange({ search: event.target.value })}
-          className="h-full min-w-0 flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+          onValueChange={search => onFiltersChange({ search })}
+          trailing={
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={panelId}
+              aria-label={activeCount > 0 ? `Filters (${activeCount} active)` : 'Filters'}
+              onClick={() => setExpanded(!expanded)}
+              className={cn(
+                'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors',
+                expanded || activeCount > 0
+                  ? 'bg-roman-red/10 text-roman-red hover:bg-roman-red/15'
+                  : 'text-gray-600 hover:bg-gray-100'
+              )}>
+              <SlidersHorizontal className="h-4 w-4" aria-hidden />
+              Filters
+              {activeCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-roman-red px-1.5 text-[11px] font-semibold text-white">
+                  {activeCount}
+                </span>
+              )}
+              <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} aria-hidden />
+            </button>
+          }
         />
-        {filters.search && (
-          <button
-            type="button"
-            aria-label="Clear search"
-            onClick={() => onFiltersChange({ search: '' })}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700">
-            <X className="h-4 w-4" aria-hidden />
-          </button>
-        )}
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-controls={panelId}
-          aria-label={activeCount > 0 ? `Filters (${activeCount} active)` : 'Filters'}
-          onClick={() => setExpanded(!expanded)}
-          className={cn(
-            'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors',
-            expanded || activeCount > 0
-              ? 'bg-roman-red/10 text-roman-red hover:bg-roman-red/15'
-              : 'text-gray-600 hover:bg-gray-100'
-          )}>
-          <SlidersHorizontal className="h-4 w-4" aria-hidden />
-          Filters
-          {activeCount > 0 && (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-roman-red px-1.5 text-[11px] font-semibold text-white">
-              {activeCount}
-            </span>
-          )}
-          <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} aria-hidden />
-        </button>
       </form>
 
       {expanded ? (

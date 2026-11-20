@@ -1,5 +1,6 @@
 'use client';
 
+import { AdminSearchInput } from '@/src/components/admin/shell';
 import { AdminPillPicker } from '@/src/components/admin/shell/AdminPillPicker';
 
 import { useMemo, useState } from 'react';
@@ -12,19 +13,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import {
-  Archive,
-  ArrowDown,
-  ArrowUp,
-  GripVertical,
-  Loader2,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Search,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, GripVertical, Loader2, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfirmActionDialog } from '@/src/components/admin/practice-categories/category-admin-shared';
 import { Badge } from '@/src/components/ui/badge';
@@ -374,25 +363,15 @@ export function PracticeTagManager({
               { value: 'archived', label: 'Archived', count: archivedTags.length },
             ]}
           />
-          <div className="relative min-w-0 flex-1 sm:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input
-              value={search}
-              className="pl-9 pr-9"
-              placeholder="Search tags"
-              aria-label="Search tags"
-              onChange={event => setSearch(event.target.value)}
-            />
-            {search && (
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-muted"
-                onClick={() => setSearch('')}
-                aria-label="Clear tag search">
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
+          <AdminSearchInput
+            className="flex-1 sm:max-w-sm"
+            size="sm"
+            label="Search tags"
+            clearLabel="Clear tag search"
+            placeholder="Search tags"
+            value={search}
+            onValueChange={setSearch}
+          />
           <span className="text-sm text-roman-stone">
             {visibleTags.length} {visibleTags.length === 1 ? 'tag' : 'tags'}
           </span>

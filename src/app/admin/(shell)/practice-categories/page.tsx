@@ -23,9 +23,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
-  Search,
   Trash2,
-  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
@@ -50,7 +48,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/src/components/ui/dropdown-menu';
-import { Input } from '@/src/components/ui/input';
 import { getApiErrorMessage, hasApiErrorStatus } from '@/src/store/api/baseQuery';
 import {
   practiceCategoryApi,
@@ -67,7 +64,7 @@ import type {
   PracticeLessonType,
 } from '@/src/types/practice-category';
 import { haveSameIdOrder, orderByIds } from '@/src/utils/orderByIds';
-import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import { AdminPage, AdminPageHeader, AdminSearchInput } from '@/src/components/admin/shell';
 
 type CategoryAction = 'archive' | 'restore' | 'delete';
 
@@ -510,29 +507,15 @@ function PracticeCategoriesPage() {
               <label htmlFor="category-search" className="mb-1.5 block text-sm font-medium text-gray-700">
                 Search categories
               </label>
-              <div className="relative">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-                  aria-hidden="true"
-                />
-                <Input
-                  id="category-search"
-                  className="bg-white pl-9 pr-9"
-                  value={search}
-                  disabled={dirty}
-                  placeholder="Search name or description"
-                  onChange={event => setSearch(event.target.value)}
-                />
-                {search && (
-                  <button
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={() => setSearch('')}
-                    aria-label="Clear category search">
-                    <X className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                )}
-              </div>
+              <AdminSearchInput
+                id="category-search"
+                label="Search categories"
+                clearLabel="Clear category search"
+                placeholder="Search name or description"
+                value={search}
+                disabled={dirty}
+                onValueChange={setSearch}
+              />
             </div>
           </div>
 

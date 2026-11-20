@@ -11,19 +11,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import {
-  Archive,
-  ArrowDown,
-  ArrowUp,
-  GripVertical,
-  Loader2,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Search,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, GripVertical, Loader2, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import {
@@ -50,7 +38,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/src/components/ui/dialog';
-import { Input } from '@/src/components/ui/input';
 import { Skeleton } from '@/src/components/ui/skeleton';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { PracticeTagManager } from '@/src/components/ui/admin/practice-categories/PracticeTagManager';
@@ -75,7 +62,7 @@ import type {
   PracticeTag,
 } from '@/src/types/practice-category';
 import { haveSameIdOrder, orderByIds } from '@/src/utils/orderByIds';
-import { AdminPage, AdminPageHeader, AdminStatusBadge } from '@/src/components/admin/shell';
+import { AdminPage, AdminPageHeader, AdminSearchInput, AdminStatusBadge } from '@/src/components/admin/shell';
 
 const EMPTY_LESSONS: PracticeCategoryLesson[] = [];
 
@@ -338,29 +325,15 @@ function AddLessonsDialog({ open, onOpenChange, category, assignedCount, lessons
           <label htmlFor="add-lessons-search" className="mb-1.5 block text-sm font-medium">
             Search lessons
           </label>
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-              aria-hidden="true"
-            />
-            <Input
-              id="add-lessons-search"
-              className="pl-9 pr-9"
-              value={search}
-              placeholder="Search title or description"
-              onChange={event => setSearch(event.target.value)}
-              autoFocus
-            />
-            {search && (
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => setSearch('')}
-                aria-label="Clear lesson search">
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            )}
-          </div>
+          <AdminSearchInput
+            id="add-lessons-search"
+            label="Search lessons"
+            clearLabel="Clear lesson search"
+            placeholder="Search title or description"
+            value={search}
+            onValueChange={setSearch}
+            autoFocus
+          />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto border-y px-6 py-3">
@@ -847,25 +820,15 @@ function PracticeCategoryDetailPage() {
 
               {lessons.length > 0 && (
                 <div className="mt-5 flex flex-col gap-3 rounded-lg border bg-white p-3 sm:flex-row sm:items-center">
-                  <div className="relative min-w-0 flex-1">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <Input
-                      value={lessonSearch}
-                      className="pl-9 pr-9"
-                      placeholder="Search lessons"
-                      aria-label="Search lessons in this category"
-                      onChange={event => setLessonSearch(event.target.value)}
-                    />
-                    {lessonSearch && (
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-muted"
-                        onClick={() => setLessonSearch('')}
-                        aria-label="Clear lesson search">
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
+                  <AdminSearchInput
+                    className="flex-1"
+                    size="sm"
+                    label="Search lessons in this category"
+                    clearLabel="Clear lesson search"
+                    placeholder="Search lessons"
+                    value={lessonSearch}
+                    onValueChange={setLessonSearch}
+                  />
                   <PracticeTagPicker
                     tags={category.tags}
                     selectedTagIds={lessonTagFilters}
