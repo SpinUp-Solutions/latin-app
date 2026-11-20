@@ -631,7 +631,7 @@ const SLIDE_IN = 'animate-in fade-in slide-in-from-bottom-2 duration-200 motion-
  * admin states are remembered on the word, and a principle that applies to
  * every word becomes a rule for all words.
  *
- * The down arrow closes the chat back to the Ask AI button, keeping what was typed. Each
+ * The down arrow closes the chat to a compact Ask AI button, keeping what was typed. Each
  * word's conversation lives in the page's store, so it survives switching
  * words, and a reply still running for another word can be stopped or let
  * finish.
@@ -835,9 +835,11 @@ export function AIAssistantDock({ generate }: { generate?: ReactNode }) {
         aria-label={open ? 'AI assistant' : undefined}
         className="mx-auto flex w-full max-w-3xl flex-col gap-3">
         {open && sheetVisible && (
+          // The shadow reaches at most 12px to the sides, inside the bar's 16px padding: the editor clips
+          // anything wider at its edges. `relative` paints it over the fade above the bar instead of under it.
           <div
             className={cn(
-              'flex max-h-[min(50vh,30rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.3)]',
+              'relative flex max-h-[min(50vh,30rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.05),0_2px_6px_rgba(15,23,42,0.06),0_8px_20px_-8px_rgba(15,23,42,0.18)]',
               SLIDE_IN
             )}>
             {elsewhere && (
@@ -998,7 +1000,9 @@ export function AIAssistantDock({ generate }: { generate?: ReactNode }) {
               type="button"
               aria-label={questions.length > 0 ? `Ask AI (${plural(questions.length, 'question')})` : 'Ask AI'}
               onClick={reopen}
-              className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-gray-100 px-4 text-sm text-gray-500 transition-colors hover:bg-gray-200/70">
+              // Compact, so dismissing visibly takes the AI out of the way even when the chat is empty; at
+              // full width it looked the same as the message box it replaced.
+              className="flex h-11 min-w-0 max-w-xs items-center gap-2 rounded-full bg-gray-100 px-4 text-sm text-gray-500 transition-colors hover:bg-gray-200/70">
               {pending ? (
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin text-roman-red" aria-hidden />
               ) : (
@@ -1006,9 +1010,9 @@ export function AIAssistantDock({ generate }: { generate?: ReactNode }) {
               )}
               <span className="shrink-0 font-medium text-gray-900">Ask AI</span>
               {/* What was typed before closing the chat is still there. */}
-              <span className="min-w-0 flex-1 truncate text-left">
-                {message.trim() ? message.trim().split('\n')[0] : `about ${word}`}
-              </span>
+              {message.trim() && (
+                <span className="min-w-0 flex-1 truncate text-left">{message.trim().split('\n')[0]}</span>
+              )}
               {questions.length > 0 && (
                 <span className="shrink-0 rounded-full bg-roman-red px-2 py-0.5 text-xs font-semibold text-white">
                   {questions.length}
