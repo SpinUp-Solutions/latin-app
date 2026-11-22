@@ -67,7 +67,7 @@ export function AdminSearchInput({
   return (
     <div
       className={cn(
-        'flex min-w-0 items-center gap-2 rounded-full bg-white shadow-sm ring-1 ring-gray-200 transition-shadow focus-within:ring-2 focus-within:ring-roman-red/30',
+        'flex min-w-0 items-center gap-2 rounded-full bg-white shadow-sm ring-1 ring-gray-200 transition-shadow focus-within:ring-2 focus-within:ring-roman-red',
         size === 'sm' ? 'h-9 pl-3 pr-1' : 'h-11 pl-4 pr-1.5',
         disabled && 'opacity-60',
         className
@@ -92,7 +92,7 @@ export function AdminSearchInput({
           type="button"
           onClick={() => onValueChange('')}
           className={cn(
-            'flex shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red/30',
+            'flex shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red',
             size === 'sm' ? 'h-7 w-7' : 'h-8 w-8'
           )}
           aria-label={clearLabel}>
