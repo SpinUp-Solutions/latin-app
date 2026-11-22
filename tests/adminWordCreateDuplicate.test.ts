@@ -13,7 +13,22 @@ import { GET as listWords, POST as createWord } from '@/src/app/api/admin/words/
 
 type Data = Record<string, unknown>;
 type FakeRef = { kind: 'doc'; collection: string; id: string };
-type FakeQuery = { kind: 'query'; collection: string; field: string; values: unknown[]; limitValue: number };
+type KeyFilter = (data: Data) => boolean;
+type FakeQuery = { kind: 'query'; collection: string; filter: KeyFilter; limitValue: number; after?: string };
+jest.mock('firebase-admin/firestore', () => ({
+  Filter: {
+    where: (field: string, op: string, value: string) => (doc: Data) =>
+      typeof doc[field] === 'string' && (op === '<' ? doc[field] < value : doc[field] >= value),
+    and:
+      (...filters: KeyFilter[]) =>
+      (doc: Data) =>
+        filters.every(filter => filter(doc)),
+    or:
+      (...filters: KeyFilter[]) =>
+      (doc: Data) =>
+        filters.some(filter => filter(doc)),
+  },
+}));
 
 const WORDS = 'vocabulary_words_v5';
 
@@ -34,24 +49,27 @@ class FakeFirestore {
 
   private snapshot(collection: string, id: string) {
     const data = this.docs.get(collection)?.get(id);
-    return { id, exists: data !== undefined, data: () => data };
+    return { id, ref: { kind: 'doc', collection, id }, exists: data !== undefined, data: () => data };
   }
 
-  private query(collection: string, field: string, values: unknown[], limitValue = Infinity): FakeQuery & Data {
+  private query(collection: string, filter: KeyFilter, limitValue = Infinity, after?: string): FakeQuery & Data {
+    const q: FakeQuery = { kind: 'query', collection, filter, limitValue, after };
     return {
-      kind: 'query',
-      collection,
-      field,
-      values,
-      limitValue,
-      limit: (next: number) => this.query(collection, field, values, next),
-      get: async () => this.run({ kind: 'query', collection, field, values, limitValue }),
+      ...q,
+      select: () => this.query(collection, filter, limitValue, after),
+      orderBy: () => this.query(collection, filter, limitValue, after),
+      limit: (next: number) => this.query(collection, filter, next, after),
+      startAfter: (doc: { id: string }) => this.query(collection, filter, limitValue, doc.id),
+      get: async () => this.run(q),
     };
   }
 
+  getAll = async (...refs: FakeRef[]) => refs.map(ref => this.snapshot(ref.collection, ref.id));
+
   private run(query: FakeQuery) {
     const docs = [...(this.docs.get(query.collection)?.entries() ?? [])]
-      .filter(([, data]) => query.values.includes(data[query.field]))
+      .filter(([id, data]) => (!query.after || id > query.after) && query.filter(data))
+      .sort(([a], [b]) => a.localeCompare(b))
       .slice(0, query.limitValue)
       .map(([id]) => this.snapshot(query.collection, id));
     return { docs, empty: docs.length === 0 };
@@ -68,10 +86,8 @@ class FakeFirestore {
           get: async () => this.snapshot(collection, docId),
         };
       },
-      where: (field: string, operator: string, value: unknown) => {
-        if (operator !== 'in' || !Array.isArray(value)) throw new Error(`Unsupported query ${field} ${operator}`);
-        return this.query(collection, field, value);
-      },
+      where: (field: KeyFilter | string, _operator?: string, value?: string) =>
+        this.query(collection, typeof field === 'string' ? data => data[field] === value : field),
     };
   }
 
@@ -80,6 +96,7 @@ class FakeFirestore {
     // A refused transaction is counted too: it throws, and must have written nothing.
     try {
       return await callback({
+        getAll: this.getAll,
         get: async (target: FakeRef | FakeQuery) =>
           target.kind === 'query' ? this.run(target) : this.snapshot(target.collection, target.id),
         set: (ref: FakeRef, data: Data) => {
@@ -157,6 +174,12 @@ it.each([
   ['macrons', 'rosa', 'rosā'],
   ['capitals', 'Roma', 'roma'],
   ['surrounding spaces', 'amo', ' amo '],
+  ['stored capitals', 'ROMA', 'rōma'],
+  ['stored mixed case', 'roMA', 'rōma'],
+  ['stored padding', ' Roma ', 'rōma'],
+  ['stored Unicode padding', '\u00a0Roma\u00a0', 'rōma'],
+  ['stored trailing spaces', 'RoMA  ', 'rōma'],
+  ['short padded word', ' A ', 'ā'],
 ])('matches the headword regardless of %s', async (_case, existing, added) => {
   mockDb.seed(WORDS, 'existing', stored(existing, 'noun'));
   const response = await post(newWord(added));
@@ -182,6 +205,18 @@ it('creates a word whose headword is new, or whose only match is being deleted',
   expect((await post(newWord('et'))).status).toBe(200);
   expect((await post(newWord('atque'))).status).toBe(200);
   expect(mockDb.words()).toHaveLength(4);
+});
+
+it('does not lose an active homograph behind a page of deletion-pending matches', async () => {
+  for (let i = 0; i < 110; i++) mockDb.seed(WORDS, `deleted-${i}`, stored('ROMA', 'noun', { _deletionPending: true }));
+  mockDb.seed(WORDS, 'live', stored('RoMA', 'noun'));
+  expect((await post(newWord('rōma'))).body.existingWords?.map(word => word.id)).toEqual(['live']);
+});
+
+it('derives a canonical lookup key on create independently of the display spelling and sort key', async () => {
+  const response = await post({ ...newWord(' RŌMA '), sort_key: 'wrong' });
+  expect(response.status).toBe(200);
+  expect(mockDb.words()).toMatchObject([{ word: ' RŌMA ', sort_key: 'ROMA', _headwordKey: 'roma' }]);
 });
 
 it('looks a headword up before the word is created, so the editor can warn before any AI run', async () => {

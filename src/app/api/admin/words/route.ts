@@ -6,11 +6,12 @@ import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import { WordTypeSchema } from '@/shared/types/vocabulary/schemas/enums';
 import { serializeVocabularyWord } from '@/src/lib/vocabulary/word-serialization.server';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
+import { canonicalHeadwordKey, HEADWORD_KEY_FIELD } from '@/src/utils/vocabulary/headword';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { routeErrorResponse } from '@/src/lib/route-error-response';
-import { findWordsWithHeadword, WordAlreadyExistsError } from '@/src/lib/vocabulary/duplicate-words.server';
+import { assertHeadwordAvailable, findWordsWithHeadword } from '@/src/lib/vocabulary/duplicate-words.server';
 
 const COUNTED_PARTS_OF_SPEECH = [
   'noun',
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const now = new Date();
     const validationResult = VocabularyWordSchema.safeParse({
       ...wordPayload,
-      sort_key: stripMacrons(typeof wordPayload.word === 'string' ? wordPayload.word : ''),
+      sort_key: stripMacrons(typeof wordPayload.word === 'string' ? wordPayload.word.trim() : ''),
       random_index: Math.random(),
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
@@ -149,15 +150,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const firestorePayload = { ...validationResult.data, createdAt: now, updatedAt: now };
+    const firestorePayload = {
+      ...validationResult.data,
+      [HEADWORD_KEY_FIELD]: canonicalHeadwordKey(validationResult.data.word),
+      createdAt: now,
+      updatedAt: now,
+    };
 
     const docRef = adminDb.collection(VOCABULARY_WORDS_COLLECTION).doc();
     await runVocabularyContentMutation(adminDb, async transaction => {
       // The admin confirms a homograph by sending the word again with `allowDuplicate`.
-      if (allowDuplicate !== true) {
-        const existingWords = await findWordsWithHeadword(adminDb, firestorePayload.word, transaction);
-        if (existingWords.length > 0) throw new WordAlreadyExistsError(firestorePayload.word, existingWords);
-      }
+      if (allowDuplicate !== true) await assertHeadwordAvailable(adminDb, firestorePayload.word, transaction);
       const applyContentRevision = await prepareVocabularyContentRevisionBump(transaction, adminDb);
       applyContentRevision();
       transaction.create(docRef, firestorePayload);
@@ -195,14 +198,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const updateData: Record<string, unknown> = {
-      ...updates,
-      updatedAt: new Date(),
-    };
-
-    if (typeof updates.word === 'string') {
-      updateData.sort_key = stripMacrons(updates.word);
-    }
+    const updatedAt = new Date();
 
     const existingRef = adminDb.collection(VOCABULARY_WORDS_COLLECTION).doc(wordId);
     const updateResult = await runVocabularyContentMutation(adminDb, async transaction => {
@@ -214,8 +210,8 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       const validationCandidate: Record<string, unknown> = {
         ...existingSerialized,
         ...updates,
-        ...(typeof updateData.sort_key === 'string' ? { sort_key: updateData.sort_key } : {}),
-        updatedAt: new Date().toISOString(),
+        sort_key: typeof updates.word === 'string' ? stripMacrons(updates.word.trim()) : existingSerialized.sort_key,
+        updatedAt: updatedAt.toISOString(),
       };
       const validationResult = VocabularyWordSchema.safeParse(validationCandidate);
       if (!validationResult.success) {
@@ -231,8 +227,9 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
             .filter(key => Object.hasOwn(validatedData, key) && validatedData[key] !== undefined)
             .map(key => [key, validatedData[key]])
         ),
-        ...(typeof updateData.sort_key === 'string' ? { sort_key: updateData.sort_key } : {}),
-        updatedAt: updateData.updatedAt,
+        sort_key: validationResult.data.sort_key,
+        [HEADWORD_KEY_FIELD]: canonicalHeadwordKey(validationResult.data.word),
+        updatedAt,
       };
       const applyContentRevision = await prepareVocabularyContentRevisionBump(transaction, adminDb);
       transaction.update(existingRef, persistedUpdates as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>);

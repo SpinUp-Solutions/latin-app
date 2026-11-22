@@ -237,6 +237,30 @@ describe('core and non-core word lists', () => {
   });
 });
 
+it('refreshes a negative headword preflight after approval, even for an incomplete legacy word', async () => {
+  const store = createStore();
+  const match = { id: 'roma', word: ' Rōma ', part_of_speech: 'noun', translation: 'Rome' };
+  let approved = false;
+  mockBaseQuery.mockImplementation(async (request: unknown) => {
+    if (methodOf(request) === 'POST') {
+      approved = true;
+      return { data: { success: true, data: { request: { id: 'request' }, wordId: 'roma' } } };
+    }
+    return { data: { success: true, data: { words: approved ? [match] : [] } } };
+  });
+  const query = vocabularyApi.endpoints.findWordsByHeadword;
+  const sub = store.dispatch(query.initiate('roma'));
+  try {
+    expect(await sub.unwrap()).toEqual({ words: [] });
+    await store
+      .dispatch(vocabularyWordRequestsApi.endpoints.approveVocabularyWordRequest.initiate({ id: 'request' }))
+      .unwrap();
+    await waitFor(() => expect(query.select('roma')(store.getState()).data?.words).toEqual([match]));
+  } finally {
+    sub.unsubscribe();
+  }
+});
+
 describe('signing out', () => {
   it('clears vocabulary words, pools and word requests with the one application cache reset', async () => {
     const store = createStore();

@@ -2,8 +2,7 @@ import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabu
 import type { RootWordCandidate } from '@/shared/types/vocabulary/requests';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord } from './vocabulary-defaults';
-import { stripMacrons } from './exercises/helpers';
-
+import { canonicalHeadwordKey } from '@/src/utils/vocabulary/headword';
 
 const stripUndefined = <T>(value: T): T => {
   if (Array.isArray(value)) {
@@ -37,7 +36,7 @@ export const buildDraftVocabularyWord = (
     ...autocompleteData,
     word: candidate.word,
     part_of_speech: candidate.part_of_speech,
-    sort_key: stripMacrons(candidate.word).toLowerCase(),
+    sort_key: canonicalHeadwordKey(candidate.word),
     random_index: Math.random(),
     dictionary_entry:
       autocompleteData.dictionary_entry !== undefined

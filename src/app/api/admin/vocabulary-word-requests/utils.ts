@@ -1,11 +1,21 @@
 import { adminDb } from '@/src/services/firebase-admin';
-import { VocabularyWordSchema, type VocabularyWord } from '@/shared/types/vocabulary/schemas';
+import { z } from 'zod';
+import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import { VOCABULARY_WORD_REQUESTS_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import type { VocabularyWordRequest } from '@/shared/types/vocabulary/requests';
-import { stripMacrons } from '@/src/utils/exercises/helpers';
+import { canonicalHeadwordKey, HEADWORD_KEY_FIELD } from '@/src/utils/vocabulary/headword';
+import { RequestError } from '@/src/lib/domain-error';
 
 export const requestCollection = () => adminDb.collection(VOCABULARY_WORD_REQUESTS_COLLECTION);
 export const wordCollection = () => adminDb.collection(VOCABULARY_WORDS_COLLECTION);
+
+export function pendingRequestData(snapshot: FirebaseFirestore.DocumentSnapshot) {
+  const data = snapshot.data();
+  if (!data) throw new RequestError(404, 'VOCABULARY_REQUEST_NOT_FOUND', 'Request not found');
+  if (data.status !== 'pending')
+    throw new RequestError(409, 'VOCABULARY_REQUEST_NOT_PENDING', 'This request is no longer pending');
+  return data;
+}
 
 type FirestoreTimestampLike = {
   toDate: () => Date;
@@ -80,11 +90,14 @@ export const cleanForFirestore = (value: unknown): unknown => {
   return value;
 };
 
-export const buildValidatedWordForApproval = (draftWord: VocabularyWord) => {
+export const buildValidatedWordForApproval = (input: unknown) => {
+  const draft = z.record(z.string(), z.unknown()).safeParse(input);
+  if (!draft.success) return { success: false as const, error: 'Invalid word data: expected a saved draft' };
+  const draftWord = draft.data;
   const now = new Date();
   const validationResult = VocabularyWordSchema.safeParse({
     ...draftWord,
-    sort_key: stripMacrons(draftWord.word).toLowerCase(),
+    sort_key: canonicalHeadwordKey(draftWord.word),
     random_index: typeof draftWord.random_index === 'number' ? draftWord.random_index : Math.random(),
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
@@ -107,6 +120,7 @@ export const buildValidatedWordForApproval = (draftWord: VocabularyWord) => {
       validatedWord: validationResult.data,
       firestorePayload: cleanForFirestore({
         ...validatedWord,
+        [HEADWORD_KEY_FIELD]: canonicalHeadwordKey(validatedWord.word),
         createdAt: now,
         updatedAt: now,
       }) as Record<string, unknown>,

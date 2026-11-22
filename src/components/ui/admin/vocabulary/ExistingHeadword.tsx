@@ -4,7 +4,7 @@ import { TriangleAlert } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { useFindWordsByHeadwordQuery } from '@/src/store/api/vocabularyApi';
-import type { VocabularyWordWithId } from '@/src/types/vocabulary/index';
+import type { HeadwordMatch } from '@/src/types/vocabulary/index';
 
 /** How long the headword must stay unchanged before it is looked up. */
 export const HEADWORD_LOOKUP_DELAY_MS = 300;
@@ -34,8 +34,8 @@ export function ExistingHeadwordNotice({
   onOpen,
 }: {
   headword: string;
-  words: VocabularyWordWithId[];
-  onOpen?: (word: VocabularyWordWithId) => void;
+  words: HeadwordMatch[];
+  onOpen?: (word: HeadwordMatch) => void;
 }) {
   if (words.length === 0) return null;
   return (

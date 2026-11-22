@@ -35,6 +35,9 @@ export const APP_API_TAG_TYPES = [
   'VocabularyAIGuidance',
 ] as const;
 
+/** Exact-headword preflights (not paginated word lists). */
+export const WORD_HEADWORDS_TAG = { type: 'WordList' as const, id: 'HEADWORDS' };
+
 export const PRACTICE_CATEGORY_ASSIGNMENTS_TAG = {
   type: 'PracticeCategoryAssignments' as const,
   id: 'ALL',

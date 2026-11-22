@@ -8,16 +8,20 @@ import { toast } from 'sonner';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import {
   useGetWordTypeCountsQuery,
+  useGetWordByIdQuery,
   useUpdateWordMutation,
   useCreateWordMutation,
   useDeleteWordMutation,
   type DeleteWordResponse,
+  existingHeadwordConflict,
 } from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
   resetFilters as resetFiltersAction,
   selectVocabularyFilters,
 } from '@/src/store/slices/vocabularySlice';
+import { getApiErrorMessage } from '@/src/store/api/baseQuery';
+import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { useCurrentWordsQuery } from '@/src/hooks/useCurrentWordsQuery';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { WordEditPanel, type SaveAndNext } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
@@ -33,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
 import { fetchVocabularyBackup } from '@/src/services/vocabularyBackupService';
-import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
+import type { HeadwordMatch } from '@/shared/types/vocabulary/schemas';
 import { useExistingHeadword } from '@/src/components/ui/admin/vocabulary/ExistingHeadword';
 
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
@@ -43,20 +47,15 @@ const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
 function wordIdFromHash(): string | null {
   if (typeof window === 'undefined') return null;
   const { hash } = window.location;
-  return hash.startsWith('#word-') ? hash.substring(6) || null : null;
+  if (!hash.startsWith('#word-')) return null;
+  try {
+    return decodeURIComponent(hash.slice(6)) || null;
+  } catch {
+    return null;
+  }
 }
 
 type NewWord = Omit<VocabularyWord, 'createdAt' | 'updatedAt'>;
-
-/** The words a create was refused for, when the headword is already in the vocabulary. */
-function existingWordsOf(error: unknown): VocabularyWordWithId[] | null {
-  const { status, data } = (error ?? {}) as { status?: unknown; data?: { code?: unknown; existingWords?: unknown } };
-  if (status !== 409 || data?.code !== 'WORD_ALREADY_EXISTS' || !Array.isArray(data.existingWords)) return null;
-  return data.existingWords.flatMap(word => {
-    const parsed = VocabularyWordWithIdSchema.safeParse(word);
-    return parsed.success ? [parsed.data as VocabularyWordWithId] : [];
-  });
-}
 
 function omitUndefinedFields<T extends object>(updates: T): Partial<T> {
   return Object.fromEntries(Object.entries(updates).filter(([, value]) => value !== undefined)) as Partial<T>;
@@ -76,14 +75,15 @@ function AdminVocabularyPage() {
   const [deletingWordId, setDeletingWordId] = useState<string | null>(null);
   // Unsaved edits in the editor, including what autocomplete filled or the AI's accepted answers.
   const [editorDirty, setEditorDirty] = useState(false);
-  const [pendingSwitch, setPendingSwitch] = useState<(() => void) | null>(null);
+  const navigation = useUnsavedNavigationGuard(editorDirty, undefined, { guardBack: false });
+  const switchEditor = navigation.requestNavigation;
   const [poolWarning, setPoolWarning] = useState<{
     word: VocabularyWordWithId;
     pools: { id: string; name: string }[];
     confirmationToken: string;
   } | null>(null);
   /** A new word whose headword is already in the vocabulary, waiting for the admin to confirm it. */
-  const [duplicate, setDuplicate] = useState<{ wordData: NewWord; existing: VocabularyWordWithId[] } | null>(null);
+  const [duplicate, setDuplicate] = useState<{ wordData: NewWord; existing: HeadwordMatch[] } | null>(null);
   // A new word's headword, checked against the vocabulary as it is typed, before any AI run.
   const [newHeadword, setNewHeadword] = useState('');
   const existingHeadword = useExistingHeadword(newHeadword, isPlaceholderWord(creatingWord));
@@ -110,7 +110,7 @@ function AdminVocabularyPage() {
   // App Router update the page.
   useEffect(() => {
     if (selectedWordId) {
-      if (wordIdFromHash() !== selectedWordId) window.location.hash = `word-${selectedWordId}`;
+      if (wordIdFromHash() !== selectedWordId) window.location.hash = `word-${encodeURIComponent(selectedWordId)}`;
     } else if (window.location.hash) {
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
@@ -123,29 +123,19 @@ function AdminVocabularyPage() {
     const id = wordIdFromHash();
     if (id === selectedWordId) return;
     if (editorDirty) {
-      const here = selectedWordId ? `#word-${selectedWordId}` : '';
+      const here = selectedWordId ? `#word-${encodeURIComponent(selectedWordId)}` : '';
       history.pushState(null, '', window.location.pathname + window.location.search + here);
     }
-    switchEditor(() => setSelectedWordId(id));
+    switchEditor(() => {
+      setCreatingWord(null);
+      setSelectedWordId(id);
+    });
   });
   useEffect(() => {
     const handleHashChange = () => followHash();
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
-
-  useEffect(() => {
-    if (!editorDirty) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [editorDirty]);
-
-  /** Switching words rebuilds the editor, so unsaved edits are only dropped once the admin agrees. */
-  const switchEditor = (go: () => void) => {
-    if (editorDirty) setPendingSwitch(() => go);
-    else go();
-  };
 
   const handleSelectWord = (word: VocabularyWordWithId) => {
     if (!creatingWord && word.id === selectedWordId) return;
@@ -195,7 +185,7 @@ function AdminVocabularyPage() {
       setSelectedWordId(created.id);
       return true;
     } catch (error) {
-      const existing = existingWordsOf(error);
+      const existing = existingHeadwordConflict(error)?.words;
       if (existing) {
         setDuplicate({ wordData, existing });
         return false;
@@ -207,11 +197,9 @@ function AdminVocabularyPage() {
     }
   };
 
-  const handleOpenExisting = (word: VocabularyWordWithId) => {
+  const handleOpenExisting = (word: HeadwordMatch) => {
     setDuplicate(null);
     switchEditor(() => {
-      // A word the filters leave out of the list is still opened.
-      setKeptWord(word);
       setCreatingWord(null);
       setSelectedWordId(word.id);
     });
@@ -259,7 +247,11 @@ function AdminVocabularyPage() {
   const listedWord = selectedWordId ? (words.find(w => w.id === selectedWordId) ?? null) : null;
   const [keptWord, setKeptWord] = useState<VocabularyWordWithId | null>(null);
   if (listedWord && listedWord !== keptWord) setKeptWord(listedWord);
-  const selectedWord = creatingWord ?? listedWord ?? (keptWord && keptWord.id === selectedWordId ? keptWord : null);
+  const localWord = creatingWord ?? listedWord ?? (keptWord?.id === selectedWordId ? keptWord : null);
+  const detail = useGetWordByIdQuery(selectedWordId ?? '', {
+    skip: !selectedWordId || !!localWord,
+  });
+  const selectedWord: VocabularyWordWithId | null = localWord ?? detail.currentData?.word ?? null;
 
   // "Save and next" follows the list as filtered and sorted. It opens the next word straight away: the save
   // that precedes it has just succeeded, so there is nothing for the unsaved-changes prompt to protect.
@@ -404,29 +396,40 @@ function AdminVocabularyPage() {
           </div>
 
           <div className="min-h-0 overflow-hidden">
-            <WordEditPanel
-              key={selectedWord?.id ?? 'no-selection'}
-              word={selectedWord}
-              onSave={handleSaveWord}
-              updating={updating || creating}
-              learnedRules={learnedRules}
-              onDirtyChange={setEditorDirty}
-              next={next}
-              onHeadwordChange={setNewHeadword}
-              existingHeadword={isPlaceholderWord(creatingWord) ? existingHeadword : undefined}
-              onOpenWord={handleOpenExisting}
-            />
+            {selectedWordId && !selectedWord ? (
+              detail.isError ? (
+                <div role="alert" className="space-y-2 p-6">
+                  <p>{getApiErrorMessage(detail.error, 'Could not open the linked word.')}</p>
+                  <Button variant="outline" onClick={detail.refetch}>
+                    Retry
+                  </Button>
+                </div>
+              ) : (
+                <p role="status" className="p-6">
+                  Loading the selected word…
+                </p>
+              )
+            ) : (
+              <WordEditPanel
+                key={selectedWord?.id ?? 'no-selection'}
+                word={selectedWord}
+                onSave={handleSaveWord}
+                updating={updating || creating}
+                learnedRules={learnedRules}
+                onDirtyChange={setEditorDirty}
+                next={next}
+                onHeadwordChange={setNewHeadword}
+                existingHeadword={isPlaceholderWord(creatingWord) ? existingHeadword : undefined}
+                onOpenWord={handleOpenExisting}
+              />
+            )}
           </div>
         </main>
 
         <ConfirmationDialog
-          isOpen={pendingSwitch !== null}
-          onClose={() => setPendingSwitch(null)}
-          onConfirm={() => {
-            const go = pendingSwitch;
-            setPendingSwitch(null);
-            go?.();
-          }}
+          isOpen={navigation.isOpen}
+          onClose={navigation.stayOnPage}
+          onConfirm={navigation.leavePage}
           title="Discard unsaved changes?"
           description={`Your changes to ${selectedWord?.word || 'this word'} have not been saved. Save them with Apply first, or discard them. The conversation with the AI is kept either way.`}
           confirmText="Discard changes"

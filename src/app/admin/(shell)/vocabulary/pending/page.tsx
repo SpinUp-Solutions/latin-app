@@ -18,6 +18,9 @@ import { VocabularyAIRulesDialog } from '@/src/components/ui/admin/vocabulary/Vo
 import { useLearnedAIRules } from '@/src/store/api/vocabularyAIGuidanceApi';
 import { WordUpdateReview } from '@/src/components/ui/admin/vocabulary/WordUpdateReview';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { WordDiffPanel } from '@/src/components/ui/admin/vocabulary/WordDiffPanel';
+import { existingHeadwordConflict } from '@/src/store/api/vocabularyApi';
+import { ExistingHeadwordNotice } from '@/src/components/ui/admin/vocabulary/ExistingHeadword';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { AdminPillPicker } from '@/src/components/admin/shell';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
@@ -30,7 +33,7 @@ import {
 } from '@/src/store/api/vocabularyWordRequestsApi';
 import { useGetVocabularyWordUpdateRequestsQuery } from '@/src/store/api/vocabularyWordUpdateRequestsApi';
 import type { VocabularyWordRequestStatus } from '@/shared/types/vocabulary/requests';
-import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
+import type { HeadwordMatch, VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
 
 const STATUS_LABELS: Record<VocabularyWordRequestStatus, string> = {
   pending: 'Pending',
@@ -45,13 +48,21 @@ const statusIcon = {
 };
 
 /** AI-generated drafts of words that do not exist yet. */
-function NewWordRequestsReview() {
+function NewWordRequestsReview({
+  draftDirty,
+  onDirtyChange,
+  requestNavigation,
+}: {
+  draftDirty: boolean;
+  onDirtyChange: (dirty: boolean) => void;
+  requestNavigation: (go: () => void) => void;
+}) {
   const learnedRules = useLearnedAIRules();
   const [status, setStatus] = useState<VocabularyWordRequestStatus>('pending');
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
   const {
-    data: requests = [],
+    currentData: requests = [],
     isLoading,
     isFetching,
     error: requestError,
@@ -59,13 +70,13 @@ function NewWordRequestsReview() {
   const [updateRequest, { isLoading: updating }] = useUpdateVocabularyWordRequestMutation();
   const [approveRequest, { isLoading: approving }] = useApproveVocabularyWordRequestMutation();
   const [dismissRequest, { isLoading: dismissing }] = useDismissVocabularyWordRequestMutation();
-  // Approve creates the word from the saved draft, so unsaved edits (an accepted AI answer included) would
-  // be left out of it. It waits until they are saved.
-  const [draftDirty, setDraftDirty] = useState(false);
+  const [duplicate, setDuplicate] = useState<{ id: string; word: string; matches: HeadwordMatch[] } | null>(null);
   const requestErrorMessage = requestError
     ? getApiErrorMessage(requestError, 'Could not load vocabulary requests')
     : null;
   const selectedRequest = requests.find(request => request.id === selectedRequestId) ?? requests[0] ?? null;
+  // Pin even the implicit first selection: refreshing a reordered list must not replace its editor.
+  if (selectedRequest && selectedRequest.id !== selectedRequestId) setSelectedRequestId(selectedRequest.id);
 
   const editorWord: VocabularyWordWithId | null = selectedRequest
     ? ({ id: selectedRequest.id, ...selectedRequest.draftWord } as VocabularyWordWithId)
@@ -82,7 +93,7 @@ function NewWordRequestsReview() {
         : { unavailable: 'This is the last request in the list.' };
 
   const handleSaveDraft = async (updates: Partial<VocabularyWord>) => {
-    if (!selectedRequest) return false;
+    if (selectedRequest?.status !== 'pending') return false;
 
     try {
       await updateRequest({
@@ -98,14 +109,18 @@ function NewWordRequestsReview() {
     }
   };
 
-  const handleApprove = async () => {
-    if (!selectedRequest || draftDirty) return;
+  const handleApprove = async (confirmedHeadword?: string) => {
+    if (selectedRequest?.status !== 'pending' || draftDirty) return;
 
     try {
-      const result = await approveRequest(selectedRequest.id).unwrap();
+      const result = await approveRequest({ id: selectedRequest.id, confirmedHeadword }).unwrap();
       toast.success(`Approved and created word ${result.wordId}`);
-      setSelectedRequestId(null);
     } catch (error) {
+      const conflict = existingHeadwordConflict(error);
+      if (conflict?.headword) {
+        setDuplicate({ id: selectedRequest.id, word: conflict.headword, matches: conflict.words });
+        return;
+      }
       console.error('Approve vocabulary request error:', error);
       toast.error(getApiErrorMessage(error, 'Could not approve request'));
     }
@@ -117,7 +132,6 @@ function NewWordRequestsReview() {
     try {
       await dismissRequest({ id: selectedRequest.id }).unwrap();
       toast.success('Request dismissed');
-      setSelectedRequestId(null);
     } catch (error) {
       console.error('Dismiss vocabulary request error:', error);
       toast.error(getApiErrorMessage(error, 'Could not dismiss request'));
@@ -130,7 +144,11 @@ function NewWordRequestsReview() {
         <>
           <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <Select value={status} onValueChange={value => setStatus(value as VocabularyWordRequestStatus)}>
+              <Select
+                value={status}
+                onValueChange={value =>
+                  value !== status && requestNavigation(() => setStatus(value as VocabularyWordRequestStatus))
+                }>
                 <SelectTrigger className="h-9 w-44">
                   <SelectValue />
                 </SelectTrigger>
@@ -162,7 +180,7 @@ function NewWordRequestsReview() {
                   <VocabularyReviewRow
                     key={request.id}
                     selected={isSelected}
-                    onSelect={() => setSelectedRequestId(request.id)}>
+                    onSelect={() => !isSelected && requestNavigation(() => setSelectedRequestId(request.id))}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate">{request.draftWord.word}</p>
@@ -193,11 +211,14 @@ function NewWordRequestsReview() {
             <VocabularyAIRulesDialog />
             {selectedRequest.status === 'pending' && (
               <>
-                <Button variant="outline" onClick={handleDismiss} disabled={dismissing || approving || updating}>
+                <Button
+                  variant="outline"
+                  onClick={() => requestNavigation(() => void handleDismiss())}
+                  disabled={dismissing || approving || updating}>
                   {dismissing ? 'Dismissing...' : 'Dismiss'}
                 </Button>
                 <Button
-                  onClick={handleApprove}
+                  onClick={() => void handleApprove()}
                   disabled={approving || dismissing || updating || draftDirty}
                   title={
                     draftDirty ? 'Save the draft first: Approve creates the word from the saved draft.' : undefined
@@ -209,16 +230,33 @@ function NewWordRequestsReview() {
           </div>
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <WordEditPanel
-          word={editorWord}
-          onSave={handleSaveDraft}
-          updating={updating}
-          learnedRules={learnedRules}
-          next={next}
-          onDirtyChange={setDraftDirty}
-        />
+      <div className="min-h-0 flex-1 overflow-hidden" inert={approving || dismissing}>
+        {selectedRequest && selectedRequest.status !== 'pending' ? (
+          <WordDiffPanel after={selectedRequest.draftWord} />
+        ) : (
+          <WordEditPanel
+            word={editorWord}
+            onSave={handleSaveDraft}
+            updating={updating}
+            learnedRules={learnedRules}
+            next={next}
+            onDirtyChange={onDirtyChange}
+          />
+        )}
       </div>
+      <ConfirmationDialog
+        isOpen={!!duplicate && duplicate.id === selectedRequest?.id}
+        onClose={() => setDuplicate(null)}
+        onConfirm={() => {
+          if (duplicate && duplicate.id === selectedRequest?.id) void handleApprove(duplicate.word);
+          setDuplicate(null);
+        }}
+        title="This word is already in the vocabulary"
+        description={`Approve “${duplicate?.word ?? ''}” anyway only if it is a different word with the same spelling.`}
+        confirmText="Approve homograph"
+        cancelText="Keep reviewing">
+        {duplicate && <ExistingHeadwordNotice headword={duplicate.word} words={duplicate.matches} />}
+      </ConfirmationDialog>
     </VocabularyReviewLayout>
   );
 }
@@ -228,9 +266,12 @@ type PendingTab = 'new' | 'updates';
 function PendingVocabularyPage() {
   const [tab, setTab] = useState<PendingTab>('new');
   const [proposalDirty, setProposalDirty] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
   const navigationGuard = useUnsavedNavigationGuard(
-    proposalDirty,
-    'You have unsaved edits to this proposal. Leave it without saving?'
+    tab === 'new' ? draftDirty : proposalDirty,
+    tab === 'new'
+      ? 'You have unsaved edits to this draft. Leave it without saving?'
+      : 'You have unsaved edits to this proposal. Leave it without saving?'
   );
   const { data: newWords } = useGetVocabularyWordRequestsQuery({ status: 'pending' });
   const { data: updates } = useGetVocabularyWordUpdateRequestsQuery({ status: 'pending' });
@@ -246,7 +287,7 @@ function PendingVocabularyPage() {
           <AdminPillPicker<PendingTab>
             label="Pending vocabulary"
             value={tab}
-            onValueChange={next => navigationGuard.requestNavigation(() => setTab(next))}
+            onValueChange={next => next !== tab && navigationGuard.requestNavigation(() => setTab(next))}
             options={[
               { value: 'new', label: 'New words', count: newWords?.length },
               {
@@ -264,7 +305,11 @@ function PendingVocabularyPage() {
 
       {tab === 'new' ? (
         <AIAssistantProvider>
-          <NewWordRequestsReview />
+          <NewWordRequestsReview
+            draftDirty={draftDirty}
+            onDirtyChange={setDraftDirty}
+            requestNavigation={navigationGuard.requestNavigation}
+          />
         </AIAssistantProvider>
       ) : (
         <WordUpdateReview requestNavigation={navigationGuard.requestNavigation} onDirtyChange={setProposalDirty} />

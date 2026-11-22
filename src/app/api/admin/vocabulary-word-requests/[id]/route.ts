@@ -5,7 +5,7 @@ import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import { VocabularyAIReviewSchema } from '@/shared/types/vocabulary/ai-review';
 import { adminDb } from '@/src/services/firebase-admin';
 import { RequestError } from '@/src/lib/domain-error';
-import { cleanForFirestore, requestCollection, serializeRequestSnapshot } from '../utils';
+import { cleanForFirestore, pendingRequestData, requestCollection, serializeRequestSnapshot } from '../utils';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -30,9 +30,9 @@ export async function PATCH(
     const docRef = requestCollection().doc(id);
     await adminDb.runTransaction(async transaction => {
       const snapshot = await transaction.get(docRef);
-      if (!snapshot.exists) throw new RequestError(404, 'VOCABULARY_REQUEST_NOT_FOUND', 'Request not found');
+      const current = pendingRequestData(snapshot);
       const draftWord = { ...draftWordResult.data };
-      const previousReview = snapshot.data()?.draftWord?.ai_review;
+      const previousReview = current.draftWord?.ai_review;
       if (draftWord.ai_review === undefined && previousReview !== undefined) {
         const review = VocabularyAIReviewSchema.safeParse(previousReview);
         if (!review.success) {

@@ -35,7 +35,11 @@ export function interceptableLink(event: MouseEvent): HTMLAnchorElement | null {
  * Back. In-app navigation is resolved through a React dialog; refresh and tab
  * close continue to use the browser's required beforeunload prompt.
  */
-export function useUnsavedNavigationGuard(dirty: boolean, message = DEFAULT_MESSAGE): UnsavedNavigationGuard {
+export function useUnsavedNavigationGuard(
+  dirty: boolean,
+  message = DEFAULT_MESSAGE,
+  { guardBack = true } = {}
+): UnsavedNavigationGuard {
   const bypassNextClick = useRef(false);
   const bypassNextBeforeUnload = useRef(false);
   const bypassNextPop = useRef(false);
@@ -123,7 +127,8 @@ export function useUnsavedNavigationGuard(dirty: boolean, message = DEFAULT_MESS
     }
 
     const marker = markerRef.current ?? `${Date.now()}-${Math.random()}`;
-    if (!markerRef.current) {
+    // Hash-based editors can own Back/Forward themselves; don't insert a second guard entry.
+    if (guardBack && !markerRef.current) {
       markerRef.current = marker;
       window.history.pushState(
         { ...(window.history.state ?? {}), [HISTORY_SENTINEL]: marker },
@@ -147,6 +152,10 @@ export function useUnsavedNavigationGuard(dirty: boolean, message = DEFAULT_MESS
       }
       const anchor = interceptableLink(event);
       if (!anchor) return;
+      // The hash owner's change handler already asks for these. Replaying a guarded link
+      // there would make the same navigation ask twice.
+      if (!guardBack && anchor.pathname === window.location.pathname && anchor.search === window.location.search)
+        return;
       event.preventDefault();
       event.stopPropagation();
       setPending({
@@ -185,7 +194,7 @@ export function useUnsavedNavigationGuard(dirty: boolean, message = DEFAULT_MESS
 
     window.addEventListener('beforeunload', beforeUnload);
     globalThis.document.addEventListener('click', click, true);
-    window.addEventListener('popstate', popState);
+    if (guardBack) window.addEventListener('popstate', popState);
     return () => {
       window.removeEventListener('beforeunload', beforeUnload);
       globalThis.document.removeEventListener('click', click, true);
@@ -194,7 +203,7 @@ export function useUnsavedNavigationGuard(dirty: boolean, message = DEFAULT_MESS
       bypassNextBeforeUnload.current = false;
       bypassNextPop.current = false;
     };
-  }, [dirty, message, setPending]);
+  }, [dirty, guardBack, setPending]);
 
   return {
     isOpen: pendingNavigation !== null,

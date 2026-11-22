@@ -27,6 +27,7 @@ import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { firestoreVersionFingerprint } from '@/src/lib/vocabulary/word-deletion.server';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
+import { canonicalHeadwordKey, HEADWORD_KEY_FIELD } from '@/src/utils/vocabulary/headword';
 import { changedWordFields, summarizeWordChanges } from '@/src/utils/vocabulary/word-diff';
 
 /** The review list loads at most this many requests of one status. */
@@ -108,7 +109,7 @@ function validateProposal(proposed: Plain, live: Plain): { proposedWord: Vocabul
   const now = new Date().toISOString();
   const result = VocabularyWordSchema.safeParse({
     ...preserveAiReview(proposed, live),
-    sort_key: typeof proposed.word === 'string' ? stripMacrons(proposed.word) : proposed.word,
+    sort_key: typeof proposed.word === 'string' ? stripMacrons(proposed.word.trim()) : proposed.word,
     random_index: typeof live.random_index === 'number' ? live.random_index : Math.random(),
     createdAt: typeof live.createdAt === 'string' ? live.createdAt : now,
     updatedAt: typeof live.updatedAt === 'string' ? live.updatedAt : now,
@@ -401,6 +402,7 @@ export async function approveWordUpdate(db: Firestore, actorUid: string, id: str
       withoutUndefined({
         ...authored,
         ...kept,
+        [HEADWORD_KEY_FIELD]: canonicalHeadwordKey(proposedWord.word),
         random_index: typeof live.data.random_index === 'number' ? live.data.random_index : authored.random_index,
         createdAt: live.data.createdAt ?? now,
         updatedAt: now,

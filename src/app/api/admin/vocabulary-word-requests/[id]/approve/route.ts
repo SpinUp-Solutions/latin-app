@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { RequestError } from '@/src/lib/domain-error';
 import {
   buildValidatedWordForApproval,
+  pendingRequestData,
   requestCollection,
   serializeRequestSnapshot,
   wordCollection,
 } from '../../utils';
 import { adminDb } from '@/src/services/firebase-admin';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
+import { assertHeadwordAvailable } from '@/src/lib/vocabulary/duplicate-words.server';
+import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,27 +26,19 @@ export async function POST(
     await verifyAdminAccess(request);
     const { id } = await params;
     const docRef = requestCollection().doc(id);
-    const snapshot = await docRef.get();
-
-    if (!snapshot.exists) {
-      return NextResponse.json({ success: false, error: 'Request not found' }, { status: 404 });
-    }
-
-    const requestData = snapshot.data() || {};
-    if (requestData.status !== 'pending') {
-      return NextResponse.json({ success: false, error: 'Only pending requests can be approved' }, { status: 409 });
-    }
+    const { confirmedHeadword } = z
+      .object({ confirmedHeadword: z.string().min(1).optional() })
+      .parse(request.body ? await request.json().catch(() => null) : {});
 
     const wordRef = wordCollection().doc();
     await runVocabularyContentMutation(adminDb, async transaction => {
-      const currentRequest = await transaction.get(docRef);
-      if (!currentRequest.exists || currentRequest.data()?.status !== 'pending') {
-        throw new RequestError(409, 'VOCABULARY_REQUEST_NOT_PENDING', 'Only pending requests can be approved');
-      }
-      // Validate the same draft this transaction approves, including any review
-      // metadata saved after the initial request was read.
-      const validated = buildValidatedWordForApproval(currentRequest.data()!.draftWord);
+      const current = pendingRequestData(await transaction.get(docRef));
+      const validated = buildValidatedWordForApproval(current.draftWord);
       if (!validated.success) throw new RequestError(400, 'INVALID_WORD_DATA', validated.error);
+      const { word } = validated.data.validatedWord;
+      if (confirmedHeadword !== word) await assertHeadwordAvailable(adminDb, word, transaction);
+      const bumpRevision = await prepareVocabularyContentRevisionBump(transaction, adminDb);
+      bumpRevision();
       transaction.create(wordRef, validated.data.firestorePayload);
       transaction.update(docRef, {
         status: 'approved',

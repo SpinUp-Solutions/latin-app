@@ -1,3 +1,4 @@
+jest.mock('firebase-admin/firestore', () => ({ Filter: { where: jest.fn(), and: jest.fn(), or: jest.fn() } }));
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('@/src/lib/verifyAdminAccess', () => ({ verifyAdminAccess: jest.fn(async () => ({ uid: 'admin-1' })) }));
 jest.mock('@/src/services/firebase-admin', () => ({
@@ -12,6 +13,8 @@ jest.mock('@/src/lib/vocabulary-pools/sync-lock.server', () => ({
 
 import { PATCH } from '@/src/app/api/admin/vocabulary-word-requests/[id]/route';
 import { POST as approve } from '@/src/app/api/admin/vocabulary-word-requests/[id]/approve/route';
+import { POST as dismiss } from '@/src/app/api/admin/vocabulary-word-requests/[id]/dismiss/route';
+import { VOCABULARY_WORD_REQUESTS_COLLECTION } from '@/shared/constants/firestore';
 import { buildValidatedWordForApproval } from '@/src/app/api/admin/vocabulary-word-requests/utils';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { AdminAccessError } from '@/src/lib/admin-access-error';
@@ -40,14 +43,30 @@ const word = {
 let stored: Data | undefined;
 let createdWord: Data | undefined;
 let transactionWrites: number;
+let candidates: { id: string; ref: { id: string }; data: () => Data }[];
 let beforeTransaction: (() => void) | undefined;
 const snapshot = () => ({ id: 'request-1', exists: stored !== undefined, data: () => stored });
 const mockDb = {
-  collection: () => ({ doc: (id = 'new-word-1') => ({ id, get: async () => snapshot() }) }),
+  collection: (collection: string) => ({
+    doc: (id = 'new-word-1') => ({ id, collection, get: async () => snapshot() }),
+    where: () => {
+      const query = { query: true, orderBy: () => query, select: () => query, limit: () => query };
+      return query;
+    },
+  }),
   runTransaction: async (callback: (transaction: unknown) => Promise<unknown>) => {
     beforeTransaction?.();
     return callback({
-      get: async () => snapshot(),
+      get: async (ref: { collection?: string; query?: boolean }) =>
+        ref.query
+          ? { docs: candidates }
+          : ref.collection === VOCABULARY_WORD_REQUESTS_COLLECTION
+            ? snapshot()
+            : { data: () => undefined },
+      getAll: async () => candidates,
+      set: () => {
+        transactionWrites += 1;
+      },
       create: (_ref: unknown, data: Data) => {
         transactionWrites += 1;
         createdWord = data;
@@ -68,6 +87,7 @@ beforeEach(() => {
   stored = { status: 'pending', draftWord: { ...word, ai_review: review }, createdAt: word.createdAt };
   createdWord = undefined;
   transactionWrites = 0;
+  candidates = [];
   beforeTransaction = undefined;
   jest.mocked(verifyAdminAccess).mockResolvedValue({ uid: 'admin-1' } as never);
 });
@@ -84,6 +104,24 @@ it('retains the current stored review when a legacy editor omits it and does not
   expect(result.body.data.request.draftWord).not.toHaveProperty('uncertainties');
   expect(transactionWrites).toBe(1);
 });
+
+it.each(['approved', 'dismissed'])(
+  'rejects a save and a dismiss after the transaction sees status %s',
+  async status => {
+    beforeTransaction = () => {
+      stored = { ...stored, status };
+    };
+    expect(await save({ ...word, translation: 'not saved' })).toMatchObject({
+      status: 409,
+      body: { code: 'VOCABULARY_REQUEST_NOT_PENDING' },
+    });
+    expect(
+      (await dismiss({ json: async () => ({}) } as never, { params: Promise.resolve({ id: 'request-1' }) })).status
+    ).toBe(409);
+    expect(stored).toMatchObject({ status, draftWord: { translation: 'and' } });
+    expect(transactionWrites).toBe(0);
+  }
+);
 
 it('accepts an explicit empty review to clear it', async () => {
   const empty = { uncertainties: [], guidance: [] };
@@ -126,6 +164,22 @@ it('keeps review metadata in the validated new-word approval payload, excluding 
   if (!result.success) throw new Error(result.error);
   expect(result.data.firestorePayload).toMatchObject({ ai_review: review });
   expect(result.data.firestorePayload).not.toHaveProperty('review_answer');
+});
+
+it('does not reuse confirmation for a different headword saved before approval', async () => {
+  const updated = { ...word, word: ' SĒD ', sort_key: ' SED ' };
+  candidates = [{ id: 'existing', ref: { id: 'existing' }, data: () => updated }];
+  beforeTransaction = () => {
+    stored = { ...stored, draftWord: updated };
+  };
+  const confirm = (headword: string) =>
+    approve({ body: true, json: async () => ({ confirmedHeadword: headword }) } as never, {
+      params: Promise.resolve({ id: 'request-1' }),
+    });
+  expect(await confirm('et')).toMatchObject({ status: 409, body: { code: 'WORD_ALREADY_EXISTS', headword: ' SĒD ' } });
+  expect(transactionWrites).toBe(0);
+  expect((await confirm(' SĒD ')).status).toBe(200);
+  expect(createdWord).toMatchObject({ word: ' SĒD ', _headwordKey: 'sed' });
 });
 
 it('approves the current transaction draft when review metadata changed after the initial read', async () => {

@@ -16,7 +16,7 @@ import { changedTableCells } from '@/src/utils/vocabulary/word-diff';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
-import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
+import { VocabularyWord, VocabularyWordWithId, type HeadwordMatch } from '@/src/types/vocabulary/index';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue } from '@/src/utils/vocabUtils';
 import { SchemaTable } from './tables/SchemaTable';
@@ -80,9 +80,9 @@ interface WordEditPanelProps {
    * The words already in the vocabulary under a new word's headword, and whether that is still being
    * checked. AI Generate waits for the check and asks before running on a duplicate.
    */
-  existingHeadword?: { words: VocabularyWordWithId[]; checking: boolean };
+  existingHeadword?: { words: HeadwordMatch[]; checking: boolean };
   /** Opens a word already in the vocabulary that a new word's headword duplicates. */
-  onOpenWord?: (word: VocabularyWordWithId) => void;
+  onOpenWord?: (word: HeadwordMatch) => void;
 }
 
 const NO_EXISTING_HEADWORD = { words: [], checking: false };

@@ -237,7 +237,7 @@ export function VocabularyAIRulesDialog({ disabled = false }: { disabled?: boole
         <Lightbulb className="h-4 w-4" />
         AI rules
       </Button>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto overscroll-contain">
         <DialogHeader>
           <DialogTitle>AI rules for all words</DialogTitle>
           <DialogDescription>
