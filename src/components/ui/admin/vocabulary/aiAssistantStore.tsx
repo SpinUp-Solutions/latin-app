@@ -297,7 +297,10 @@ function useAIAssistantState(): AIAssistantStore {
       ...reply.answered,
       ...reply.remember.flatMap(note => (note.field ? [note.field] : [])),
       // A pronoun's shape fields and its table depend on each other: see `staleFields`.
-      ...(changes.some(change => PRONOUN_SHAPE.has(change.field)) ? (['declension_table'] as const) : []),
+      ...(part_of_speech === 'pronoun' &&
+      changes.some(change => PRONOUN_SHAPE.has(change.field) || change.field === 'declension_table')
+        ? (['declension_table', 'pronoun_type', 'person'] as const)
+        : []),
     ];
     const seen = Object.fromEntries(
       touched.filter(field => !changed.has(field)).map(field => [field, snapshotValue(draftValue(asked, field))])

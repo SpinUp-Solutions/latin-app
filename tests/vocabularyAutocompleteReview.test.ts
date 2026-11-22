@@ -275,6 +275,22 @@ it('rejects a conversation answer that makes the pronoun type and person conflic
   expect(result.data).toBeUndefined();
 });
 
+it('refuses a person-only proposal that would reset the existing paradigm', async () => {
+  respond(conversationOutput('pronoun', { person: '3rd' }));
+  const result = await autocompleteVocabularyWord({
+    word: 'ego',
+    part_of_speech: 'pronoun',
+    existingData: { pronoun_type: 'personal', person: '1st', declension_table: nounOutput().declension_table },
+    ...talk('Make it third person.'),
+  });
+  expect(result).toMatchObject({
+    success: false,
+    errorCode: 'invalid-schema',
+    error: expect.stringContaining('matching declension table'),
+  });
+  expect(result.data).toBeUndefined();
+});
+
 it('preserves nonempty arrays and full forms, fills empty nested values, and preserves meaningful table nulls', async () => {
   const output = nounOutput();
   output.declension_table.locative.singular = ['rēgī'];

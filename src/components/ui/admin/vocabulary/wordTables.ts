@@ -1,9 +1,5 @@
 import type { z } from 'zod';
-import {
-  DeclensionTableSchema,
-  AdjectiveDeclensionTableSchema,
-  PersonalPronounDeclensionTableSchema,
-} from '@/shared/types/vocabulary/schemas/declension';
+import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/shared/types/vocabulary/schemas/declension';
 import type { PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
@@ -45,12 +41,7 @@ const EDITABLE_TABLES: Partial<Record<string, EditableTable>> = {
 export const getEditableTable = (word: { part_of_speech: string } | null) =>
   word ? EDITABLE_TABLES[word.part_of_speech] : undefined;
 
-export const getPronounTableSchema = (pronounType: PronounType | null, person: PronounPerson | null) => {
-  if (pronounType === 'personal' && (person === '1st' || person === '2nd')) {
-    return PersonalPronounDeclensionTableSchema;
-  }
-  return AdjectiveDeclensionTableSchema;
-};
+export { getPronounTableSchema } from '@/shared/types/vocabulary/schemas/pronoun';
 
 export const getPronounTableTitle = (pronounType: PronounType | null, person: PronounPerson | null): string => {
   if (!pronounType) return 'Pronoun Declension Table';

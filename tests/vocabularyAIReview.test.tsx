@@ -453,12 +453,45 @@ it.each([
         reply: { message: 'First person now.', answered: [], remember: [], rule: null },
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    if (withTable) fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    else expect(screen.queryByRole('button', { name: /^Accept/ })).toBeNull();
 
     // The person would change the table's shape and empty the table the admin edited, so it is skipped.
     const saved = await saveWord(onSave);
     expect(saved.person).toBe('3rd');
     expect(saved.declension_table.nominative.masculine).toEqual({ singular: ['ille'], plural: ['eī'] });
+  }
+);
+
+it.each([false, true])(
+  'refuses a person change without a compatible replacement, even with no intervening edit (old table supplied: %s)',
+  async wrongShape => {
+    const schema = getPronounTableSchema('personal', '3rd');
+    const gendered = schema.parse(buildEmptyFromSchema(schema));
+    if (!('masculine' in gendered.nominative)) throw new Error('Expected a gendered table');
+    gendered.nominative.masculine.singular = ['is'];
+    const word = {
+      ...cloneNoun(),
+      id: 'is',
+      word: 'is',
+      part_of_speech: 'pronoun',
+      pronoun_type: 'personal',
+      person: '3rd',
+      declension_table: gendered,
+    } as VocabularyWordWithId;
+    mockCallable.mockResolvedValueOnce(
+      reply({ part_of_speech: 'pronoun', person: '1st', ...(wrongShape ? { declension_table: gendered } : {}) })
+    );
+    const onSave = jest.fn(async () => true);
+    render(<WordEditPanel word={word} onSave={onSave} updating={false} />);
+    say('Make it first person.');
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('The AI could not answer', {
+        description: expect.stringContaining('matching declension table'),
+      })
+    );
+    expect(screen.queryByRole('button', { name: /^Accept/ })).toBeNull();
+    expect(await saveWord(onSave)).toMatchObject({ person: '3rd', declension_table: gendered });
   }
 );
 

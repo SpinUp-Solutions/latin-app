@@ -32,6 +32,7 @@ import type {
 } from './types';
 import { PartOfSpeech } from '../types/vocabulary/schemas/enums';
 import { VocabularyWord } from '../types/vocabulary/schemas';
+import { pronounProposalError } from '../types/vocabulary/schemas/pronoun';
 import {
   VerbStructuredOutputSchema,
   NounStructuredOutputSchema,
@@ -483,16 +484,16 @@ export async function autocompleteVocabularyWord(
     // A valid raw proposal can become inconsistent after a scoped replacement.
     const pronounType = 'pronoun_type' in data ? data.pronoun_type : existing.pronoun_type;
     const person = 'person' in data ? data.person : existing.person;
-    if (
+    const pronounError =
       request.part_of_speech === 'pronoun' &&
-      typeof pronounType === 'string' &&
-      person !== undefined &&
-      (pronounType === 'personal') !== (person !== null)
-    ) {
+      (typeof pronounType === 'string' && person !== undefined && (pronounType === 'personal') !== (person !== null)
+        ? 'The proposed pronoun type and person conflict with the current word. Review these fields together.'
+        : pronounProposalError(existing, data));
+    if (pronounError) {
       return {
         success: false,
         errorCode: 'invalid-schema',
-        error: 'The proposed pronoun type and person conflict with the current word. Review these fields together.',
+        error: pronounError,
         model: result.model,
         cost: result.cost,
         tokensUsed: result.usage?.totalTokens,

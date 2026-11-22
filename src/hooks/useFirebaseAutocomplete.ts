@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AIAutocompleteRequest, AIAutocompleteResponse, CostBreakdown, ErrorDetails } from '@/shared/openai/types';
 import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
+import { pronounProposalError } from '@/shared/types/vocabulary/schemas/pronoun';
+
 export interface ErrorInfo {
   message: string;
   details?: ErrorDetails;
@@ -37,6 +39,12 @@ export async function callAutocompleteWord(request: AIAutocompleteRequest): Prom
     );
     const { data: result } = await autocompleteWordFunc(request);
     if (!result.success) return failure(result.error || 'Failed to autocomplete word', result.errorDetails);
+    // An older deployed callable may still return a person change without its replacement table.
+    const tableError =
+      request.part_of_speech === 'pronoun' &&
+      result.data &&
+      pronounProposalError(request.existingData ?? {}, result.data);
+    if (tableError) return failure(tableError);
     return { ok: true, result };
   } catch (err: unknown) {
     const error = err as { message?: string; details?: ErrorDetails; code?: string };
