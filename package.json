@@ -127,6 +127,8 @@
     "whatwg-fetch": "^3.6.20"
   },
   "overrides": {
-    "undici": "6.29.1"
+    "firebase": {
+      "undici": "6.29.1"
+    }
   }
 }
