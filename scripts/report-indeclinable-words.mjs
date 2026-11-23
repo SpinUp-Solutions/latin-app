@@ -12,7 +12,7 @@
 
 import { pathToFileURL } from 'node:url';
 import { VOCABULARY_WORDS_COLLECTION } from '../shared/constants/firestore.ts';
-import { isUniformTable } from '../src/utils/morphologyForms.ts';
+import { collectSelectableForms, isSelectableMorphologyForm, isUniformTable } from '../src/utils/morphologyForms.ts';
 
 export const INDECLINABLE_NOUN_HEADWORDS = new Set([
   'fas',
@@ -27,6 +27,12 @@ export const INDECLINABLE_NOUN_HEADWORDS = new Set([
   'gummi',
   'sinapi',
 ]);
+
+/**
+ * Indeclinable only in some uses: opus only in the idiom opus est (otherwise opus, operis), and gummī and
+ * sināpī also occur as declined 3rd-declension nouns. An entry whose own forms decline is the declined noun.
+ */
+const SOMETIMES_DECLINED_NOUN_HEADWORDS = new Set(['opus', 'gummi', 'sinapi']);
 
 export const INDECLINABLE_ADJECTIVE_HEADWORDS = new Set([
   'frugi',
@@ -69,9 +75,12 @@ const INDECLINABLE_CARDINAL_TOKENS = new Set([
   'quattuordecim',
   'quindecim',
   'sedecim',
+  'sexdecim',
   'septendecim',
+  'septemdecim',
   'octodecim',
   'novendecim',
+  'novemdecim',
   ...CARDINAL_TENS_AND_CENTUM,
   ...CARDINAL_TENS_AND_CENTUM.flatMap(base => [`duode${base}`, `unde${base}`]),
   'mille',
@@ -104,6 +113,17 @@ export function matchesIndeclinableHeadword(word, partOfSpeech) {
   return false;
 }
 
+/** Whether a noun entry for opus, gummī or sināpī is the declined noun, judged by its own forms. */
+function isDeclinedUseOfSometimesIndeclinableNoun(data) {
+  if (data.part_of_speech !== 'noun' || !SOMETIMES_DECLINED_NOUN_HEADWORDS.has(normalizeHeadword(data.word))) {
+    return false;
+  }
+  const genitive = data.genitive_singular?.full_form;
+  const forms = [data.word, ...(isSelectableMorphologyForm(genitive) ? [genitive] : [])];
+  forms.push(...collectSelectableForms(data.declension_table));
+  return new Set(forms.map(normalizeHeadword)).size > 1;
+}
+
 function getInflectionTableForUniformCheck(data) {
   if (data.part_of_speech === 'noun') return data.declension_table;
   if (data.part_of_speech === 'adjective') {
@@ -132,7 +152,10 @@ export function findIndeclinableCandidates(docs, { includeMarked = false } = {})
     if (!includeMarked && declension === 'indeclinable') continue;
 
     const reasons = [];
-    if (matchesIndeclinableHeadword(data.word, data.part_of_speech)) {
+    if (
+      matchesIndeclinableHeadword(data.word, data.part_of_speech) &&
+      !isDeclinedUseOfSometimesIndeclinableNoun(data)
+    ) {
       reasons.push('headword');
     }
     if (isUniformTable(getInflectionTableForUniformCheck(data))) {

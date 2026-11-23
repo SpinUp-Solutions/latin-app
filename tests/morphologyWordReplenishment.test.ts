@@ -762,7 +762,7 @@ describe('generated exercise word replenishment', () => {
     expect(first.words.map(word => word.id)).toEqual(second.words.map(word => word.id));
   });
 
-  describe('indeclinable adjective form retry and filtering', () => {
+  describe('indeclinable adjectives and nouns in the generator', () => {
     const selectedPaths = [
       'positive.nominative.masculine.singular',
       'positive.nominative.neuter.singular',
@@ -817,14 +817,14 @@ describe('generated exercise word replenishment', () => {
       },
     });
 
-    it('always picks a positive-only spelling in a declension-only drill and stays deterministic per seed', async () => {
+    it("draws every form of an indeclinable adjective in a declension-only drill, asking each degree's declension", async () => {
       const db = createFakeGeneratedWordDb({
         words: [sharedAndPositiveAdj('nequam', ['nēquam', 'nēquam-alt'])],
         pools: [{ id: 'one-word', wordDocIds: ['nequam'] }],
       });
       const exercise = makeIndeclinableAdjectiveExercise(['declension'], 'one-word');
 
-      const seen = new Set<string>();
+      const acceptedByForm = new Map<string, string[]>();
       for (let seed = 1; seed <= 40; seed += 1) {
         const first = await createFirestoreGeneratedWordLoader(db as never, {
           rng: createGeneratedExerciseRng(seed),
@@ -834,11 +834,19 @@ describe('generated exercise word replenishment', () => {
         })(exercise);
 
         expect(first).toHaveLength(1);
-        expect(['nēquam', 'nēquam-alt']).toContain(first[0].selected_form);
         expect(first[0].selected_form).toBe(replay[0].selected_form);
-        seen.add(first[0].selected_form);
+        const items = await resolveGeneratedExerciseItems(exercise, async () => first);
+        expect(items).toHaveLength(1);
+        acceptedByForm.set(first[0].selected_form, (items[0] as { acceptedAnswers: string[] }).acceptedAnswers);
       }
-      expect(seen.size).toBe(2);
+
+      expect([...acceptedByForm.keys()].sort()).toEqual(['nēquam', 'nēquam-alt', 'nēquior', 'shared']);
+      expect(acceptedByForm.get('nēquam')).toContain('indeclinable');
+      expect(acceptedByForm.get('nēquam')).not.toContain('3rd');
+      expect(acceptedByForm.get('nēquior')).toContain('3rd');
+      expect(acceptedByForm.get('nēquior')).not.toContain('indeclinable');
+      // The spelling both degrees share accepts the declension of either reading.
+      expect(acceptedByForm.get('shared')).toEqual(expect.arrayContaining(['indeclinable', '3rd']));
     });
 
     it('keeps both degree readings of the shared spelling in a degree drill', async () => {
@@ -869,9 +877,9 @@ describe('generated exercise word replenishment', () => {
       expect('primaryFormPaths' in items[0] ? items[0].primaryFormPaths : []).toHaveLength(2);
     });
 
-    it('returns no item when every spelling of the word is ineligible for a declension-only drill', async () => {
-      const ineligible: FakeDocument = {
-        id: 'ineligible',
+    it('loads an indeclinable adjective with no positive-only spelling and asks its comparative declension', async () => {
+      const noPositiveOnlyForm: FakeDocument = {
+        id: 'no-positive-only',
         data: {
           word: 'nēquam',
           part_of_speech: 'adjective',
@@ -896,60 +904,18 @@ describe('generated exercise word replenishment', () => {
         },
       };
       const db = createFakeGeneratedWordDb({
-        words: [ineligible],
-        pools: [{ id: 'ineligible-pool', wordDocIds: ['ineligible'] }],
+        words: [noPositiveOnlyForm],
+        pools: [{ id: 'comparative-pool', wordDocIds: ['no-positive-only'] }],
       });
-      const exercise = makeIndeclinableAdjectiveExercise(['declension'], 'ineligible-pool');
+      const exercise = makeIndeclinableAdjectiveExercise(['declension'], 'comparative-pool');
 
       const words = await createFirestoreGeneratedWordLoader(db as never, {
         rng: createGeneratedExerciseRng(7),
       })(exercise);
-      expect(words).toEqual([]);
-    });
-
-    it('preserves seed output for regular words that need no retry', async () => {
-      const regularWords: FakeDocument[] = Array.from({ length: 6 }, (_, index) => ({
-        id: `adj-${index}`,
-        data: {
-          word: `bonus-${index}`,
-          part_of_speech: 'adjective',
-          declension: '1-2',
-          translation: 'good',
-          random_index: (index + 1) / 10,
-          sort_key: `bonus-${index}`,
-          degrees_table: {
-            positive: {
-              nominative: {
-                masculine: { singular: [`bonus-${index}`] },
-                neuter: { singular: [`bonum-${index}`] },
-              },
-            },
-            comparative: {
-              nominative: {
-                masculine: { singular: [`melior-${index}`] },
-                neuter: { singular: [`melius-${index}`] },
-              },
-            },
-            superlative: {},
-          },
-        },
-      }));
-      const db = createFakeGeneratedWordDb({
-        words: regularWords,
-        pools: [{ id: 'regular-pool', wordDocIds: regularWords.map(w => w.id) }],
-      });
-      const exercise = makeIndeclinableAdjectiveExercise(['declension', 'degree'], 'regular-pool');
-      exercise.data.generatorConfig.count = 6;
-
-      const run = () =>
-        createFirestoreGeneratedWordLoader(db as never, {
-          rng: createGeneratedExerciseRng(123),
-        })(exercise);
-
-      const first = await run();
-      const second = await run();
-      expect(first.map(w => `${w.id}:${w.selected_form}`)).toEqual(second.map(w => `${w.id}:${w.selected_form}`));
-      expect(first).toHaveLength(6);
+      expect(words).toHaveLength(1);
+      const items = await resolveGeneratedExerciseItems(exercise, async () => words);
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ step: 'declension', acceptedAnswers: expect.arrayContaining(['3rd']) });
     });
 
     it('filters both nouns and adjectives by declension="indeclinable"', async () => {

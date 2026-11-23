@@ -11,49 +11,33 @@ export function isSelectableMorphologyForm(value: unknown): value is string {
   return trimmed.length > 0 && trimmed !== EMPTY_MORPHOLOGY_FORM_PLACEHOLDER;
 }
 
+/** Every selectable form anywhere in a table or table fragment, trimmed. */
+export function collectSelectableForms(node: unknown): string[] {
+  if (typeof node === 'string') return isSelectableMorphologyForm(node) ? [node.trim()] : [];
+  if (Array.isArray(node)) return node.flatMap(collectSelectableForms);
+  if (node && typeof node === 'object') return Object.values(node).flatMap(collectSelectableForms);
+  return [];
+}
+
 /**
- * Returns whether an inflection table has at least two filled cells and every
- * selectable form across those cells has the same spelling.
+ * Returns whether a case-keyed inflection table (a noun's declension table, or one degree of an adjective's)
+ * has forms in at least two cases and every form in it has the same spelling.
+ *
+ * Two cases, not two cells: forms that agree within one case (fēlīx in all three genders, diēs in both
+ * numbers) are ordinary syncretism. The vocative must still match but does not count as a case, because it
+ * repeats the nominative in nearly every paradigm (puella, puella).
  */
 export function isUniformTable(table: unknown): boolean {
   if (!table || typeof table !== 'object' || Array.isArray(table)) return false;
 
-  let filledCells = 0;
   let sharedForm: string | null = null;
-
-  const visit = (node: unknown): boolean => {
-    if (node === null || node === undefined) return true;
-    if (typeof node === 'string') {
-      if (!isSelectableMorphologyForm(node)) return true;
-      const form = node.trim();
-      if (sharedForm === null) {
-        sharedForm = form;
-      } else if (sharedForm !== form) {
-        return false;
-      }
-      filledCells += 1;
-      return true;
+  const casesWithForms = new Set<string>();
+  for (const [caseName, row] of Object.entries(table)) {
+    for (const form of collectSelectableForms(row)) {
+      if (sharedForm === null) sharedForm = form;
+      else if (form !== sharedForm) return false;
+      if (caseName !== 'vocative') casesWithForms.add(caseName);
     }
-    if (Array.isArray(node)) {
-      const forms = node.filter(isSelectableMorphologyForm).map(entry => entry.trim());
-      if (forms.length === 0) return true;
-      for (const form of forms) {
-        if (sharedForm === null) {
-          sharedForm = form;
-        } else if (sharedForm !== form) {
-          return false;
-        }
-      }
-      filledCells += 1;
-      return true;
-    }
-    if (typeof node === 'object') {
-      for (const value of Object.values(node)) {
-        if (!visit(value)) return false;
-      }
-    }
-    return true;
-  };
-
-  return visit(table) && filledCells >= 2;
+  }
+  return casesWithForms.size >= 2;
 }

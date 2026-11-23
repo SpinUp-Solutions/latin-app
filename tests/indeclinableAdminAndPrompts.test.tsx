@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { WordFiltersPanel } from '@/src/components/ui/admin/vocabulary/WordFiltersPanel';
@@ -26,6 +27,13 @@ Object.defineProperty(globalThis, 'ResizeObserver', {
     unobserve() {}
     disconnect() {}
   },
+});
+
+// Radix Select relies on pointer-capture and scrolling APIs that jsdom does not implement.
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.releasePointerCapture = () => undefined;
+  Element.prototype.scrollIntoView = () => undefined;
 });
 
 const emptyRow = () => ({ singular: null, plural: null });
@@ -95,6 +103,11 @@ const baseAdjective = (overrides: Record<string, unknown> = {}) => ({
     positive: {
       ...emptyAdjDegree(),
       nominative: {
+        masculine: { singular: null, plural: ['quattuor'] },
+        feminine: { singular: null, plural: ['quattuor'] },
+        neuter: { singular: null, plural: ['quattuor'] },
+      },
+      accusative: {
         masculine: { singular: null, plural: ['quattuor'] },
         feminine: { singular: null, plural: ['quattuor'] },
         neuter: { singular: null, plural: ['quattuor'] },
@@ -285,7 +298,56 @@ describe('indeclinable admin menus, editor warnings, schemas, and AI prompts', (
     );
     expect(screen.getByRole('heading', { name: 'puella' })).toBeInTheDocument();
     expect(screen.queryByText(/may be indeclinable/i)).not.toBeInTheDocument();
+
+    // Half filled in, with only the nominative and the vocative that repeats it, puella is not flagged.
+    rerender(
+      <WordEditPanel
+        word={
+          baseNoun({
+            id: 'noun-puella-partial',
+            word: 'puella',
+            declension: '1',
+            declension_table: {
+              nominative: { singular: ['puella'], plural: null },
+              genitive: emptyRow(),
+              dative: emptyRow(),
+              accusative: emptyRow(),
+              ablative: emptyRow(),
+              vocative: { singular: ['puella'], plural: null },
+              locative: emptyRow(),
+            },
+          }) as never
+        }
+        onSave={jest.fn()}
+        updating={false}
+      />
+    );
+    expect(screen.getByRole('heading', { name: 'puella' })).toBeInTheDocument();
+    expect(screen.queryByText(/may be indeclinable/i)).not.toBeInTheDocument();
   });
+
+  it.each([
+    ['noun', baseNoun, 'Third'],
+    ['adjective', baseAdjective, 'Third'],
+  ] as const)(
+    'hides the %s warning as soon as Declension is set to Indeclinable in the editor',
+    async (_partOfSpeech, buildWord, declinedLabel) => {
+      const user = userEvent.setup();
+      // AIEnumSelect's label is not tied to its trigger, so the select is found through its form item.
+      const declensionSelect = () =>
+        within(screen.getByText('Declension', { selector: 'label' }).parentElement!).getByRole('combobox');
+      render(<WordEditPanel word={buildWord() as never} onSave={jest.fn()} updating={false} />);
+      expect(screen.getByRole('status')).toHaveTextContent(/may be indeclinable/i);
+
+      await user.click(declensionSelect());
+      await user.click(await screen.findByRole('option', { name: 'Indeclinable' }));
+      expect(screen.queryByText(/may be indeclinable/i)).not.toBeInTheDocument();
+
+      await user.click(declensionSelect());
+      await user.click(await screen.findByRole('option', { name: declinedLabel }));
+      expect(screen.getByRole('status')).toHaveTextContent(/may be indeclinable/i);
+    }
+  );
 
   it('warns in AdjectiveForm for uniform positive tables (including nēquam) until marked indeclinable', () => {
     const { rerender } = render(<WordEditPanel word={baseAdjective() as never} onSave={jest.fn()} updating={false} />);
@@ -299,6 +361,11 @@ describe('indeclinable admin menus, editor warnings, schemas, and AI prompts', (
         positive: {
           ...emptyAdjDegree(),
           nominative: {
+            masculine: { singular: ['nēquam'], plural: ['nēquam'] },
+            feminine: emptyRow(),
+            neuter: emptyRow(),
+          },
+          accusative: {
             masculine: { singular: ['nēquam'], plural: ['nēquam'] },
             feminine: emptyRow(),
             neuter: emptyRow(),

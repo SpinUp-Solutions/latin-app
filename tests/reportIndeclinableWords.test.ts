@@ -36,6 +36,9 @@ describe('read-only indeclinable words report script', () => {
             nominative: {
               masculine: { singular: ['nēquam'], plural: ['nēquam'] },
             },
+            accusative: {
+              masculine: { singular: ['nēquam'], plural: ['nēquam'] },
+            },
           },
           comparative: {
             nominative: {
@@ -54,6 +57,9 @@ describe('read-only indeclinable words report script', () => {
             nominative: {
               masculine: { singular: null, plural: ['quattuor'] },
               feminine: { singular: null, plural: ['quattuor'] },
+            },
+            accusative: {
+              masculine: { singular: null, plural: ['quattuor'] },
             },
           },
           comparative: {},
@@ -167,6 +173,9 @@ describe('read-only indeclinable words report script', () => {
       doc('c-24', { word: 'vīgintī quattuor', part_of_speech: 'adjective', declension: '3' }),
       doc('c-100', { word: 'centum', part_of_speech: 'adjective', declension: '3' }),
       doc('c-1000', { word: 'mīlle', part_of_speech: 'adjective', declension: '3' }),
+      doc('c-16-variant', { word: 'sexdecim', part_of_speech: 'adjective', declension: '3' }),
+      doc('c-17-variant', { word: 'septemdecim', part_of_speech: 'adjective', declension: '3' }),
+      doc('c-19-variant', { word: 'novemdecim', part_of_speech: 'adjective', declension: '3' }),
       doc('c-21', { word: 'vīgintī ūnus', part_of_speech: 'adjective', declension: '1-2' }),
       doc('c-200', { word: 'ducentī', part_of_speech: 'adjective', declension: '1-2' }),
       doc('c-milia', { word: 'mīlia', part_of_speech: 'noun', declension: '3-istem' }),
@@ -178,7 +187,64 @@ describe('read-only indeclinable words report script', () => {
       findIndeclinableCandidates(docs)
         .map(entry => entry.id)
         .sort()
-    ).toEqual(['c-100', 'c-1000', 'c-18', 'c-24', 'c-4', 'n-fas-no-macron']);
+    ).toEqual([
+      'c-100',
+      'c-1000',
+      'c-16-variant',
+      'c-17-variant',
+      'c-18',
+      'c-19-variant',
+      'c-24',
+      'c-4',
+      'n-fas-no-macron',
+    ]);
+  });
+
+  it('flags opus, gummī and sināpī by headword only when the entry itself does not decline', () => {
+    const docs = [
+      // opus, operis: the ordinary 3rd-declension noun, by its genitive or by its table.
+      doc('opus-genitive', {
+        word: 'opus',
+        part_of_speech: 'noun',
+        declension: '3',
+        genitive_singular: { full_form: 'operis', shortened_form: '-eris' },
+      }),
+      doc('opus-table', {
+        word: 'opus',
+        part_of_speech: 'noun',
+        declension: '3',
+        genitive_singular: null,
+        declension_table: { nominative: { singular: ['opus'] }, genitive: { singular: ['operis'] } },
+      }),
+      doc('gummi-declined', {
+        word: 'gummī',
+        part_of_speech: 'noun',
+        declension: '3',
+        declension_table: { nominative: { singular: ['gummī'] }, genitive: { singular: ['gummis'] } },
+      }),
+      // opus as in opus est, and an undeclined sināpī: still candidates.
+      doc('opus-est', {
+        word: 'opus',
+        part_of_speech: 'noun',
+        declension: '3',
+        genitive_singular: null,
+        declension_table: { nominative: { singular: ['opus'] } },
+      }),
+      doc('sinapi-plain', { word: 'sināpī', part_of_speech: 'noun', declension: '3' }),
+      // Other listed headwords do not depend on their forms: nihil keeps its headword match beside nihilī.
+      doc('nihil', {
+        word: 'nihil',
+        part_of_speech: 'noun',
+        declension: '2',
+        declension_table: { nominative: { singular: ['nihil'] }, genitive: { singular: ['nihilī'] } },
+      }),
+    ];
+
+    expect(
+      findIndeclinableCandidates(docs)
+        .map(entry => entry.id)
+        .sort()
+    ).toEqual(['nihil', 'opus-est', 'sinapi-plain']);
   });
 
   it('parses CLI flags and rejects unknown arguments', () => {
