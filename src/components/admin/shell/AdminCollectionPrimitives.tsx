@@ -3,7 +3,6 @@
 import type { ReactNode } from 'react';
 import { Search, X, type LucideIcon } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
 import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { cn } from '@/src/lib/utils';
 
@@ -33,13 +32,23 @@ interface AdminSearchInputProps {
   label: string;
   placeholder: string;
   clearLabel?: string;
+  /** Classes for the bar itself, such as its width. */
   className?: string;
   inputClassName?: string;
   type?: 'text' | 'search';
   disabled?: boolean;
   id?: string;
+  autoFocus?: boolean;
+  /** `sm` for tight spots such as dialogs and side panels. */
+  size?: 'default' | 'sm';
+  /** Controls inside the bar after the input, such as a filters toggle. */
+  trailing?: ReactNode;
 }
 
+/**
+ * The admin panel's search bar: a rounded bar with the search icon, a clear button once something is typed,
+ * and room for controls of its own at the end.
+ */
 export function AdminSearchInput({
   value,
   onValueChange,
@@ -51,34 +60,46 @@ export function AdminSearchInput({
   type = 'text',
   disabled,
   id,
+  autoFocus,
+  size = 'default',
+  trailing,
 }: AdminSearchInputProps) {
   return (
-    <div className={cn('relative', className)}>
-      <Search
-        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-        aria-hidden="true"
-      />
-      <Input
+    <div
+      className={cn(
+        'flex min-w-0 items-center gap-2 rounded-full bg-white shadow-sm ring-1 ring-gray-200 transition-shadow focus-within:ring-2 focus-within:ring-roman-red',
+        size === 'sm' ? 'h-9 pl-3 pr-1' : 'h-11 pl-4 pr-1.5',
+        disabled && 'opacity-60',
+        className
+      )}>
+      <Search className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
+      <input
         type={type}
         id={id}
         aria-label={label}
         placeholder={placeholder}
         value={value}
         onChange={event => onValueChange(event.target.value)}
-        className={cn('pl-10 pr-10', inputClassName)}
         disabled={disabled}
+        autoFocus={autoFocus}
+        className={cn(
+          'h-full min-w-0 flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed [&::-webkit-search-cancel-button]:hidden',
+          inputClassName
+        )}
       />
       {value && !disabled && (
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
           onClick={() => onValueChange('')}
-          className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-roman-stone"
+          className={cn(
+            'flex shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red',
+            size === 'sm' ? 'h-7 w-7' : 'h-8 w-8'
+          )}
           aria-label={clearLabel}>
           <X className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        </button>
       )}
+      {trailing}
     </div>
   );
 }

@@ -16,6 +16,7 @@ jest.mock('@/src/components/auth/withAdminAuth', () => ({ withAdminAuth: (Compon
 jest.mock('@/src/components/admin/shell', () => ({
   AdminPage: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
   AdminPageHeader: () => <h1>Edit Vocabulary Pool</h1>,
+  AdminSearchInput: jest.requireActual('@/src/components/admin/shell/AdminCollectionPrimitives').AdminSearchInput,
 }));
 jest.mock('@/src/hooks/useInfiniteScroll', () => ({ useInfiniteScroll: () => ({ current: null }) }));
 jest.mock('@/src/store/api/baseQuery', () => ({

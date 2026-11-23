@@ -1,3 +1,4 @@
+import { AdminSearchInput } from '@/src/components/admin/shell';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
@@ -9,10 +10,9 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/src/components/ui/dialog';
-import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Library, Loader2, Search } from 'lucide-react';
+import { Library, Loader2 } from 'lucide-react';
 import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { cn } from '@/src/lib/utils';
 import Link from 'next/link';
@@ -128,15 +128,14 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
           <div className="space-y-4">
             {/* Search and Filters */}
             <div className="flex gap-4">
-              <div className="relative flex-1">
-                <Search className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
-                <Input
-                  placeholder="Search pools..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+              <AdminSearchInput
+                className="flex-1"
+                label="Search pools"
+                clearLabel="Clear pool search"
+                placeholder="Search pools..."
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+              />
               <Select value={difficulty || 'all'} onValueChange={value => setDifficulty(value === 'all' ? '' : value)}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All Difficulties" />

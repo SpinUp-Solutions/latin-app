@@ -1,8 +1,8 @@
+import { AdminSearchInput } from '@/src/components/admin/shell';
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
-import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { MultiSelect } from '@/src/components/ui/multi-select';
@@ -296,12 +296,13 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
         {relevantFilters.includes('search') && (
           <div>
             <Label className="text-sm">Search</Label>
-            <Input
-              type="text"
+            <AdminSearchInput
+              className="mt-1"
+              size="sm"
+              label="Search words"
               placeholder="Search words..."
               value={filters.search || ''}
-              onChange={e => handleFilterChange('search', e.target.value)}
-              className="mt-1"
+              onValueChange={search => handleFilterChange('search', search)}
             />
           </div>
         )}
