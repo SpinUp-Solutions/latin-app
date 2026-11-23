@@ -4,6 +4,7 @@ import type { PartOfSpeech, PronounPerson, PronounType } from '@/shared/types/vo
 import { deriveParadigm } from '@/src/utils/paradigm';
 import { buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
 import {
+  canAskDeclension,
   deduplicatePathsBySteps,
   enrichPathsWithSteps,
   getAnswerableStepsForWord,
@@ -53,6 +54,11 @@ export function prepareGeneratedFormIdentificationWord(
   // selected interpretation and discard incompatible alternatives below.
   if (candidateSteps.length === 0) {
     candidateSteps = getFallbackAnswerableStepsForWord(word, configuredSteps, preferredPath);
+  }
+
+  const declensionPaths = paths.primary.length > 0 ? paths.primary : preferredPath ? [preferredPath] : [];
+  if (declensionPaths.some(path => !canAskDeclension(word, path))) {
+    candidateSteps = candidateSteps.filter(step => step !== 'declension');
   }
 
   let enrichedPrimary = enrichPathsWithSteps(paths.primary, word, candidateSteps);

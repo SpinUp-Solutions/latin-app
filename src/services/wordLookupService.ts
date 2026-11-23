@@ -129,7 +129,7 @@ export class WordLookupService {
 
     const declension = word.declensionClass || word.declension;
     if (declension) {
-      parts.push(`${declension} declension`);
+      parts.push(declension === 'indeclinable' ? 'indeclinable' : `${declension} declension`);
     }
 
     const conjugation = word.conjugationClass || word.conjugation;

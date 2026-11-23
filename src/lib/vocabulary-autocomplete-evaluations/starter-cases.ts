@@ -44,4 +44,13 @@ export const STARTER_VOCABULARY_EVALUATION_CASES: VocabularyEvaluationCaseInput[
       { id: 'et', word: 'et', partOfSpeech: 'conjunction' },
     ],
   },
+  {
+    title: 'Indeclinable nouns and adjectives: fās, quattuor, frūgī, nēquam',
+    entries: [
+      { id: 'fas', word: 'fās', partOfSpeech: 'noun' },
+      { id: 'quattuor', word: 'quattuor', partOfSpeech: 'adjective' },
+      { id: 'frugi', word: 'frūgī', partOfSpeech: 'adjective' },
+      { id: 'nequam', word: 'nēquam', partOfSpeech: 'adjective' },
+    ],
+  },
 ];

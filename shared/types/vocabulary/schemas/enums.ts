@@ -40,9 +40,9 @@ export const GenderSchema = z.enum(['masculine', 'feminine', 'neuter', 'masculin
 
 export const NumberSchema = z.enum(['singular', 'plural']);
 
-export const NounDeclensionSchema = z.enum(['1', '2', '3', '3-istem', '4', '5']);
+export const NounDeclensionSchema = z.enum(['1', '2', '3', '3-istem', '4', '5', 'indeclinable']);
 
-export const AdjectiveDeclensionSchema = z.enum(['1-2', '3']);
+export const AdjectiveDeclensionSchema = z.enum(['1-2', '3', 'indeclinable']);
 
 export const DegreeSchema = z.enum(['positive', 'comparative', 'superlative']);
 

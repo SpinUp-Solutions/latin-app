@@ -1,7 +1,13 @@
 import React from 'react';
 import { WordFiltersPanel } from '../vocabulary/WordFiltersPanel';
 import type { GeneratorFilters } from '@/src/types/exercises/base';
-import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
+import type {
+  PartOfSpeech,
+  NounDeclension,
+  AdjectiveDeclension,
+  PronounType,
+  PronounPerson,
+} from '@/shared/types/vocabulary/schemas/enums';
 import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
 
 interface GeneratedVocabularyFiltersProps {
@@ -51,10 +57,10 @@ export const GeneratedVocabularyFilters: React.FC<GeneratedVocabularyFiltersProp
             | ('1' | '2' | '3' | '3io' | '4' | 'irregular')[]
             | 'all',
           isDeponent: (derivedFilters.isDeponent || 'both') as 'true' | 'false' | 'both',
-          nounDeclension: parseMultiFilterValue(derivedFilters.nounDeclension) as
-            | ('1' | '2' | '3' | '3-istem' | '4' | '5')[]
+          nounDeclension: parseMultiFilterValue(derivedFilters.nounDeclension) as NounDeclension[] | 'all',
+          adjectiveDeclension: parseMultiFilterValue(derivedFilters.adjectiveDeclension) as
+            | AdjectiveDeclension[]
             | 'all',
-          adjectiveDeclension: parseMultiFilterValue(derivedFilters.adjectiveDeclension) as ('1-2' | '3')[] | 'all',
           pronounType: parseMultiFilterValue(derivedFilters.pronounType) as PronounType[] | 'all',
           pronounPerson: parseMultiFilterValue(derivedFilters.pronounPerson) as PronounPerson[] | 'all',
           limit: count,

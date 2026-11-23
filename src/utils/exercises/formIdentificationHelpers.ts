@@ -80,6 +80,16 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
   }
 };
 
+export function canAskDeclension(
+  word: ExerciseWordResponse,
+  path: Record<string, string | undefined> | null | undefined
+): boolean {
+  if (word.part_of_speech === 'adjective' && word.declension === 'indeclinable') {
+    return path?.degree === 'positive';
+  }
+  return true;
+}
+
 export function enrichPathsWithSteps(
   paths: Array<Record<string, string | undefined>>,
   word: ExerciseWordResponse,
@@ -91,6 +101,9 @@ export function enrichPathsWithSteps(
     const verbSupport = isVerb ? getSupportedVerbFormStepsForParsedPath(path) : null;
     steps.forEach(step => {
       if (isVerb && !verbSupport?.supportedSteps.includes(step)) {
+        return;
+      }
+      if (step === 'declension' && !canAskDeclension(word, path)) {
         return;
       }
       if (!enrichedPath[step]) {
@@ -283,6 +296,7 @@ const createVariantMap = (): Record<FormIdentificationStep, VariantMap> => {
     ]);
     declension[value] = withNoun(['2-1-2', ...names], 'declension');
   });
+  declension.indeclinable = ['indecl', 'indcl', 'indec', 'indeclinable'];
 
   const conjugation: VariantMap = {};
   VerbConjugationSchema.options.forEach(value => {

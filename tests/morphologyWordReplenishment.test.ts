@@ -761,4 +761,236 @@ describe('generated exercise word replenishment', () => {
     const second = await collect();
     expect(first.words.map(word => word.id)).toEqual(second.words.map(word => word.id));
   });
+
+  describe('indeclinable adjective form retry and filtering', () => {
+    const selectedPaths = [
+      'positive.nominative.masculine.singular',
+      'positive.nominative.neuter.singular',
+      'comparative.nominative.masculine.singular',
+      'comparative.nominative.neuter.singular',
+    ];
+
+    const makeIndeclinableAdjectiveExercise = (steps: ('declension' | 'degree' | 'case')[], poolId: string) => {
+      const exercise = morphologyExercise(
+        {
+          'adjective-declension': {
+            enabled: true,
+            filters: {},
+            steps,
+            formSelection: { tableType: 'adjective-declension', selectedCellPaths: selectedPaths },
+          },
+        },
+        1
+      );
+      exercise.data.generatorConfig = {
+        ...exercise.data.generatorConfig,
+        wordSource: 'pool',
+        poolId,
+      };
+      return exercise;
+    };
+
+    const sharedAndPositiveAdj = (id: string, positiveOnlyForms: string[]): FakeDocument => ({
+      id,
+      data: {
+        word: 'nēquam',
+        part_of_speech: 'adjective',
+        declension: 'indeclinable',
+        translation: 'worthless',
+        random_index: 0.5,
+        sort_key: 'nequam',
+        degrees_table: {
+          positive: {
+            nominative: {
+              masculine: { singular: positiveOnlyForms },
+              neuter: { singular: ['shared'] },
+            },
+          },
+          comparative: {
+            nominative: {
+              masculine: { singular: ['nēquior'] },
+              neuter: { singular: ['shared'] },
+            },
+          },
+          superlative: {},
+        },
+      },
+    });
+
+    it('always picks a positive-only spelling in a declension-only drill and stays deterministic per seed', async () => {
+      const db = createFakeGeneratedWordDb({
+        words: [sharedAndPositiveAdj('nequam', ['nēquam', 'nēquam-alt'])],
+        pools: [{ id: 'one-word', wordDocIds: ['nequam'] }],
+      });
+      const exercise = makeIndeclinableAdjectiveExercise(['declension'], 'one-word');
+
+      const seen = new Set<string>();
+      for (let seed = 1; seed <= 40; seed += 1) {
+        const first = await createFirestoreGeneratedWordLoader(db as never, {
+          rng: createGeneratedExerciseRng(seed),
+        })(exercise);
+        const replay = await createFirestoreGeneratedWordLoader(db as never, {
+          rng: createGeneratedExerciseRng(seed),
+        })(exercise);
+
+        expect(first).toHaveLength(1);
+        expect(['nēquam', 'nēquam-alt']).toContain(first[0].selected_form);
+        expect(first[0].selected_form).toBe(replay[0].selected_form);
+        seen.add(first[0].selected_form);
+      }
+      expect(seen.size).toBe(2);
+    });
+
+    it('keeps both degree readings of the shared spelling in a degree drill', async () => {
+      const db = createFakeGeneratedWordDb({
+        words: [sharedAndPositiveAdj('nequam', ['nēquam'])],
+        pools: [{ id: 'one-word', wordDocIds: ['nequam'] }],
+      });
+      const exercise = makeIndeclinableAdjectiveExercise(['degree'], 'one-word');
+
+      let sharedWord = null;
+      for (let seed = 1; seed <= 50; seed += 1) {
+        const words = await createFirestoreGeneratedWordLoader(db as never, {
+          rng: createGeneratedExerciseRng(seed),
+        })(exercise);
+        if (words[0]?.selected_form === 'shared') {
+          sharedWord = words[0];
+          break;
+        }
+      }
+
+      expect(sharedWord).not.toBeNull();
+      const items = await resolveGeneratedExerciseItems(exercise, async () => [sharedWord!]);
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        step: 'degree',
+        acceptedAnswers: expect.arrayContaining(['positive', 'comparative']),
+      });
+      expect('primaryFormPaths' in items[0] ? items[0].primaryFormPaths : []).toHaveLength(2);
+    });
+
+    it('returns no item when every spelling of the word is ineligible for a declension-only drill', async () => {
+      const ineligible: FakeDocument = {
+        id: 'ineligible',
+        data: {
+          word: 'nēquam',
+          part_of_speech: 'adjective',
+          declension: 'indeclinable',
+          translation: 'worthless',
+          random_index: 0.5,
+          sort_key: 'nequam',
+          degrees_table: {
+            positive: {
+              nominative: {
+                neuter: { singular: ['shared'] },
+              },
+            },
+            comparative: {
+              nominative: {
+                masculine: { singular: ['nēquior'] },
+                neuter: { singular: ['shared'] },
+              },
+            },
+            superlative: {},
+          },
+        },
+      };
+      const db = createFakeGeneratedWordDb({
+        words: [ineligible],
+        pools: [{ id: 'ineligible-pool', wordDocIds: ['ineligible'] }],
+      });
+      const exercise = makeIndeclinableAdjectiveExercise(['declension'], 'ineligible-pool');
+
+      const words = await createFirestoreGeneratedWordLoader(db as never, {
+        rng: createGeneratedExerciseRng(7),
+      })(exercise);
+      expect(words).toEqual([]);
+    });
+
+    it('preserves seed output for regular words that need no retry', async () => {
+      const regularWords: FakeDocument[] = Array.from({ length: 6 }, (_, index) => ({
+        id: `adj-${index}`,
+        data: {
+          word: `bonus-${index}`,
+          part_of_speech: 'adjective',
+          declension: '1-2',
+          translation: 'good',
+          random_index: (index + 1) / 10,
+          sort_key: `bonus-${index}`,
+          degrees_table: {
+            positive: {
+              nominative: {
+                masculine: { singular: [`bonus-${index}`] },
+                neuter: { singular: [`bonum-${index}`] },
+              },
+            },
+            comparative: {
+              nominative: {
+                masculine: { singular: [`melior-${index}`] },
+                neuter: { singular: [`melius-${index}`] },
+              },
+            },
+            superlative: {},
+          },
+        },
+      }));
+      const db = createFakeGeneratedWordDb({
+        words: regularWords,
+        pools: [{ id: 'regular-pool', wordDocIds: regularWords.map(w => w.id) }],
+      });
+      const exercise = makeIndeclinableAdjectiveExercise(['declension', 'degree'], 'regular-pool');
+      exercise.data.generatorConfig.count = 6;
+
+      const run = () =>
+        createFirestoreGeneratedWordLoader(db as never, {
+          rng: createGeneratedExerciseRng(123),
+        })(exercise);
+
+      const first = await run();
+      const second = await run();
+      expect(first.map(w => `${w.id}:${w.selected_form}`)).toEqual(second.map(w => `${w.id}:${w.selected_form}`));
+      expect(first).toHaveLength(6);
+    });
+
+    it('filters both nouns and adjectives by declension="indeclinable"', async () => {
+      const words: FakeDocument[] = [
+        nounDoc('fas', { declension: 'indeclinable', declension_table: { nominative: { singular: ['fās'] } } }),
+        nounDoc('puella', { declension: '1', declension_table: { nominative: { singular: ['puella'] } } }),
+        sharedAndPositiveAdj('nequam', ['nēquam']),
+        {
+          id: 'bonus',
+          data: {
+            word: 'bonus',
+            part_of_speech: 'adjective',
+            declension: '1-2',
+            translation: 'good',
+            random_index: 0.4,
+            sort_key: 'bonus',
+            degrees_table: { positive: { nominative: { masculine: { singular: ['bonus'] } } } },
+          },
+        },
+      ];
+      const db = createFakeGeneratedWordDb({
+        words,
+        pools: [{ id: 'mixed-indecl', wordDocIds: words.map(w => w.id) }],
+      });
+      const result = await collectGeneratedExerciseWords({
+        db: db as never,
+        collection: 'vocabulary_words_v5',
+        specs: [
+          { id: 'noun', partOfSpeech: 'noun', filters: { nounDeclension: 'indeclinable' } },
+          { id: 'adjective', partOfSpeech: 'adjective', filters: { adjectiveDeclension: 'indeclinable' } },
+        ],
+        count: 'all',
+        exercise: translationExercise(['noun', 'adjective'], 'all', {
+          wordSource: 'pool',
+          poolId: 'mixed-indecl',
+        }),
+        poolId: 'mixed-indecl',
+        rng: createGeneratedExerciseRng(31),
+      });
+
+      expect(result.words.map(word => word.id).sort()).toEqual(['fas', 'nequam']);
+    });
+  });
 });

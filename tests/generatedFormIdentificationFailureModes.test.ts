@@ -1,17 +1,20 @@
-import type { ExerciseWordResponse, VerbFormPath } from '@/src/types/api/exercise-word-responses';
+import type { AdjectiveFormPath, ExerciseWordResponse, VerbFormPath } from '@/src/types/api/exercise-word-responses';
 import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises';
 import type {
   FormIdentificationItem,
   FormIdentificationStep,
   MultiAnswerFormIdentificationItem,
+  SingleFieldFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
 import {
   createGeneratedFormIdentificationItems,
   narrowFormIdentificationItem,
 } from '@/src/lib/tests/generated-exercises';
 import {
+  validateGeneratedFormIdentificationExercise,
   validateMultiAnswerStep,
   validatePartialMultiAnswerPaths,
+  validateSingleFieldFormIdentificationExercise,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 
 const finitePath: VerbFormPath = {
@@ -417,5 +420,299 @@ describe('generated form-identification failure boundaries', () => {
         [{ gender: 'masculine-feminine' }, { gender: 'masculine' }]
       )
     ).toMatchObject({ isCorrect: true, failedSlots: [] });
+  });
+});
+
+function makeAdjectiveExercise({
+  steps,
+  mode = 'step-by-step',
+  requireAllPrimaryAnswers = false,
+  selectedCellPaths = [
+    'positive.nominative.masculine.singular',
+    'comparative.nominative.masculine.singular',
+    'superlative.nominative.masculine.singular',
+  ],
+}: {
+  steps: FormIdentificationStep[];
+  mode?: 'step-by-step' | 'single-field';
+  requireAllPrimaryAnswers?: boolean;
+  selectedCellPaths?: string[];
+}): GeneratedFormIdentificationExercise {
+  return {
+    ...makeExercise({ steps, mode, requireAllPrimaryAnswers }),
+    data: {
+      ...makeExercise({ steps, mode, requireAllPrimaryAnswers }).data,
+      paradigmConfigs: {
+        'adjective-declension': {
+          enabled: true,
+          filters: {},
+          formSelection: { tableType: 'adjective-declension', selectedCellPaths },
+          steps,
+        },
+      },
+    },
+  };
+}
+
+const makeAdjectiveWord = ({
+  id,
+  rootWord,
+  selectedForm,
+  declension,
+  formPath,
+  primaryFormPaths = [formPath],
+  optionalFormPaths = [],
+}: {
+  id: string;
+  rootWord: string;
+  selectedForm: string;
+  declension: '1-2' | '3' | 'indeclinable';
+  formPath: AdjectiveFormPath;
+  primaryFormPaths?: AdjectiveFormPath[];
+  optionalFormPaths?: AdjectiveFormPath[];
+}): ExerciseWordResponse => ({
+  id,
+  root_word: rootWord,
+  dictionary_entry: rootWord,
+  selected_form: selectedForm,
+  part_of_speech: 'adjective',
+  declension,
+  form_path: formPath,
+  primary_form_paths: primaryFormPaths,
+  optional_form_paths: optionalFormPaths,
+});
+
+describe('indeclinable nouns and adjectives in morphology exercises', () => {
+  const fas: ExerciseWordResponse = {
+    id: 'fas',
+    root_word: 'fās',
+    dictionary_entry: 'fās',
+    selected_form: 'fās',
+    part_of_speech: 'noun',
+    declension: 'indeclinable',
+    gender: 'neuter',
+    form_path: { case: 'nominative', number: 'singular' },
+    primary_form_paths: [{ case: 'nominative', number: 'singular' }],
+  };
+
+  const puella: ExerciseWordResponse = {
+    id: 'puella',
+    root_word: 'puella',
+    dictionary_entry: 'puella, -ae',
+    selected_form: 'puella',
+    part_of_speech: 'noun',
+    declension: '1',
+    gender: 'feminine',
+    form_path: { case: 'nominative', number: 'singular' },
+    primary_form_paths: [{ case: 'nominative', number: 'singular' }],
+  };
+
+  it('accepts indeclinable spellings for fās, shows "indeclinable" in the key, and rejects them on puella', () => {
+    const exercise = makeNounExercise(['declension', 'case', 'number', 'gender']);
+    const fasItems = createGeneratedFormIdentificationItems(exercise, [fas]) as FormIdentificationItem[];
+    const fasDecl = fasItems.find(item => item.step === 'declension')!;
+
+    expect(fasDecl.correctAnswer).toBe('indeclinable');
+    for (const answer of ['indeclinable', 'indecl', 'indecl.', 'indcl', 'indec']) {
+      expect(validateGeneratedFormIdentificationExercise(answer, fasDecl)).toEqual({ isCorrect: true });
+    }
+    expect(validateGeneratedFormIdentificationExercise('3rd', fasDecl)).toEqual({ isCorrect: false });
+
+    for (const step of ['case', 'number', 'gender'] as const) {
+      const item = fasItems.find(entry => entry.step === step)!;
+      expect(validateGeneratedFormIdentificationExercise('indeclinable', item)).toEqual({ isCorrect: false });
+      expect(validateGeneratedFormIdentificationExercise('indecl', item)).toEqual({ isCorrect: false });
+    }
+
+    const puellaDecl = (createGeneratedFormIdentificationItems(exercise, [puella]) as FormIdentificationItem[]).find(
+      item => item.step === 'declension'
+    )!;
+    expect(validateGeneratedFormIdentificationExercise('indecl', puellaDecl)).toEqual({ isCorrect: false });
+    expect(validateGeneratedFormIdentificationExercise('indeclinable', puellaDecl)).toEqual({ isCorrect: false });
+  });
+
+  it('asks declension on positive nēquam and accepts "indcl." with "indeclinable" in the answer key', () => {
+    const nequamPos = makeAdjectiveWord({
+      id: 'nequam-pos',
+      rootWord: 'nēquam',
+      selectedForm: 'nēquam',
+      declension: 'indeclinable',
+      formPath: { degree: 'positive', case: 'nominative', gender: 'masculine', number: 'singular' },
+    });
+
+    const stepExercise = makeAdjectiveExercise({ steps: ['declension', 'degree', 'case'] });
+    const stepItems = createGeneratedFormIdentificationItems(stepExercise, [nequamPos]) as FormIdentificationItem[];
+    const declItem = stepItems.find(item => item.step === 'declension')!;
+    expect(declItem.correctAnswer).toBe('indeclinable');
+    expect(validateGeneratedFormIdentificationExercise('indcl.', declItem)).toEqual({ isCorrect: true });
+
+    const singleFieldExercise = makeAdjectiveExercise({ steps: ['declension', 'degree'], mode: 'single-field' });
+    const singleItem = createGeneratedFormIdentificationItems(singleFieldExercise, [
+      nequamPos,
+    ])[0] as SingleFieldFormIdentificationItem;
+    expect(singleItem.steps).toEqual(['declension', 'degree']);
+    expect(singleItem.correctAnswerDisplay).toBe('indeclinable,pos');
+    expect(validateSingleFieldFormIdentificationExercise('indcl., positive', singleItem)).toEqual({ isCorrect: true });
+  });
+
+  it('skips declension on comparative nēquior across all three modes while keeping its other questions', () => {
+    const nequior = makeAdjectiveWord({
+      id: 'nequior',
+      rootWord: 'nēquam',
+      selectedForm: 'nēquior',
+      declension: 'indeclinable',
+      formPath: { degree: 'comparative', case: 'nominative', gender: 'masculine', number: 'singular' },
+    });
+    const steps: FormIdentificationStep[] = ['declension', 'degree', 'case', 'number', 'gender'];
+
+    const normalItems = createGeneratedFormIdentificationItems(makeAdjectiveExercise({ steps }), [
+      nequior,
+    ]) as FormIdentificationItem[];
+    expect(normalItems.map(item => item.step)).toEqual(['degree', 'case', 'number', 'gender']);
+
+    const singleItems = createGeneratedFormIdentificationItems(makeAdjectiveExercise({ steps, mode: 'single-field' }), [
+      nequior,
+    ]) as SingleFieldFormIdentificationItem[];
+    expect(singleItems).toHaveLength(1);
+    expect(singleItems[0].steps).toEqual(['degree', 'case', 'number', 'gender']);
+    expect(singleItems[0].correctAnswerDisplay).not.toContain('indeclinable');
+
+    const multiItems = createGeneratedFormIdentificationItems(
+      makeAdjectiveExercise({ steps, requireAllPrimaryAnswers: true }),
+      [nequior]
+    ) as MultiAnswerFormIdentificationItem[];
+    expect(multiItems.map(item => item.step)).toEqual(['degree', 'case', 'number', 'gender']);
+    expect(multiItems.every(item => item.steps.length === 4 && !item.steps.includes('declension'))).toBe(true);
+  });
+
+  it('skips declension on superlative and missing-degree forms of an indeclinable adjective', () => {
+    const nequissimus = makeAdjectiveWord({
+      id: 'nequissimus',
+      rootWord: 'nēquam',
+      selectedForm: 'nēquissimus',
+      declension: 'indeclinable',
+      formPath: { degree: 'superlative', case: 'nominative', gender: 'masculine', number: 'singular' },
+    });
+    const missingDegree = makeAdjectiveWord({
+      id: 'missing-degree',
+      rootWord: 'nēquam',
+      selectedForm: 'nēquam',
+      declension: 'indeclinable',
+      formPath: { degree: '', case: 'nominative', gender: 'masculine', number: 'singular' },
+    });
+    const exercise = makeAdjectiveExercise({ steps: ['declension', 'case'] });
+
+    expect(stepsForWord(createGeneratedFormIdentificationItems(exercise, [nequissimus]), 'nequissimus')).toEqual([
+      'case',
+    ]);
+    expect(stepsForWord(createGeneratedFormIdentificationItems(exercise, [missingDegree]), 'missing-degree')).toEqual([
+      'case',
+    ]);
+
+    const declOnly = makeAdjectiveExercise({ steps: ['declension'] });
+    expect(createGeneratedFormIdentificationItems(declOnly, [nequissimus, missingDegree])).toEqual([]);
+  });
+
+  it('drops declension on a spelling shared by two degrees while preserving both readings for other questions', () => {
+    const posPath: AdjectiveFormPath = {
+      degree: 'positive',
+      case: 'nominative',
+      gender: 'neuter',
+      number: 'singular',
+    };
+    const compPath: AdjectiveFormPath = {
+      degree: 'comparative',
+      case: 'nominative',
+      gender: 'neuter',
+      number: 'singular',
+    };
+    const shared = makeAdjectiveWord({
+      id: 'shared-degree',
+      rootWord: 'nēquam',
+      selectedForm: 'shared',
+      declension: 'indeclinable',
+      formPath: posPath,
+      primaryFormPaths: [posPath, compPath],
+    });
+    const steps: FormIdentificationStep[] = ['declension', 'degree', 'case'];
+
+    const normalItems = createGeneratedFormIdentificationItems(makeAdjectiveExercise({ steps }), [
+      shared,
+    ]) as FormIdentificationItem[];
+    expect(normalItems.map(item => item.step)).toEqual(['degree', 'case']);
+    const degreeItem = normalItems.find(item => item.step === 'degree')!;
+    expect(degreeItem.primaryFormPaths).toHaveLength(2);
+    expect(validateGeneratedFormIdentificationExercise('positive', degreeItem)).toEqual({ isCorrect: true });
+    expect(validateGeneratedFormIdentificationExercise('comparative', degreeItem)).toEqual({ isCorrect: true });
+
+    const singleItem = createGeneratedFormIdentificationItems(makeAdjectiveExercise({ steps, mode: 'single-field' }), [
+      shared,
+    ])[0] as SingleFieldFormIdentificationItem;
+    expect(singleItem.steps).toEqual(['degree', 'case']);
+    expect(singleItem.primaryFormPaths).toHaveLength(2);
+    expect(
+      validateSingleFieldFormIdentificationExercise('positive, nominative; comparative, nominative', singleItem)
+    ).toEqual({ isCorrect: true });
+
+    const multiItems = createGeneratedFormIdentificationItems(
+      makeAdjectiveExercise({ steps, requireAllPrimaryAnswers: true }),
+      [shared]
+    ) as MultiAnswerFormIdentificationItem[];
+    expect(multiItems.map(item => item.step)).toEqual(['degree', 'case']);
+    expect(validateMultiAnswerStep('positive;comparative', multiItems[0])).toMatchObject({ isCorrect: true });
+
+    expect(createGeneratedFormIdentificationItems(makeAdjectiveExercise({ steps: ['declension'] }), [shared])).toEqual(
+      []
+    );
+  });
+
+  it('rejects a comparative optional reading when declension is asked on a positive-only primary form', () => {
+    const posPath: AdjectiveFormPath = {
+      degree: 'positive',
+      case: 'nominative',
+      gender: 'masculine',
+      number: 'singular',
+    };
+    const compPath: AdjectiveFormPath = {
+      degree: 'comparative',
+      case: 'nominative',
+      gender: 'masculine',
+      number: 'singular',
+    };
+    const word = makeAdjectiveWord({
+      id: 'pos-with-optional-comp',
+      rootWord: 'nēquam',
+      selectedForm: 'shared',
+      declension: 'indeclinable',
+      formPath: posPath,
+      primaryFormPaths: [posPath],
+      optionalFormPaths: [compPath],
+    });
+    const items = createGeneratedFormIdentificationItems(makeAdjectiveExercise({ steps: ['declension', 'degree'] }), [
+      word,
+    ]) as FormIdentificationItem[];
+    const degreeItem = items.find(item => item.step === 'degree')!;
+    expect(degreeItem.optionalFormPaths).toEqual([]);
+    expect(validateGeneratedFormIdentificationExercise('comparative', degreeItem)).toEqual({ isCorrect: false });
+  });
+
+  it('still expects 1st/2nd declension for melior on bonus', () => {
+    const melior = makeAdjectiveWord({
+      id: 'bonus-melior',
+      rootWord: 'bonus',
+      selectedForm: 'melior',
+      declension: '1-2',
+      formPath: { degree: 'comparative', case: 'nominative', gender: 'masculine', number: 'singular' },
+    });
+    const items = createGeneratedFormIdentificationItems(
+      makeAdjectiveExercise({ steps: ['declension', 'degree', 'case'] }),
+      [melior]
+    ) as FormIdentificationItem[];
+    const declItem = items.find(item => item.step === 'declension')!;
+
+    expect(items.map(item => item.step)).toEqual(['declension', 'degree', 'case']);
+    expect(validateGeneratedFormIdentificationExercise('1st/2nd', declItem)).toEqual({ isCorrect: true });
+    expect(validateGeneratedFormIdentificationExercise('indeclinable', declItem)).toEqual({ isCorrect: false });
+    expect(validateGeneratedFormIdentificationExercise('3rd', declItem)).toEqual({ isCorrect: false });
   });
 });

@@ -270,8 +270,15 @@ function evaluateCandidate(
   if (isRejectedBySpecAwarePronounOverlap(word, spec.paradigm, paradigmConfigs)) return null;
   if (exercise.type === 'generated-form-identification') {
     if (getExerciseDisplayForm(word).trim().length === 0) return null;
-    if (!prepareGeneratedFormIdentificationWord(exercise, word)) return null;
-    return word;
+    if (prepareGeneratedFormIdentificationWord(exercise, word)) return word;
+    if (rotation) return null;
+    const forms = new Set(getFormCandidates(data, spec)?.candidates.map(candidate => candidate.form));
+    forms.delete(word.selected_form);
+    for (const form of shuffleWithRng([...forms], formRng)) {
+      const retry = evaluateCandidate(doc, spec, exercise, formRng, paradigmConfigs, { form, data });
+      if (retry) return retry;
+    }
+    return null;
   }
   return isUsableGeneratedTranslationWord(exercise, word) ? word : null;
 }

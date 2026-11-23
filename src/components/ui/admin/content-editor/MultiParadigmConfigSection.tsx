@@ -7,6 +7,7 @@ import { Label } from '@/src/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { MultiSelect } from '@/src/components/ui/multi-select';
 import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
+import { nounDeclensionOptions, adjectiveDeclensionOptions } from '@/src/utils/vocabulary/formOptions';
 import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
 import type { PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormParadigm, ParadigmConfig, ParadigmConfigs } from '@/src/types/exercises/paradigm';
@@ -239,14 +240,7 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
           <div>
             <Label className="text-sm">Declension</Label>
             <MultiSelect
-              options={[
-                { value: '1', label: '1st' },
-                { value: '2', label: '2nd' },
-                { value: '3', label: '3rd' },
-                { value: '3-istem', label: '3rd i-stem' },
-                { value: '4', label: '4th' },
-                { value: '5', label: '5th' },
-              ]}
+              options={nounDeclensionOptions}
               value={parseMultiFilterValue(filters.nounDeclension)}
               onChange={val => handleFilterChange('nounDeclension', val)}
               placeholder="All"
@@ -259,10 +253,7 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
           <div>
             <Label className="text-sm">Declension</Label>
             <MultiSelect
-              options={[
-                { value: '1-2', label: '1st/2nd' },
-                { value: '3', label: '3rd' },
-              ]}
+              options={adjectiveDeclensionOptions}
               value={parseMultiFilterValue(filters.adjectiveDeclension)}
               onChange={val => handleFilterChange('adjectiveDeclension', val)}
               placeholder="All"

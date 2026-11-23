@@ -79,4 +79,19 @@ describe('admin word search', () => {
     expect(response.status).toBe(200);
     expect(where).not.toHaveBeenCalledWith('type', expect.anything(), expect.anything());
   });
+
+  it.each([
+    ['noun', 'nounDeclension'],
+    ['adjective', 'adjectiveDeclension'],
+  ] as const)('filters %ss by declension="indeclinable"', async (wordType, param) => {
+    const where = mockWordsQuery();
+
+    const response = await GET({
+      url: `http://localhost/api/admin/words?wordType=${wordType}&${param}=indeclinable`,
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(where).toHaveBeenCalledWith('part_of_speech', '==', wordType);
+    expect(where).toHaveBeenCalledWith('declension', '==', 'indeclinable');
+  });
 });
