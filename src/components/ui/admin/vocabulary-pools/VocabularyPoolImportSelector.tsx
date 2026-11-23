@@ -1,12 +1,12 @@
 'use client';
 
+import { AdminSearchInput } from '@/src/components/admin/shell';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Library, Loader2, Search, X } from 'lucide-react';
+import { Check, Library, Loader2, X } from 'lucide-react';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Checkbox } from '@/src/components/ui/checkbox';
-import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
@@ -193,17 +193,14 @@ export const VocabularyPoolImportSelector: React.FC<VocabularyPoolImportSelector
 
       <RomanCard>
         <RomanCardContent className="p-4 space-y-4">
-          <div className="relative">
-            <Search className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
-            <Input
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Search pools by name..."
-              className="pl-10"
-              disabled={disabled}
-              aria-label="Search pools to import"
-            />
-          </div>
+          <AdminSearchInput
+            label="Search pools to import"
+            clearLabel="Clear pool search"
+            placeholder="Search pools by name..."
+            value={search}
+            onValueChange={setSearch}
+            disabled={disabled}
+          />
 
           {isLoading ? (
             <div className="text-center py-8 text-gray-600">

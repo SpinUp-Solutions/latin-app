@@ -156,7 +156,9 @@ export function formAgreement(left: string[], right: string[]): FormAgreement | 
 export function compareEntryForms(first: Record<string, unknown>, second: Record<string, unknown>): EntryComparison {
   const grammar = (output: Record<string, unknown>) =>
     Object.fromEntries(
-      Object.entries(output).filter(([field]) => !(PROSE_FIELDS as readonly string[]).includes(field))
+      Object.entries(output).filter(
+        ([field]) => field !== 'ai_review' && !(PROSE_FIELDS as readonly string[]).includes(field)
+      )
     );
   const left = entryLeaves(grammar(first));
   const right = entryLeaves(grammar(second));

@@ -11,11 +11,18 @@ export * from './pronoun';
 export * from './adjective';
 export * from './indeclinable-words';
 
+import { BaseWordSchema } from './base-word';
 import { NounSchema } from './noun';
 import { VerbSchema } from './verb';
 import { BasePronounSchema } from './pronoun';
 import { AdjectiveSchema } from './adjective';
 import { AdverbSchema, PrepositionSchema, ConjunctionSchema, InterjectionSchema } from './indeclinable-words';
+
+/** Enough to identify an existing homograph, even when the rest still needs editing. */
+export const HeadwordMatchSchema = BaseWordSchema.pick({ word: true, part_of_speech: true, translation: true }).extend({
+  id: z.string().min(1),
+});
+export type HeadwordMatch = z.infer<typeof HeadwordMatchSchema>;
 
 export const VocabularyWordSchema = z.discriminatedUnion('part_of_speech', [
   NounSchema,

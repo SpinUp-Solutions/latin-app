@@ -453,7 +453,6 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               label="Search lessons"
               clearLabel="Clear lesson search"
               placeholder="Search lessons by title or description..."
-              inputClassName="border-gray-200 bg-white transition-colors duration-300 focus:border-roman-red focus-visible:ring-0 focus-visible:ring-offset-0"
             />
           </RomanCardContent>
         </RomanCard>

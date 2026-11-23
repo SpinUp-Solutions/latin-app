@@ -58,6 +58,7 @@ jest.mock('@/src/hooks/useFormIdentificationEditor', () => ({
     derivedFilters: { partOfSpeech: 'all' },
     derivedFormSelection: undefined,
     handleGlobalFiltersChange: jest.fn(),
+    handleResetFilters: jest.fn(),
     handleToggleParadigm: jest.fn(),
     handleUpdateParadigmConfig: jest.fn(),
     isPreviewFetching: false,

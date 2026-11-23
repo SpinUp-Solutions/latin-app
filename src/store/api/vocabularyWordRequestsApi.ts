@@ -1,4 +1,5 @@
 import { appApi, withSubscriptionDefaults } from './appApi';
+import { WORD_HEADWORDS_TAG } from './tags';
 import type {
   RootWordCandidate,
   VocabularyWordRequest,
@@ -56,22 +57,35 @@ export const vocabularyWordRequestsApi = appApi.injectEndpoints({
         body: { draftWord },
       }),
       transformResponse: (response: ApiResponse<{ request: VocabularyWordRequest }>) => response.data.request,
-      invalidatesTags: (result, error, { id }) => [
-        { type: 'VocabularyWordRequest', id },
-        { type: 'VocabularyWordRequestList', id: 'LIST' },
-      ],
+      // A refused save must leave the local draft open, even if another admin just approved it.
+      invalidatesTags: (result, _error, { id }) =>
+        result
+          ? [
+              { type: 'VocabularyWordRequest', id },
+              { type: 'VocabularyWordRequestList', id: 'LIST' },
+            ]
+          : [],
     }),
 
-    approveVocabularyWordRequest: builder.mutation<{ request: VocabularyWordRequest; wordId: string }, string>({
-      query: id => ({
+    approveVocabularyWordRequest: builder.mutation<
+      { request: VocabularyWordRequest; wordId: string },
+      { id: string; confirmedHeadword?: string }
+    >({
+      query: ({ id, confirmedHeadword }) => ({
         url: `/admin/vocabulary-word-requests/${id}/approve`,
         method: 'POST',
+        body: { confirmedHeadword },
       }),
       transformResponse: (response: ApiResponse<{ request: VocabularyWordRequest; wordId: string }>) => response.data,
-      invalidatesTags: (result, error, id) => [
-        { type: 'VocabularyWordRequest', id },
-        { type: 'VocabularyWordRequestList', id: 'LIST' },
-      ],
+      invalidatesTags: (result, _error, { id }) =>
+        result
+          ? [
+              { type: 'VocabularyWordRequest', id },
+              { type: 'VocabularyWordRequestList', id: 'LIST' },
+              { type: 'WordCounts', id: 'COUNTS' },
+              WORD_HEADWORDS_TAG,
+            ]
+          : [],
     }),
 
     dismissVocabularyWordRequest: builder.mutation<VocabularyWordRequest, { id: string; reason?: string }>({

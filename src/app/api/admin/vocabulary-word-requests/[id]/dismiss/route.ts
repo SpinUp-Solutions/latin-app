@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { routeErrorResponse } from '@/src/lib/route-error-response';
-import { requestCollection, serializeRequestSnapshot } from '../../utils';
+import { pendingRequestData, requestCollection, serializeRequestSnapshot } from '../../utils';
+import { adminDb } from '@/src/services/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,16 +17,9 @@ export async function POST(
     const dismissedReason = typeof body?.reason === 'string' ? body.reason : null;
     const { id } = await params;
     const docRef = requestCollection().doc(id);
-    const snapshot = await docRef.get();
-
-    if (!snapshot.exists) {
-      return NextResponse.json({ success: false, error: 'Request not found' }, { status: 404 });
-    }
-
-    await docRef.update({
-      status: 'dismissed',
-      dismissedReason,
-      updatedAt: new Date(),
+    await adminDb.runTransaction(async tx => {
+      pendingRequestData(await tx.get(docRef));
+      tx.update(docRef, { status: 'dismissed', dismissedReason, updatedAt: new Date() });
     });
 
     const updated = await docRef.get();

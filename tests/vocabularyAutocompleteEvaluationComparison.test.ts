@@ -3,6 +3,20 @@ import { compareEntryForms, differingSpan, formMatchesQuery, formAgreement } fro
 import type { VocabularyEvaluationCell } from '@/src/lib/vocabulary-autocomplete-evaluations/contracts';
 
 describe('vocabulary autocomplete form comparison', () => {
+  it('never counts AI uncertainty or saved guidance as grammatical forms', () => {
+    const first = {
+      word: 'et',
+      ai_review: { uncertainties: [], guidance: [{ id: 'sense', instruction: 'Use and.' }] },
+    };
+    const second = {
+      word: 'et',
+      ai_review: { uncertainties: [{ field: 'translation', explanation: 'Check sense.' }], guidance: [] },
+    };
+    const { rows, counts } = compareEntryForms(first, second);
+    expect(rows.map(row => row.field)).toEqual(['word']);
+    expect(counts).toEqual({ same: 1, macrons: 0, missing: 0, different: 0, total: 1 });
+  });
+
   it('classifies forms as same, macrons only, one model only or different', () => {
     expect(formAgreement(['amō'], ['amō'])).toBe('same');
     expect(formAgreement(['amāris', 'amāre'], ['amāre', 'amāris'])).toBe('same');

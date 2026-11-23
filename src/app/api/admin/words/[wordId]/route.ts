@@ -24,7 +24,10 @@ import {
   wordNotFound,
 } from '@/src/lib/vocabulary/word-deletion-cleanup.server';
 import { routeErrorResponse } from '@/src/lib/route-error-response';
-import { DomainError } from '@/src/lib/domain-error';
+import { DomainError, RequestError } from '@/src/lib/domain-error';
+import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
+import { HeadwordMatchSchema, VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
+import { serializeVocabularyWord } from '@/src/lib/vocabulary/word-serialization.server';
 
 class WordDeletionConfirmationError extends DomainError {
   readonly status = 409;
@@ -39,6 +42,29 @@ class WordDeletionConfirmationError extends DomainError {
       referencedPools: referencedPools.slice(0, WORD_DELETION_POOL_WARNING_SAMPLE_SIZE),
       referencedPoolCount: referencedPools.length,
     };
+  }
+}
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ wordId: string }> }) {
+  try {
+    await verifyAdminAccess(request);
+    const id = firestoreDocumentIdSchema.parse((await params).wordId);
+    const snapshot = await adminDb.collection(VOCABULARY_WORDS_COLLECTION).doc(id).get();
+    const data = snapshot.data();
+    if (!data || data._deletionPending) throw wordNotFound();
+    const word = serializeVocabularyWord(data);
+    // Just like a selection from the list, a linked legacy word may still need fields filled in.
+    // Validate the fields that are present; don't invent defaults or strip legacy table cells.
+    const schema = VocabularyWordSchema.options.find(
+      option => option.shape.part_of_speech.value === word.part_of_speech
+    );
+    const values = { ...word, id: snapshot.id, definitions: Array.isArray(word.definitions) ? word.definitions : [] };
+    if (!HeadwordMatchSchema.safeParse(values).success || !schema?.partial().safeParse(values).success) {
+      throw new RequestError(409, 'INVALID_STORED_WORD', 'The saved vocabulary word is invalid');
+    }
+    return NextResponse.json({ success: true, data: { word: values } });
+  } catch (error) {
+    return routeErrorResponse(error, 'fetch vocabulary word');
   }
 }
 

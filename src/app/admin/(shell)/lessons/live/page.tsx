@@ -18,7 +18,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { BookOpen, CheckCircle, Clock, Edit, FileCheck2, Globe, Plus, Search } from 'lucide-react';
+import { BookOpen, CheckCircle, Clock, Edit, FileCheck2, Globe, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
@@ -29,13 +29,12 @@ import { SortableLessonItem } from '@/src/components/admin/SortableLessonItem';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { LessonTypeTabs } from '@/src/components/ui/admin/LessonTypeTabs';
 import { PracticeCategoryChips } from '@/src/components/ui/admin/practice-categories/PracticeCategoryChips';
-import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import { AdminPage, AdminPageHeader, AdminSearchInput } from '@/src/components/admin/shell';
 import { PageLoading } from '@/src/components/ui/page-loading';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Checkbox } from '@/src/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/src/components/ui/dialog';
-import { Input } from '@/src/components/ui/input';
 import { RomanCard, RomanCardContent, RomanCardHeader } from '@/src/components/ui/core/roman-card';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { Tabs, TabsContent } from '@/src/components/ui/tabs';
@@ -804,15 +803,14 @@ function LiveLessonsPage() {
 
               <RomanCard className="mb-6">
                 <RomanCardContent className="flex flex-wrap items-center gap-4 p-4">
-                  <div className="relative min-w-0 flex-1">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Search lessons by title or description..."
-                      value={searchQuery}
-                      onChange={event => setSearchQuery(event.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
+                  <AdminSearchInput
+                    className="flex-1"
+                    label="Search lessons"
+                    clearLabel="Clear lesson search"
+                    placeholder="Search lessons by title or description..."
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                  />
                   <AdminPillPicker
                     label="Lesson status"
                     value={filterStatus}
@@ -936,16 +934,14 @@ function LiveLessonsPage() {
               Choose a test container. Its rotation version is selected only when a student starts an attempt.
             </DialogDescription>
           </DialogHeader>
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" aria-hidden="true" />
-            <Input
-              autoFocus
-              value={testPickerSearch}
-              onChange={event => setTestPickerSearch(event.target.value)}
-              placeholder="Search tests by title or description"
-              className="pl-10"
-            />
-          </div>
+          <AdminSearchInput
+            autoFocus
+            label="Search tests"
+            clearLabel="Clear test search"
+            placeholder="Search tests by title or description"
+            value={testPickerSearch}
+            onValueChange={setTestPickerSearch}
+          />
           <div className="max-h-[52vh] space-y-3 overflow-y-auto pr-1">
             {unplacedTests.length === 0 ? (
               <p className="rounded-md border border-dashed p-6 text-center text-sm text-gray-500">

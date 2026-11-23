@@ -1,7 +1,7 @@
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { appApi } from './appApi';
-import { STUDENT_POOLS_TAG } from './tags';
-import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
+import { STUDENT_POOLS_TAG, WORD_HEADWORDS_TAG } from './tags';
+import { HeadwordMatchSchema, type HeadwordMatch, VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
 import type { WordType } from '@/shared/types/vocabulary/schemas/enums';
 import { z, ZodError } from 'zod';
 
@@ -38,6 +38,26 @@ export interface VocabularySearchResult {
   translation: string;
   part_of_speech: string;
   dictionary_entry: string | null;
+}
+
+const headwordMatches = (words: unknown[]) =>
+  words.flatMap(word => {
+    const parsed = HeadwordMatchSchema.safeParse(word);
+    return parsed.success ? [parsed.data] : [];
+  });
+const ConflictSchema = z.object({
+  status: z.literal(409),
+  data: z.object({
+    code: z.literal('WORD_ALREADY_EXISTS'),
+    headword: z.string().optional(),
+    existingWords: z.array(z.unknown()),
+  }),
+});
+export function existingHeadwordConflict(error: unknown) {
+  const parsed = ConflictSchema.safeParse(error);
+  return parsed.success
+    ? { headword: parsed.data.data.headword, words: headwordMatches(parsed.data.data.existingWords) }
+    : null;
 }
 
 export const vocabularyApi = appApi.injectEndpoints({
@@ -104,6 +124,12 @@ export const vocabularyApi = appApi.injectEndpoints({
           : [{ type: 'WordList', id: 'LIST' }],
     }),
 
+    getWordById: builder.query<{ word: VocabularyWordWithId }, string>({
+      query: id => `/admin/words/${encodeURIComponent(id)}`,
+      transformResponse: (response: { data: { word: VocabularyWordWithId } }) => response.data,
+      providesTags: (_result, _error, id) => [{ type: 'Word', id }],
+    }),
+
     getWordTypeCounts: builder.query<Record<string, number>, void>({
       query: () => '/admin/words?countsOnly=true',
       transformResponse: (response: WordsResponse) => response.data.wordTypeCounts || {},
@@ -149,12 +175,19 @@ export const vocabularyApi = appApi.injectEndpoints({
       ],
     }),
 
-    createWord: builder.mutation<VocabularyWordWithId, { wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'> }>({
-      query: ({ wordData }) => {
+    createWord: builder.mutation<
+      VocabularyWordWithId,
+      {
+        wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'>;
+        /** Create it even though the headword is already in the vocabulary (a homograph). */
+        allowDuplicate?: boolean;
+      }
+    >({
+      query: ({ wordData, allowDuplicate }) => {
         return {
           url: '/admin/words',
           method: 'POST',
-          body: wordData,
+          body: allowDuplicate ? { ...wordData, allowDuplicate: true } : wordData,
         };
       },
       transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => {
@@ -174,6 +207,15 @@ export const vocabularyApi = appApi.injectEndpoints({
       ],
     }),
 
+    /** Words already stored under this headword, ignoring macrons and capitals. */
+    findWordsByHeadword: builder.query<{ words: HeadwordMatch[] }, string>({
+      query: headword => `/admin/words?${new URLSearchParams({ headword })}`,
+      transformResponse: (response: { success: boolean; data: { words: unknown[] } }) => ({
+        words: headwordMatches(response.data.words),
+      }),
+      providesTags: [{ type: 'WordList', id: 'LIST' }, WORD_HEADWORDS_TAG],
+    }),
+
     searchWords: builder.query<VocabularySearchResult[], { search: string; limit?: number }>({
       query: ({ search, limit = 12 }) => {
         const params = new URLSearchParams({ search, limit: limit.toString() });
@@ -190,10 +232,10 @@ export const vocabularyApi = appApi.injectEndpoints({
         ...(confirmationToken ? { body: { confirmationToken } } : {}),
       }),
       transformResponse: (response: DeleteWordResponse) => response,
-      invalidatesTags: result =>
+      invalidatesTags: (result, _error, { wordId }) =>
         result?.success
           ? [
-              { type: 'Word', id: 'LIST' },
+              { type: 'Word', id: wordId },
               { type: 'WordList', id: 'LIST' },
               { type: 'WordCounts', id: 'COUNTS' },
               STUDENT_POOLS_TAG,
@@ -205,9 +247,11 @@ export const vocabularyApi = appApi.injectEndpoints({
 
 export const {
   useGetWordsQuery,
+  useGetWordByIdQuery,
   useGetWordTypeCountsQuery,
   useUpdateWordMutation,
   useCreateWordMutation,
+  useFindWordsByHeadwordQuery,
   useSearchWordsQuery,
   useLazySearchWordsQuery,
   useDeleteWordMutation,

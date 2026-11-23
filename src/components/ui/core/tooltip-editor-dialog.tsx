@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { EditorContent } from '@tiptap/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/src/components/ui/dialog';
 import { Button } from '@/src/components/ui/button';
@@ -27,7 +27,6 @@ import { useFirebaseRootResolver } from '@/src/hooks/useFirebaseRootResolver';
 import { useCreateVocabularyWordRequestMutation } from '@/src/store/api/vocabularyWordRequestsApi';
 import { useLazySearchWordsQuery, type VocabularySearchResult } from '@/src/store/api/vocabularyApi';
 import type { RootWordCandidate } from '@/shared/types/vocabulary/requests';
-import type { CostBreakdown } from '@/shared/openai/types';
 import type { VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { toast } from 'sonner';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
@@ -132,10 +131,6 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   const [addToDbError, setAddToDbError] = useState<string | null>(null);
   const [rootCandidates, setRootCandidates] = useState<EnrichedRootWordCandidate[]>([]);
   const [savedRequestId, setSavedRequestId] = useState<string | null>(null);
-  const autocompleteMetaRef = useRef<{
-    cost?: CostBreakdown;
-    fieldStatus?: Record<string, 'filled' | 'missing'>;
-  }>({});
 
   const [createVocabularyWordRequest] = useCreateVocabularyWordRequestMutation();
   const [searchWords] = useLazySearchWordsQuery();
@@ -144,10 +139,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
       setAddToDbError(error);
     },
   });
-  const { autocomplete: autocompleteVocabularyDraft } = useFirebaseAutocomplete({
-    onSuccess: (_data, cost, fieldStatus) => {
-      autocompleteMetaRef.current = { cost, fieldStatus };
-    },
+  const { requestAutocomplete: autocompleteVocabularyDraft } = useFirebaseAutocomplete({
     onError: error => {
       setAddToDbError(error);
     },
@@ -299,9 +291,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
     try {
       setAddToDbError(null);
       setAddToDbStep('autocompleting');
-      autocompleteMetaRef.current = {};
-
-      const autocompleteData = await autocompleteVocabularyDraft({
+      const autocompleteResult = await autocompleteVocabularyDraft({
         word: selectedCandidate.word,
         part_of_speech: selectedCandidate.part_of_speech,
         existingData: {
@@ -313,9 +303,14 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
         overwriteExisting: false,
       });
 
-      if (!autocompleteData) {
+      if (!autocompleteResult?.data) {
         throw new Error('AI autocomplete did not return vocabulary data');
       }
+      // The AI's doubts travel with the draft so the pending-request editor flags those fields.
+      const uncertainties = autocompleteResult.uncertainties ?? [];
+      const autocompleteData = uncertainties.length
+        ? { ...autocompleteResult.data, ai_review: { uncertainties, guidance: [] } }
+        : autocompleteResult.data;
 
       setAddToDbStep('saving');
       const request = await createVocabularyWordRequest({
@@ -323,7 +318,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
         selectedCandidate,
         candidates: cleanCandidates,
         autocompleteData,
-        aiMeta: autocompleteMetaRef.current,
+        aiMeta: { cost: autocompleteResult.cost, fieldStatus: autocompleteResult.fieldStatus },
       }).unwrap();
 
       setSavedRequestId(request.id);

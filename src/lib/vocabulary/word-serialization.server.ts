@@ -1,3 +1,5 @@
+import { HEADWORD_KEY_FIELD } from '@/src/utils/vocabulary/headword';
+
 const serializeTimestamp = (value: unknown): string | undefined => {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
     return value.toDate().toISOString();
@@ -10,7 +12,7 @@ const serializeTimestamp = (value: unknown): string | undefined => {
 
 /** Converts a stored word's Firestore timestamps to ISO strings for JSON responses. */
 export const serializeVocabularyWord = (data: Record<string, unknown>): Record<string, unknown> => {
-  const serialized = { ...data };
+  const { [HEADWORD_KEY_FIELD]: _lookupKey, ...serialized } = data;
   const createdAt = serializeTimestamp(serialized.createdAt);
   const updatedAt = serializeTimestamp(serialized.updatedAt);
   if (createdAt) serialized.createdAt = createdAt;

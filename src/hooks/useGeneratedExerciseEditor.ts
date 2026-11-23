@@ -69,12 +69,25 @@ export function useGeneratedExerciseEditor(editingContent: GeneratedTranslationE
 
   const updateConfig = useCallback(
     (configUpdates: Partial<typeof config>) => {
+      const isChangingWordSource =
+        configUpdates.wordSource !== undefined && configUpdates.wordSource !== config.wordSource;
       const nextContent = produce(editingContent, draft => {
-        draft.data.generatorConfig = ensureGeneratorConfig({ ...rawConfig, ...configUpdates });
+        draft.data.generatorConfig = ensureGeneratorConfig({
+          ...rawConfig,
+          ...configUpdates,
+          ...(isChangingWordSource ? { filters: { partOfSpeech: 'all', ...DEFAULT_POS_FILTERS } } : {}),
+        });
+        if (!isChangingWordSource || !draft.data.posConfigs) return;
+        for (const pos of Object.keys(draft.data.posConfigs) as PartOfSpeech[]) {
+          const posConfig = draft.data.posConfigs[pos];
+          if (posConfig) {
+            draft.data.posConfigs[pos] = { ...posConfig, filters: { ...DEFAULT_POS_FILTERS } };
+          }
+        }
       });
       updateContent(nextContent);
     },
-    [editingContent, rawConfig, updateContent]
+    [config.wordSource, editingContent, rawConfig, updateContent]
   );
 
   const handlePartOfSpeechChange = useCallback(
@@ -173,8 +186,23 @@ export function useGeneratedExerciseEditor(editingContent: GeneratedTranslationE
   );
 
   const handleResetFilters = useCallback(() => {
-    handlePartOfSpeechChange('all');
-  }, [handlePartOfSpeechChange]);
+    const nextContent = produce(editingContent, draft => {
+      draft.data.generatorConfig = ensureGeneratorConfig({
+        ...rawConfig,
+        filters: { partOfSpeech: 'all', ...DEFAULT_POS_FILTERS },
+      });
+      const currentConfigs = (draft.data.posConfigs ?? {}) as Record<string, PosGeneratorConfig>;
+      for (const pos of Object.keys(currentConfigs)) {
+        currentConfigs[pos] = {
+          ...currentConfigs[pos],
+          enabled: false,
+          filters: { ...DEFAULT_POS_FILTERS },
+        };
+      }
+      draft.data.posConfigs = currentConfigs;
+    });
+    updateContent(nextContent);
+  }, [editingContent, rawConfig, updateContent]);
 
   useEffect(() => {
     if (editingContent.data.posConfigs && Object.keys(editingContent.data.posConfigs).length > 0) {

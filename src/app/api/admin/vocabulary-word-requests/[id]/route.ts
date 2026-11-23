@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
-import { cleanForFirestore, requestCollection, serializeRequestSnapshot } from '../utils';
+import { VocabularyAIReviewSchema } from '@/shared/types/vocabulary/ai-review';
+import { adminDb } from '@/src/services/firebase-admin';
+import { RequestError } from '@/src/lib/domain-error';
+import { cleanForFirestore, pendingRequestData, requestCollection, serializeRequestSnapshot } from '../utils';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -25,17 +28,26 @@ export async function PATCH(
     }
 
     const docRef = requestCollection().doc(id);
-    const snapshot = await docRef.get();
-    if (!snapshot.exists) {
-      return NextResponse.json({ success: false, error: 'Request not found' }, { status: 404 });
-    }
-
-    await docRef.update(
-      cleanForFirestore({
-        draftWord: draftWordResult.data,
-        updatedAt: new Date(),
-      }) as Record<string, unknown>
-    );
+    await adminDb.runTransaction(async transaction => {
+      const snapshot = await transaction.get(docRef);
+      const current = pendingRequestData(snapshot);
+      const draftWord = { ...draftWordResult.data };
+      const previousReview = current.draftWord?.ai_review;
+      if (draftWord.ai_review === undefined && previousReview !== undefined) {
+        const review = VocabularyAIReviewSchema.safeParse(previousReview);
+        if (!review.success) {
+          throw new RequestError(409, 'INVALID_STORED_AI_REVIEW', 'The saved AI review is invalid');
+        }
+        draftWord.ai_review = review.data;
+      }
+      transaction.update(
+        docRef,
+        cleanForFirestore({
+          draftWord,
+          updatedAt: new Date(),
+        }) as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>
+      );
+    });
 
     const updated = await docRef.get();
     return NextResponse.json({

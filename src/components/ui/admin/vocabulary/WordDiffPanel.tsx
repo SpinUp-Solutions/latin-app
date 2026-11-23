@@ -21,8 +21,8 @@ import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 type Plain = Record<string, unknown>;
 
 interface WordDiffPanelProps {
-  /** The word before the change. */
-  before: Plain;
+  /** The word before the change. Omit to show a single, read-only snapshot. */
+  before?: Plain;
   /** The word after the change. */
   after: Plain;
   /** What the "before" side is called, such as "Current". */
@@ -67,7 +67,8 @@ const valueAt = (value: unknown, path: string): unknown =>
       value
     );
 
-const humanize = (field: string) => field.replace(/_/g, ' ').replace(/^./, letter => letter.toUpperCase());
+const humanize = (field: string) =>
+  field === 'ai_review' ? 'AI review' : field.replace(/_/g, ' ').replace(/^./, letter => letter.toUpperCase());
 
 const Empty = () => <span className="text-muted-foreground">—</span>;
 
@@ -299,12 +300,13 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
  * each changed table cell marked in place.
  */
 export function WordDiffPanel({
-  before,
+  before: original,
   after,
   beforeLabel = 'Current',
   afterLabel = 'Proposed',
   actions,
 }: WordDiffPanelProps) {
+  const before = original ?? after;
   const [changesOnly, setChangesOnly] = useState(false);
   const summary = useMemo(() => summarizeWordChanges(before, after), [before, after]);
   const parts = [
@@ -313,27 +315,32 @@ export function WordDiffPanel({
   ].filter(Boolean);
 
   return (
-    <DiffContext.Provider value={{ before, after, changesOnly }}>
+    <DiffContext.Provider value={{ before, after, changesOnly: !!original && changesOnly }}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden border-l border-gray-200 bg-white">
         <div className="sticky top-0 z-10 flex-shrink-0 border-b border-gray-200 bg-white px-6 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
               <h2 className="truncate font-serif text-xl font-semibold text-roman-red">{asText(after.word)}</h2>
               <p className="mt-0.5 text-sm text-gray-500">
-                {asText(after.part_of_speech)} · {parts.length ? `${parts.join(' and ')} changed` : 'No changes'}
-                <span className="ml-3 whitespace-nowrap text-xs">
-                  <span className="mr-1 font-semibold text-red-500">−</span>
-                  {beforeLabel}
-                  <span className="ml-3 mr-1 font-semibold text-green-600">+</span>
-                  {afterLabel}
-                </span>
+                {asText(after.part_of_speech)} ·{' '}
+                {!original ? 'Read-only draft' : parts.length ? `${parts.join(' and ')} changed` : 'No changes'}
+                {original && (
+                  <span className="ml-3 whitespace-nowrap text-xs">
+                    <span className="mr-1 font-semibold text-red-500">−</span>
+                    {beforeLabel}
+                    <span className="ml-3 mr-1 font-semibold text-green-600">+</span>
+                    {afterLabel}
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Switch id="word-diff-changes-only" checked={changesOnly} onCheckedChange={setChangesOnly} />
-                <Label htmlFor="word-diff-changes-only">Changes only</Label>
-              </div>
+              {original && (
+                <div className="flex items-center gap-2">
+                  <Switch id="word-diff-changes-only" checked={changesOnly} onCheckedChange={setChangesOnly} />
+                  <Label htmlFor="word-diff-changes-only">Changes only</Label>
+                </div>
+              )}
               {actions}
             </div>
           </div>
@@ -345,7 +352,7 @@ export function WordDiffPanel({
             <ReviewFields section={String(after.part_of_speech)} />
             <OtherChanges />
             <TableDiff />
-            {changesOnly && parts.length === 0 && <p className="text-sm text-gray-500">Nothing changes.</p>}
+            {original && changesOnly && parts.length === 0 && <p className="text-sm text-gray-500">Nothing changes.</p>}
           </div>
         </div>
       </div>

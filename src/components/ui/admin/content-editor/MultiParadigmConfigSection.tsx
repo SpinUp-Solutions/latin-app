@@ -1,8 +1,8 @@
+import { AdminSearchInput } from '@/src/components/admin/shell';
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
-import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { MultiSelect } from '@/src/components/ui/multi-select';
@@ -26,6 +26,11 @@ import {
   getCompatibilityStepLabels,
   getFormIdentificationCompatibilitySummary,
 } from '@/src/utils/exercises/formIdentificationCompatibility';
+import {
+  DEFAULT_POS_FILTERS,
+  formatActiveFilterSummary,
+  getActiveParadigmFilterKeys,
+} from '@/src/utils/exercises/generatorConfigDefaults';
 
 interface MultiParadigmConfigSectionProps {
   availableParadigms: FormParadigm[];
@@ -105,6 +110,14 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
   const currentSteps = currentConfig?.steps || [];
   const tableType = PARADIGM_TABLE_TYPE[activeParadigm];
   const relevantFilters = PARADIGM_RELEVANT_FILTERS[activeParadigm];
+  const activeFilterKeys = currentConfig?.enabled
+    ? getActiveParadigmFilterKeys(activeParadigm, currentConfig.filters)
+    : [];
+  const activeFilterSummary = formatActiveFilterSummary(activeFilterKeys, currentConfig?.filters);
+
+  const handleClearFilters = () => {
+    onUpdateParadigmConfig(activeParadigm, { filters: { ...DEFAULT_POS_FILTERS } });
+  };
   const getCompatibilitySummaryForParadigm = (paradigm: FormParadigm) => {
     const config = paradigmConfigs[paradigm];
     if (!config?.enabled || !config.formSelection) return null;
@@ -141,8 +154,11 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
 
   const renderParadigmTab = (paradigm: FormParadigm) => {
     const isActive = paradigm === activeParadigm;
+    const config = paradigmConfigs[paradigm];
     const wordCount = paradigmWordCounts?.[paradigm];
     const skippedCount = getSkippedSelectionCount(getCompatibilitySummaryForParadigm(paradigm));
+    const tabActiveFilterKeys = config?.enabled ? getActiveParadigmFilterKeys(paradigm, config.filters) : [];
+    const tabFilterSummary = formatActiveFilterSummary(tabActiveFilterKeys, config?.filters);
 
     return (
       <Button
@@ -156,6 +172,14 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
         {wordCount !== undefined && (
           <Badge variant={isActive ? 'secondary' : 'outline'} className="text-xs">
             {wordCount}
+          </Badge>
+        )}
+        {tabActiveFilterKeys.length > 0 && (
+          <Badge
+            variant="outline"
+            className="border-amber-300 bg-amber-50 text-xs text-amber-800"
+            title={`Active filters: ${tabFilterSummary}`}>
+            Filtered
           </Badge>
         )}
         {skippedCount > 0 && (
@@ -272,12 +296,13 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
         {relevantFilters.includes('search') && (
           <div>
             <Label className="text-sm">Search</Label>
-            <Input
-              type="text"
+            <AdminSearchInput
+              className="mt-1"
+              size="sm"
+              label="Search words"
               placeholder="Search words..."
               value={filters.search || ''}
-              onChange={e => handleFilterChange('search', e.target.value)}
-              className="mt-1"
+              onValueChange={search => handleFilterChange('search', search)}
             />
           </div>
         )}
@@ -357,7 +382,26 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
                 />
 
                 <div>
-                  <label className="block text-sm font-medium mb-3">Filters</label>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium">Filters</label>
+                    {activeFilterKeys.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-50 hover:text-amber-900"
+                        onClick={handleClearFilters}>
+                        Clear filters
+                      </Button>
+                    )}
+                  </div>
+                  {activeFilterKeys.length > 0 && (
+                    <p
+                      role="status"
+                      className="mb-3 rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+                      Active filters narrow the words used for this paradigm: <strong>{activeFilterSummary}</strong>.
+                    </p>
+                  )}
                   {renderFilters()}
                 </div>
               </div>

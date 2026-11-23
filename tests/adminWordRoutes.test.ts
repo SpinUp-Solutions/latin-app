@@ -11,7 +11,9 @@ jest.mock('@/src/services/firebase-admin', () => ({
 }));
 
 import { PUT as updateWord } from '@/src/app/api/admin/words/route';
-import { DELETE as deleteWord } from '@/src/app/api/admin/words/[wordId]/route';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { AdminAccessError } from '@/src/lib/admin-access-error';
+import { DELETE as deleteWord, GET as getWord } from '@/src/app/api/admin/words/[wordId]/route';
 import {
   cleanupVocabularyWordPoolReferences,
   WORD_DELETION_POOL_CLEANUP_BATCH_SIZE,
@@ -148,6 +150,96 @@ type RouteResponse<T> = { status: number; body: T };
 
 beforeEach(() => {
   mockDb = new FakeFirestore();
+});
+
+describe('linked vocabulary words', () => {
+  const get = (id: string) => getWord(request('/api/admin/words'), { params: Promise.resolve({ wordId: id }) });
+  it('returns the specific word, not its position in a listing', async () => {
+    mockDb.seed(WORDS, 'linked', word);
+    expect(await get('linked')).toMatchObject({ status: 200, body: { data: { word: { id: 'linked', word: 'et' } } } });
+  });
+  it('opens a linked legacy word with missing fields for repair, as the list editor does', async () => {
+    mockDb.seed(WORDS, 'legacy', {
+      word: 'amo',
+      part_of_speech: 'verb',
+      translation: 'love',
+      sort_key: 'amo',
+      random_index: 0.5,
+      legacy_note: 'keep',
+    });
+    expect(await get('legacy')).toMatchObject({
+      status: 200,
+      body: { data: { word: { id: 'legacy', word: 'amo', definitions: [], legacy_note: 'keep' } } },
+    });
+  });
+  it('checks admin access and rejects bad IDs, unavailable or invalid words', async () => {
+    jest.mocked(verifyAdminAccess).mockRejectedValueOnce(new AdminAccessError('Admin access required', 403));
+    expect((await get('missing')).status).toBe(403);
+    expect((await get('bad/path')).status).toBe(400);
+    expect((await get('missing')).status).toBe(404);
+    mockDb.seed(WORDS, 'deleted', { ...word, _deletionPending: true });
+    expect((await get('deleted')).status).toBe(404);
+    mockDb.seed(WORDS, 'invalid', { word: 42 });
+    expect((await get('invalid')).status).toBe(409);
+  });
+});
+
+describe('word AI review persistence', () => {
+  const review = {
+    uncertainties: [{ field: 'translation', explanation: 'Check the contextual sense.' }],
+    guidance: [{ id: 'sense', instruction: 'Prefer the conjunction sense.' }],
+  };
+  const save = async (updates: Data) =>
+    (await updateWord(
+      request('http://localhost/api/admin/words', { wordId: 'word-1', updates })
+    )) as unknown as RouteResponse<{ updatedData: Data }>;
+
+  it('saves parsed review metadata, returns it, and preserves it on a legacy partial edit', async () => {
+    mockDb.seed(WORDS, 'word-1', { ...word, legacy_note: 'kept' });
+    const response = await save({
+      ai_review: {
+        ...review,
+        guidance: [{ id: 'sense', instruction: '  Prefer the conjunction sense.  ' }],
+      },
+      review_answer: 'A generation-only answer',
+      uncertainties: review.uncertainties,
+      data: { translation: 'must not be written' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.updatedData).toMatchObject({ ai_review: review, legacy_note: 'kept', translation: 'and' });
+    expect(response.body.updatedData).not.toHaveProperty('review_answer');
+    expect(mockDb.docs.get(WORDS)!.get('word-1')).not.toHaveProperty('uncertainties');
+    expect(mockDb.docs.get(WORDS)!.get('word-1')).not.toHaveProperty('data');
+
+    expect((await save({ translation: 'and also' })).body.updatedData.ai_review).toEqual(review);
+    expect(mockDb.docs.get(WORDS)!.get('word-1')).toMatchObject({ ai_review: review, legacy_note: 'kept' });
+  });
+
+  it('rebuilds the lookup index on rename rather than trusting a supplied key', async () => {
+    mockDb.seed(WORDS, 'word-1', { ...word, _headwordKey: 'et' });
+    const response = await save({ word: ' RŌMA ', sort_key: 'other', _headwordKey: 'other' });
+    expect(response.status).toBe(200);
+    expect(mockDb.docs.get(WORDS)!.get('word-1')).toMatchObject({ _headwordKey: 'roma', sort_key: 'ROMA' });
+    expect(response.body.updatedData).not.toHaveProperty('_headwordKey');
+  });
+
+  it('clears review metadata only through an explicit empty review', async () => {
+    mockDb.seed(WORDS, 'word-1', { ...word, ai_review: review });
+    const empty = { uncertainties: [], guidance: [] };
+    expect((await save({ ai_review: empty })).status).toBe(200);
+    expect(mockDb.docs.get(WORDS)!.get('word-1')!.ai_review).toEqual(empty);
+  });
+
+  it.each([null, 'invalid', { uncertainties: [], guidance: [], review_answer: 'not persisted metadata' }])(
+    'rejects invalid review metadata without writing: %p',
+    async ai_review => {
+      mockDb.seed(WORDS, 'word-1', { ...word, ai_review: review });
+      expect((await save({ ai_review })).status).toBe(400);
+      expect(mockDb.docs.get(WORDS)!.get('word-1')).toEqual({ ...word, ai_review: review });
+      expect(mockDb.writesPerTransaction).toEqual([0]);
+    }
+  );
 });
 
 it('rejects a word deletion during production content sync before issuing a challenge or writing', async () => {
