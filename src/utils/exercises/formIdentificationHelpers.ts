@@ -20,19 +20,32 @@ import { getParsedFormPathStepSupport } from './formIdentificationCompatibility'
 type FormPathRecord = Record<string, string | undefined>;
 
 /**
- * The declension an adjective form shows. Comparatives decline in the 3rd declension (melior, melius) and
- * superlatives in the 1st/2nd (optimus, -a, -um) whatever the positive does, so only the positive takes the
- * word's own declension: nēquam is indeclinable, but nēquior is 3rd and nēquissimus 1st/2nd. A form with no
- * degree is read as positive.
+ * The declension an adjective form shows. An indeclinable adjective is indeclinable only in the positive:
+ * nēquam is indeclinable, but nēquior is 3rd and nēquissimus 1st/2nd. Every other adjective's forms take the
+ * word's own declension. A form with no degree is read as positive.
  */
 const getAdjectiveDeclensionForDegree = (
   word: Extract<ExerciseWordResponse, { part_of_speech: 'adjective' }>,
   degree: string | undefined
 ): string => {
-  if (degree === 'comparative') return '3';
-  if (degree === 'superlative') return '1-2';
+  if (word.declension === 'indeclinable') {
+    if (degree === 'comparative') return '3';
+    if (degree === 'superlative') return '1-2';
+  }
   return word.declension || '';
 };
+
+/**
+ * Whether the form shown is indeclinable, so that "indeclinable" is its whole identification: any form of an
+ * indeclinable noun (fās, mīlle), and an indeclinable adjective's form when every reading of it is positive.
+ */
+export function isIndeclinableForm(word: ExerciseWordResponse, paths: Array<FormPathRecord>): boolean {
+  if (word.part_of_speech === 'noun') return word.declension === 'indeclinable';
+  if (word.part_of_speech === 'adjective' && word.declension === 'indeclinable') {
+    return paths.every(path => !path.degree || path.degree === 'positive');
+  }
+  return false;
+}
 
 /**
  * A step's answer from the word. `path` is the reading being answered, defaulting to the selected
@@ -108,17 +121,6 @@ export const extractStepValue = (
   }
 };
 
-/**
- * Whether a reading of the word can answer the declension question. An indeclinable adjective (nēquam, potis)
- * is indeclinable only in the positive, so a reading without a degree cannot say which answer is right.
- */
-export function canAskDeclension(word: ExerciseWordResponse, path: FormPathRecord | null | undefined): boolean {
-  if (word.part_of_speech === 'adjective' && word.declension === 'indeclinable') {
-    return Boolean(path?.degree);
-  }
-  return true;
-}
-
 export function enrichPathsWithSteps(
   paths: Array<FormPathRecord>,
   word: ExerciseWordResponse,
@@ -130,9 +132,6 @@ export function enrichPathsWithSteps(
     const verbSupport = isVerb ? getSupportedVerbFormStepsForParsedPath(path) : null;
     steps.forEach(step => {
       if (isVerb && !verbSupport?.supportedSteps.includes(step)) {
-        return;
-      }
-      if (step === 'declension' && !canAskDeclension(word, path)) {
         return;
       }
       if (!enrichedPath[step]) {

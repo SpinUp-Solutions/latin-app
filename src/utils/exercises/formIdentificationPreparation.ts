@@ -4,11 +4,11 @@ import type { PartOfSpeech, PronounPerson, PronounType } from '@/shared/types/vo
 import { deriveParadigm } from '@/src/utils/paradigm';
 import { buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
 import {
-  canAskDeclension,
   deduplicatePathsBySteps,
   enrichPathsWithSteps,
   getAnswerableStepsForWord,
   getFallbackAnswerableStepsForWord,
+  isIndeclinableForm,
 } from '@/src/utils/exercises/formIdentificationHelpers';
 
 export interface PreparedFormIdentificationWord {
@@ -45,8 +45,16 @@ export function prepareGeneratedFormIdentificationWord(
   const config = paradigm ? paradigmConfigs[paradigm] : undefined;
   const paths = getPaths(word);
   const configuredSteps = config?.steps || [];
-  let candidateSteps = getAnswerableStepsForWord(word, configuredSteps, paths.primary);
+  if (configuredSteps.length === 0) return null;
   const preferredPath = (word.form_path || paths.primary[0]) as Record<string, string | undefined> | undefined;
+
+  // An indeclinable form cannot show its case, number or gender, so "indeclinable" is the whole answer in
+  // every mode, whichever steps the exercise asks for declined words.
+  if (isIndeclinableForm(word, paths.primary.length > 0 ? paths.primary : preferredPath ? [preferredPath] : [])) {
+    return { steps: ['declension'], primary: [{ declension: 'indeclinable' }], optional: [] };
+  }
+
+  let candidateSteps = getAnswerableStepsForWord(word, configuredSteps, paths.primary);
 
   // A selected path can be answerable even when a syncretic alternative in
   // `primary_form_paths` cannot answer any of the same questions (for example
@@ -54,11 +62,6 @@ export function prepareGeneratedFormIdentificationWord(
   // selected interpretation and discard incompatible alternatives below.
   if (candidateSteps.length === 0) {
     candidateSteps = getFallbackAnswerableStepsForWord(word, configuredSteps, preferredPath);
-  }
-
-  const declensionPaths = paths.primary.length > 0 ? paths.primary : preferredPath ? [preferredPath] : [];
-  if (declensionPaths.some(path => !canAskDeclension(word, path))) {
-    candidateSteps = candidateSteps.filter(step => step !== 'declension');
   }
 
   let enrichedPrimary = enrichPathsWithSteps(paths.primary, word, candidateSteps);
