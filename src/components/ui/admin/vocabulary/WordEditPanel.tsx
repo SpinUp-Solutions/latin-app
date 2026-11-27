@@ -617,11 +617,11 @@ const WordEditor: React.FC<WordEditPanelProps> = ({
   const renderPosForm = () => {
     switch (word?.part_of_speech) {
       case 'noun':
-        return <NounForm />;
+        return <NounForm table={table} />;
       case 'pronoun':
         return <PronounForm />;
       case 'adjective':
-        return <AdjectiveForm />;
+        return <AdjectiveForm table={table} />;
       case 'verb':
         return <VerbForm />;
       case 'preposition':

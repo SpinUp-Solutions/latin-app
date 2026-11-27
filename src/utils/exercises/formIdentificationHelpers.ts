@@ -17,7 +17,45 @@ import {
 import { getSupportedVerbFormStepsForParsedPath, getVerbFormKindForParsedPath } from './verbFormStepCompatibility';
 import { getParsedFormPathStepSupport } from './formIdentificationCompatibility';
 
-export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentificationStep): string => {
+type FormPathRecord = Record<string, string | undefined>;
+
+/**
+ * The declension an adjective form shows. An indeclinable adjective is indeclinable only in the positive:
+ * nēquam is indeclinable, but nēquior is 3rd and nēquissimus 1st/2nd. Every other adjective's forms take the
+ * word's own declension. A form with no degree is read as positive.
+ */
+const getAdjectiveDeclensionForDegree = (
+  word: Extract<ExerciseWordResponse, { part_of_speech: 'adjective' }>,
+  degree: string | undefined
+): string => {
+  if (word.declension === 'indeclinable') {
+    if (degree === 'comparative') return '3';
+    if (degree === 'superlative') return '1-2';
+  }
+  return word.declension || '';
+};
+
+/**
+ * Whether the form shown is indeclinable, so that "indeclinable" is its whole identification: any form of an
+ * indeclinable noun (fās, mīlle), and an indeclinable adjective's form when every reading of it is positive.
+ */
+export function isIndeclinableForm(word: ExerciseWordResponse, paths: Array<FormPathRecord>): boolean {
+  if (word.part_of_speech === 'noun') return word.declension === 'indeclinable';
+  if (word.part_of_speech === 'adjective' && word.declension === 'indeclinable') {
+    return paths.every(path => !path.degree || path.degree === 'positive');
+  }
+  return false;
+}
+
+/**
+ * A step's answer from the word. `path` is the reading being answered, defaulting to the selected
+ * `form_path`; of the steps read here only an adjective's declension depends on it, through the degree.
+ */
+export const extractStepValue = (
+  word: ExerciseWordResponse,
+  step: FormIdentificationStep,
+  path?: FormPathRecord | null
+): string => {
   switch (word.part_of_speech) {
     case 'verb':
       switch (step) {
@@ -51,7 +89,10 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
     case 'adjective':
       switch (step) {
         case 'declension':
-          return word.declension || '';
+          return getAdjectiveDeclensionForDegree(
+            word,
+            (path ?? (word.form_path as FormPathRecord | null | undefined))?.degree
+          );
         case 'degree':
         case 'case':
         case 'number':
@@ -81,20 +122,20 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
 };
 
 export function enrichPathsWithSteps(
-  paths: Array<Record<string, string | undefined>>,
+  paths: Array<FormPathRecord>,
   word: ExerciseWordResponse,
   steps: FormIdentificationStep[]
-): Array<Record<string, string | undefined>> {
+): Array<FormPathRecord> {
   const isVerb = word.part_of_speech === 'verb';
   return paths.map(path => {
-    const enrichedPath: Record<string, string | undefined> = { ...path };
+    const enrichedPath: FormPathRecord = { ...path };
     const verbSupport = isVerb ? getSupportedVerbFormStepsForParsedPath(path) : null;
     steps.forEach(step => {
       if (isVerb && !verbSupport?.supportedSteps.includes(step)) {
         return;
       }
       if (!enrichedPath[step]) {
-        enrichedPath[step] = extractStepValue(word, step);
+        enrichedPath[step] = extractStepValue(word, step, path);
       }
     });
     return enrichedPath;
@@ -283,6 +324,7 @@ const createVariantMap = (): Record<FormIdentificationStep, VariantMap> => {
     ]);
     declension[value] = withNoun(['2-1-2', ...names], 'declension');
   });
+  declension.indeclinable = ['indecl', 'indcl', 'indec', 'indeclinable'];
 
   const conjugation: VariantMap = {};
   VerbConjugationSchema.options.forEach(value => {

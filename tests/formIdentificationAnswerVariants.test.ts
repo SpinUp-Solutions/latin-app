@@ -98,6 +98,35 @@ describe('form identification answer spellings', () => {
     expect(earns('n', 'gender', 'masculine-feminine')).toBe(false);
   });
 
+  it('accepts indeclinable spellings only for indeclinable declensions, never declined words or other steps', () => {
+    for (const answer of ['indeclinable', 'indecl', 'indecl.', 'indcl', 'indcl.', 'indec']) {
+      expect(earns(answer, 'declension', 'indeclinable')).toBe(true);
+    }
+    expect(earns('3rd', 'declension', 'indeclinable')).toBe(false);
+    expect(getDisplayForm('declension', 'indeclinable')).toBe('indeclinable');
+
+    for (const declined of ['1', '2', '3', '3-istem', '4', '5', '1-2']) {
+      for (const answer of ['indeclinable', 'indecl', 'indecl.', 'indcl', 'indec']) {
+        expect(earns(answer, 'declension', declined)).toBe(false);
+      }
+    }
+
+    for (const [step, values] of [
+      ['case', CaseSchema.options],
+      ['number', NumberSchema.options],
+      ['gender', GenderSchema.options],
+    ] as const) {
+      for (const value of values) {
+        for (const answer of ['indeclinable', 'indecl', 'indecl.', 'indcl', 'indec']) {
+          expect(earns(answer, step, value)).toBe(false);
+        }
+      }
+    }
+
+    expect(earns('ind', 'declension', 'indeclinable')).toBe(false);
+    expect(earns('ind', 'mood', 'indicative')).toBe(true);
+  });
+
   it('keeps abbreviations for legacy non-finite kinds stored as a mood', () => {
     expect(getAcceptedAnswersForStep('mood', 'infinitive')).toEqual(expect.arrayContaining(['inf']));
   });

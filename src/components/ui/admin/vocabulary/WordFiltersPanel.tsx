@@ -41,12 +41,12 @@ const VERB_CONJUGATION_OPTIONS: MultiSelectOption[] = VerbConjugationSchema.opti
 
 const NOUN_DECLENSION_OPTIONS: MultiSelectOption[] = NounDeclensionSchema.options.map(v => ({
   value: v,
-  label: `Declension ${v}`,
+  label: v === 'indeclinable' ? 'Indeclinable' : `Declension ${v}`,
 }));
 
 const ADJECTIVE_DECLENSION_OPTIONS: MultiSelectOption[] = AdjectiveDeclensionSchema.options.map(v => ({
   value: v,
-  label: `Declension ${v}`,
+  label: v === 'indeclinable' ? 'Indeclinable' : `Declension ${v}`,
 }));
 
 const PRONOUN_TYPE_OPTIONS: MultiSelectOption[] = PronounTypeSchema.options.map(v => ({

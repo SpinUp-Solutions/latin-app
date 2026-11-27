@@ -153,7 +153,7 @@ export const WordCard: React.FC<WordCardProps> = ({
 
               {word.part_of_speech === 'noun' && word.declension && (
                 <Badge variant="outline" className="text-xs">
-                  Declension {word.declension}
+                  {word.declension === 'indeclinable' ? 'Indeclinable' : `Declension ${word.declension}`}
                 </Badge>
               )}
 
@@ -165,7 +165,7 @@ export const WordCard: React.FC<WordCardProps> = ({
 
               {word.part_of_speech === 'adjective' && word.declension && (
                 <Badge variant="outline" className="text-xs">
-                  Declension {word.declension}
+                  {word.declension === 'indeclinable' ? 'Indeclinable' : `Declension ${word.declension}`}
                 </Badge>
               )}
             </div>
